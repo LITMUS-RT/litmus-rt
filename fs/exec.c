@@ -56,6 +56,8 @@
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
 
+#include <litmus/litmus.h>
+
 #ifdef CONFIG_KMOD
 #include <linux/kmod.h>
 #endif
@@ -1309,6 +1311,7 @@ int do_execve(char * filename,
 		goto out_kfree;
 
 	sched_exec();
+	litmus_exec();
 
 	bprm->file = file;
 	bprm->filename = filename;

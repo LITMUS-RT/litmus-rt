@@ -59,6 +59,9 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
+#include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
+
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -120,6 +123,8 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(!tsk->exit_state);
 	WARN_ON(atomic_read(&tsk->usage));
 	WARN_ON(tsk == current);
+
+	exit_litmus(tsk);
 
 	security_task_free(tsk);
 	free_uid(tsk->user);

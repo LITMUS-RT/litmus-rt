@@ -70,7 +70,7 @@ yield_task_rt(struct rq *rq)
  */
 static void check_preempt_curr_rt(struct rq *rq, struct task_struct *p)
 {
-	if (p->prio < rq->curr->prio)
+	if (p->prio < rq->curr->prio || p->policy == SCHED_LITMUS)
 		resched_task(rq->curr);
 }
 

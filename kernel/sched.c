@@ -324,6 +324,8 @@ struct rq {
 
 	atomic_t nr_iowait;
 
+	struct task_struct* litmus_next;
+
 #ifdef CONFIG_SMP
 	struct sched_domain *sd;
 
@@ -875,11 +877,12 @@ static inline void cpuacct_charge(struct task_struct *tsk, u64 cputime) {}
 #include "sched_idletask.c"
 #include "sched_fair.c"
 #include "sched_rt.c"
+#include "../litmus/sched_litmus.c"
 #ifdef CONFIG_SCHED_DEBUG
 # include "sched_debug.c"
 #endif
 
-#define sched_class_highest (&rt_sched_class)
+#define sched_class_highest (&litmus_sched_class)
 
 /*
  * Update delta_exec, delta_fair fields for rq.
@@ -1529,7 +1532,7 @@ static int try_to_wake_up(struct task_struct *p, unsigned int state, int sync)
 	this_cpu = smp_processor_id();
 
 #ifdef CONFIG_SMP
-	if (unlikely(task_running(rq, p)))
+	if (unlikely(task_running(rq, p) || is_realtime(p)))
 		goto out_activate;
 
 	new_cpu = cpu;
@@ -1890,6 +1893,7 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	 */
 	prev_state = prev->state;
 	finish_arch_switch(prev);
+	litmus->finish_switch(prev);
 	finish_lock_switch(rq, prev);
 	fire_sched_in_preempt_notifiers(current);
 	if (mm)
@@ -3491,6 +3495,7 @@ void scheduler_tick(void)
 	update_cpu_load(rq);
 	if (curr != rq->idle) /* FIXME: needed? */
 		curr->sched_class->task_tick(rq, curr);
+	litmus_tick(rq, curr);
 	spin_unlock(&rq->lock);
 
 #ifdef CONFIG_SMP
@@ -3641,6 +3646,10 @@ need_resched_nonpreemptible:
 	 */
 	local_irq_disable();
 	__update_rq_clock(rq);
+	/* do litmus scheduling outside of rq lock, so that we
+	 * can do proper migrations for global schedulers
+	 */
+	litmus_schedule(rq, prev);
 	spin_lock(&rq->lock);
 	clear_tsk_need_resched(prev);
 
@@ -4236,6 +4245,9 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	case SCHED_RR:
 		p->sched_class = &rt_sched_class;
 		break;
+	case SCHED_LITMUS:
+		p->sched_class = &litmus_sched_class;
+		break;
 	}
 
 	p->rt_priority = prio;
@@ -4268,7 +4280,7 @@ recheck:
 		policy = oldpolicy = p->policy;
 	else if (policy != SCHED_FIFO && policy != SCHED_RR &&
 			policy != SCHED_NORMAL && policy != SCHED_BATCH &&
-			policy != SCHED_IDLE)
+			policy != SCHED_IDLE && policy != SCHED_LITMUS)
 		return -EINVAL;
 	/*
 	 * Valid priorities for SCHED_FIFO and SCHED_RR are
@@ -4280,6 +4292,9 @@ recheck:
 	    (!p->mm && param->sched_priority > MAX_RT_PRIO-1))
 		return -EINVAL;
 	if (rt_policy(policy) != (param->sched_priority != 0))
+		return -EINVAL;
+
+	if (policy == SCHED_LITMUS && policy == p->policy)
 		return -EINVAL;
 
 	/*
@@ -4316,6 +4331,12 @@ recheck:
 			return -EPERM;
 	}
 
+	if (policy == SCHED_LITMUS) {
+		retval = litmus_admit_task(p);
+		if (retval)
+			return retval;
+	}
+
 	retval = security_task_setscheduler(p, policy, param);
 	if (retval)
 		return retval;
@@ -4345,8 +4366,14 @@ recheck:
 			p->sched_class->put_prev_task(rq, p);
 	}
 
+	if (p->policy == SCHED_LITMUS)
+		litmus_exit_task(p);
+
 	oldprio = p->prio;
 	__setscheduler(rq, p, policy, param->sched_priority);
+
+	if (policy == SCHED_LITMUS)
+		litmus->task_new(p, on_rq, running);
 
 	if (on_rq) {
 		if (running)
@@ -4364,6 +4391,7 @@ recheck:
 			check_preempt_curr(rq, p);
 		}
 	}
+
 	__task_rq_unlock(rq);
 	spin_unlock_irqrestore(&p->pi_lock, flags);
 

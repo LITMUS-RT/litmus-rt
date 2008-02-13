@@ -324,3 +324,18 @@ ENTRY(sys_call_table)
 	.long sys_timerfd
 	.long sys_eventfd
 	.long sys_fallocate
+	/* LITMUS */
+	.long sys_set_rt_task_param	/* 325 */
+	.long sys_get_rt_task_param
+	.long sys_complete_job
+	.long sys_register_np_flag
+	.long sys_exit_np
+	.long sys_od_open		/* 330 */
+	.long sys_od_close
+	.long sys_pi_down
+	.long sys_pi_up
+	.long sys_srp_down
+	.long sys_srp_up		/* 335 */
+	.long sys_reg_task_srp_sem
+	.long sys_query_job_no
+	.long sys_wait_for_job_release  /* 338 */

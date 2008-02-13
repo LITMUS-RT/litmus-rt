@@ -220,6 +220,8 @@ void inode_init_once(struct inode *inode)
 	INIT_LIST_HEAD(&inode->inotify_watches);
 	mutex_init(&inode->inotify_mutex);
 #endif
+	INIT_LIST_HEAD(&inode->i_obj_list);
+	mutex_init(&inode->i_obj_mutex);
 }
 
 EXPORT_SYMBOL(inode_init_once);

@@ -588,6 +588,8 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 #define i_size_ordered_init(inode) do { } while (0)
 #endif
 
+struct inode_obj_id_table;
+
 struct inode {
 	struct hlist_node	i_hash;
 	struct list_head	i_list;
@@ -653,6 +655,9 @@ struct inode {
 	void			*i_security;
 #endif
 	void			*i_private; /* fs or device private pointer */
+
+	struct list_head	i_obj_list;
+	struct mutex		i_obj_mutex;
 };
 
 /*

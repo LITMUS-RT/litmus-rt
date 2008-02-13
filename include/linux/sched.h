@@ -37,6 +37,7 @@
 #define SCHED_BATCH		3
 /* SCHED_ISO: reserved but not implemented yet */
 #define SCHED_IDLE		5
+#define SCHED_LITMUS		6
 
 #ifdef __KERNEL__
 
@@ -90,6 +91,8 @@ struct sched_param {
 #include <linux/kobject.h>
 
 #include <asm/processor.h>
+
+#include <litmus/rt_param.h>
 
 struct exec_domain;
 struct futex_pi_state;
@@ -914,6 +917,8 @@ struct sched_entity {
 #endif
 };
 
+struct od_table_entry;
+
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
@@ -1178,6 +1183,17 @@ struct task_struct {
 	int make_it_fail;
 #endif
 	struct prop_local_single dirties;
+
+	/* litmus parameters and state */
+	struct rt_param rt_param;
+
+	/* allow scheduler plugins to queue in release lists, etc.
+	 * Cleanup: Move this into the rt_param struct.
+	 */
+	struct list_head rt_list;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry* od_table;
 };
 
 /*

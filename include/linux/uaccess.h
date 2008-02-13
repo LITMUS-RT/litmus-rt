@@ -84,4 +84,20 @@ static inline unsigned long __copy_from_user_nocache(void *to,
 		ret;					\
 	})
 
+/* This is a naive attempt at a write version of the above native Linux macro.
+ */
+#define poke_kernel_address(val, addr)			\
+	({						\
+		long ret;				\
+		mm_segment_t old_fs = get_fs();		\
+							\
+		set_fs(KERNEL_DS);			\
+		pagefault_disable();			\
+		ret = __put_user(val, (__force typeof(val) __user *)(addr)); \
+		pagefault_enable();			\
+		set_fs(old_fs);				\
+		ret;					\
+	})
+
+
 #endif		/* __LINUX_UACCESS_H__ */

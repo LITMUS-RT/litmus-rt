@@ -1,0 +1,24 @@
+menu "LITMUS^RT"
+
+config SCHED_TASK_TRACE
+	bool "Trace real-time tasks"
+	default y
+	help
+	  Include support for the sched_trace_XXX() tracing functions. This
+          allows the collection of real-time task events such as job
+	  completions, job releases, early completions, etc. This results in  a
+	  small overhead in the scheduling code. Disable if the overhead is not
+	  acceptable (e.g., benchmarking).
+
+config SCHED_DEBUG_TRACE
+	bool "TRACE() debugging"
+	default y
+	help
+	  Include support for sched_trace_log_messageg(), which is used to
+	  implement TRACE(). If disabled, no TRACE() messages will be included
+	  in the kernel, and no overheads due to debugging statements will be
+	  incurred by the scheduler. Disable if the overhead is not acceptable
+	  (e.g. benchmarking).
+
+
+endmenu

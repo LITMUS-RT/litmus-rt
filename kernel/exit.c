@@ -52,6 +52,8 @@
 
 extern void sem_exit (void);
 
+extern void exit_od_table(struct task_struct* t);
+
 static void exit_mm(struct task_struct * tsk);
 
 static void __unhash_process(struct task_struct *p)
@@ -986,6 +988,8 @@ fastcall NORET_TYPE void do_exit(long code)
 		tty_audit_exit();
 	if (unlikely(tsk->audit_context))
 		audit_free(tsk);
+
+	exit_od_table(tsk);
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);

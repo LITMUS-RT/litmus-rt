@@ -330,10 +330,24 @@
 #define __NR_timerfd		322
 #define __NR_eventfd		323
 #define __NR_fallocate		324
+#define __NR_set_rt_task_param	325
+#define __NR_get_rt_task_param	326
+#define __NR_sleep_next_period  327
+#define __NR_register_np_flag   328
+#define __NR_exit_np            329
+#define __NR_od_open		330
+#define __NR_od_close		331
+#define __NR_pi_down		332
+#define __NR_pi_up		333
+#define __NR_srp_down		334
+#define __NR_srp_up		335
+#define __NR_reg_task_srp_sem	336
+#define __NR_query_job_no	337
+#define __NR_wait_for_job_release 338
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 325
+#define NR_syscalls 339
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR
