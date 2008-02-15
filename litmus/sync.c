@@ -33,7 +33,6 @@ static long do_wait_for_ts_release(void)
 
 static long do_release_ts(lt_t start)
 {
-	long ret = 0;
 	int  task_count = 0;
 	long flags;
 	struct list_head	*pos;
@@ -54,7 +53,7 @@ static long do_release_ts(lt_t start)
 
 	complete_n(&ts_release, task_count);
 
-	return ret;
+	return task_count;
 }
 
 
