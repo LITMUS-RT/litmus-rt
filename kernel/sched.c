@@ -3895,6 +3895,18 @@ void complete_all(struct completion *x)
 }
 EXPORT_SYMBOL(complete_all);
 
+void complete_n(struct completion *x, int n)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&x->wait.lock, flags);
+	x->done += n;
+	__wake_up_common(&x->wait, TASK_UNINTERRUPTIBLE | TASK_INTERRUPTIBLE,
+			 n, 0, NULL);
+	spin_unlock_irqrestore(&x->wait.lock, flags);
+}
+EXPORT_SYMBOL(complete_n);
+
 static inline long __sched
 do_wait_for_common(struct completion *x, long timeout, int state)
 {

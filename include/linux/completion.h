@@ -51,7 +51,7 @@ extern unsigned long wait_for_completion_interruptible_timeout(
 
 extern void complete(struct completion *);
 extern void complete_all(struct completion *);
-
+extern void complete_n(struct completion *, int n);
 #define INIT_COMPLETION(x)	((x).done = 0)
 
 #endif
