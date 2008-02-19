@@ -17,6 +17,7 @@
 #include <linux/module.h>
 
 #include <litmus/litmus.h>
+#include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 
@@ -132,7 +133,7 @@ static void job_completion(struct task_struct* t)
 {
 	TRACE_TASK(t, "job_completion().\n");
 	set_rt_flags(t, RT_F_SLEEP);
-	edf_prepare_for_next_period(t);
+	prepare_for_next_period(t);
 }
 
 static struct task_struct* psnedf_schedule(struct task_struct * prev)
@@ -225,7 +226,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 		smp_processor_id(), t->pid, get_partition(t));
 
 	/* setup job parameters */
-	edf_release_at(t, sched_clock());
+	release_at(t, sched_clock());
 
 	/* The task should be running in the queue, otherwise signal
 	 * code will try to wake it up with fatal consequences.
@@ -262,7 +263,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	if (is_tardy(task, now) &&
 	    get_rt_flags(task) != RT_F_EXIT_SEM) {
 		/* new sporadic release */
-		edf_release_at(task, now);
+		release_at(task, now);
 		sched_trace_job_release(task);
 	}
 	requeue(task, edf);
@@ -411,7 +412,7 @@ static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PSN-EDF",
 	.tick			= psnedf_tick,
 	.task_new		= psnedf_task_new,
-	.complete_job		= edf_complete_job,
+	.complete_job		= complete_job,
 	.task_exit		= psnedf_task_exit,
 	.schedule		= psnedf_schedule,
 	.task_wake_up		= psnedf_task_wake_up,

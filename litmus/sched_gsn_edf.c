@@ -14,6 +14,7 @@
 #include <linux/list.h>
 
 #include <litmus/litmus.h>
+#include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
@@ -385,7 +386,7 @@ static noinline void job_completion(struct task_struct *t)
 	/* set flags */
 	set_rt_flags(t, RT_F_SLEEP);
 	/* prepare for next period */
-	edf_prepare_for_next_period(t);
+	prepare_for_next_period(t);
 	/* unlink */
 	unlink(t);
 	/* requeue
@@ -524,7 +525,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 	t->rt_param.linked_on          = NO_CPU;
 
 	/* setup job params */
-	edf_release_at(t, sched_clock());
+	release_at(t, sched_clock());
 
 	gsnedf_job_arrival(t);
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
@@ -546,7 +547,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 		now = sched_clock();
 		if (is_tardy(task, now)) {
 			/* new sporadic release */
-			edf_release_at(task, now);
+			release_at(task, now);
 			sched_trace_job_release(task);
 		}
 		else if (task->time_slice)
@@ -684,7 +685,7 @@ static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.finish_switch		= gsnedf_finish_switch,
 	.tick			= gsnedf_tick,
 	.task_new		= gsnedf_task_new,
-	.complete_job		= edf_complete_job,
+	.complete_job		= complete_job,
 	.task_exit		= gsnedf_task_exit,
 	.schedule		= gsnedf_schedule,
 	.task_wake_up		= gsnedf_task_wake_up,

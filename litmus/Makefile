@@ -3,6 +3,6 @@
 #
 
 obj-y     = sched_plugin.o litmus.o sched_trace.o \
-	    edf_common.o \
+	    edf_common.o jobs.o\
             sched_gsn_edf.o sched_psn_edf.o litmus_sem.o \
-	    trace.o ft_event.o rt_domain.o fdso.o
+	    trace.o ft_event.o rt_domain.o fdso.o sync.o

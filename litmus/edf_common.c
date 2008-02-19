@@ -67,30 +67,9 @@ int edf_ready_order(struct list_head* a, struct list_head* b)
 		list_entry(b, struct task_struct, rt_list));
 }
 
-void edf_release_at(struct task_struct *t, lt_t start)
-{
-	t->rt_param.job_params.deadline = start;
-	edf_prepare_for_next_period(t);
-	set_rt_flags(t, RT_F_RUNNING);
-}
-
 void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched)
 {
 	rt_domain_init(rt, resched, edf_ready_order);
-}
-
-void edf_prepare_for_next_period(struct task_struct *t)
-{
-	BUG_ON(!t);
-	/* prepare next release */
-	t->rt_param.job_params.release   = t->rt_param.job_params.deadline;
-	t->rt_param.job_params.deadline += get_rt_period(t);
-	t->rt_param.job_params.exec_time = 0;
-	/* update job sequence number */
-	t->rt_param.job_params.job_no++;
-
-	/* don't confuse Linux */
-	t->time_slice = 1;
 }
 
 /* need_to_preempt - check whether the task t needs to be preempted
@@ -114,19 +93,3 @@ int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t)
 	/* make sure to get non-rt stuff out of the way */
 	return !is_realtime(t) || edf_higher_prio(next_ready(rt), t);
 }
-
-
-/*
- *	Deactivate current task until the beginning of the next period.
- */
-long edf_complete_job(void)
-{
-	/* Mark that we do not excute anymore */
-	set_rt_flags(current, RT_F_SLEEP);
-	/* call schedule, this will return when a new job arrives
-	 * it also takes care of preparing for the next release
-	 */
-	schedule();
-	return 0;
-}
-
