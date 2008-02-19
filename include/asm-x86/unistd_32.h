@@ -344,6 +344,8 @@
 #define __NR_reg_task_srp_sem	336
 #define __NR_query_job_no	337
 #define __NR_wait_for_job_release 338
+#define __NR_wait_for_ts_release 339
+#define __NR_release_ts		340
 
 #ifdef __KERNEL__
 
