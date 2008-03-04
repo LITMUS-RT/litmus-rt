@@ -360,10 +360,6 @@ static void* create_srp_semaphore(void)
 {
 	struct srp_semaphore* sem;
 
-	if (!is_realtime(current))
-		/* XXX log error */
-		return NULL;
-
 	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
