@@ -313,6 +313,8 @@ struct srp {
 };
 
 
+atomic_t srp_objects_in_use = ATOMIC_INIT(0);
+
 DEFINE_PER_CPU(struct srp, srp);
 
 #define system_ceiling(srp) list2prio(srp->ceiling.next)
@@ -343,6 +345,9 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 	list_add_tail(&prio->list, &srp->ceiling);
 }
 
+#define UNDEF_SEM -2
+
+
 /* struct for uniprocessor SRP "semaphore" */
 struct srp_semaphore {
 	struct srp_priority ceiling;
@@ -366,18 +371,47 @@ static void* create_srp_semaphore(void)
 	INIT_LIST_HEAD(&sem->ceiling.list);
 	sem->ceiling.period = 0;
 	sem->claimed = 0;
-	sem->cpu     = get_partition(current);
+	sem->cpu     = UNDEF_SEM;
+	atomic_inc(&srp_objects_in_use);
 	return sem;
+}
+
+static noinline int open_srp_semaphore(struct od_table_entry* entry, void* __user arg)
+{
+	struct srp_semaphore* sem = (struct srp_semaphore*) entry->obj->obj;
+	int ret = 0;
+	struct task_struct* t = current;
+	struct srp_priority t_prio;
+
+	TRACE("opening SRP semaphore %p, cpu=%d\n", sem, sem->cpu);
+
+	if (sem->cpu == UNDEF_SEM)
+		sem->cpu = get_partition(t);
+	else if (sem->cpu != get_partition(t))
+		ret = -EPERM;
+
+	if (ret == 0) {
+		t_prio.period = get_rt_period(t);
+		t_prio.pid    = t->pid;
+		if (srp_higher_prio(&t_prio, &sem->ceiling)) {
+			sem->ceiling.period = t_prio.period;
+			sem->ceiling.pid    = t_prio.pid;
+		}
+	}
+
+	return ret;
 }
 
 static void destroy_srp_semaphore(void* sem)
 {
 	/* XXX invariants */
+	atomic_dec(&srp_objects_in_use);
 	kfree(sem);
 }
 
 struct fdso_ops srp_sem_ops = {
 	.create  = create_srp_semaphore,
+	.open    = open_srp_semaphore,
 	.destroy = destroy_srp_semaphore
 };
 
@@ -470,46 +504,9 @@ asmlinkage long sys_srp_up(int sem_od)
 	return ret;
 }
 
-/* Indicate that task will use a resource associated with a given
- * semaphore. Should be done *a priori* before RT task system is
- * executed, so this does *not* update the system priority
- * ceiling! (The ceiling would be meaningless anyway, as the SRP
- * breaks without this a priori knowledge.)
- */
 asmlinkage long sys_reg_task_srp_sem(int sem_od)
 {
-	/*
-	 * FIXME: This whole concept is rather brittle!
-	 *        There must be a better solution. Maybe register on
-	 *        first reference?
-	 */
-
-	struct task_struct *t = current;
-	struct srp_priority t_prio;
-	struct srp_semaphore* sem;
-
-	sem = lookup_srp_sem(sem_od);
-
-	if (!sem)
-		return -EINVAL;
-
-	if (!is_realtime(t))
-		return -EPERM;
-
-	if (sem->cpu != get_partition(t))
-		return -EINVAL;
-
-	preempt_disable();
-	t->rt_param.subject_to_srp = 1;
-	t_prio.period = get_rt_period(t);
-	t_prio.pid    = t->pid;
-	if (srp_higher_prio(&t_prio, &sem->ceiling)) {
-		sem->ceiling.period = t_prio.period;
-		sem->ceiling.pid    = t_prio.pid;
-	}
-
-	preempt_enable();
-
+	/* unused */
 	return 0;
 }
 
@@ -538,6 +535,10 @@ void srp_ceiling_block(void)
 		.func      = srp_wake_up,
 		.task_list = {NULL, NULL}
 	};
+
+	/* bail out early if there aren't any SRP resources around */
+	if (!atomic_read(&srp_objects_in_use))
+		return;
 
 	preempt_disable();
 	if (!srp_exceeds_ceiling(tsk, &__get_cpu_var(srp))) {

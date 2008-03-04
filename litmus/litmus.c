@@ -153,7 +153,7 @@ asmlinkage long sys_complete_job(void)
 	 * appropriate queue and call schedule
 	 */
 	retval = litmus->complete_job();
-	if (!retval && is_subject_to_srp(current))
+	if (!retval)
 		srp_ceiling_block();
       out:
 	return retval;
@@ -207,7 +207,7 @@ asmlinkage long sys_wait_for_job_release(unsigned int job)
 
 	/* We still have to honor the SRP after the actual release.
 	 */
-	if (!retval && is_subject_to_srp(current))
+	if (!retval)
 		srp_ceiling_block();
       out:
 	return retval;

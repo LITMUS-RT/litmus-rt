@@ -153,7 +153,7 @@ inline static int budget_exhausted(struct task_struct* t)
 	return get_exec_time(t) >= get_exec_cost(t);
 }
 
-#define is_subject_to_srp(t)	((t)->rt_param.subject_to_srp)
+
 #define is_hrt(t)     		\
 	((t)->rt_param.task_params.class == RT_CLASS_HARD)
 #define is_srt(t)     		\

@@ -73,12 +73,6 @@ struct rt_param {
 	/* is the task sleeping? */
 	unsigned int 		flags:8;
 
-	/* Did this task register any SRP controlled resource accesses?
-	 * This, of course, should only ever be true under partitioning.
-	 * However, this limitation is not currently enforced.
-	 */
-	unsigned int		subject_to_srp:1;
-
 	/* user controlled parameters */
 	struct rt_task 		task_params;
 
