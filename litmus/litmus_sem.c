@@ -552,11 +552,9 @@ void srp_ceiling_block(void)
 		preempt_disable();
 		TRACE_CUR("finally exceeds system ceiling.\n");
 		remove_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
-		preempt_enable();
-	} else {
-		TRACE_CUR("is not priority ceiling blocked\n");
-		preempt_enable();
-	}
+	} else
+		TRACE_CUR("is not priority ceiling blocked\n");	
+	preempt_enable();
 }
 
 /* ************************************************************************** */
