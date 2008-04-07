@@ -319,21 +319,35 @@ DEFINE_PER_CPU(struct srp, srp);
 
 #define system_ceiling(srp) list2prio(srp->ceiling.next)
 
+
+#define UNDEF_SEM -2
+
+
+/* struct for uniprocessor SRP "semaphore" */
+struct srp_semaphore {
+	struct srp_priority ceiling;
+	struct task_struct* owner;
+	int cpu; /* cpu associated with this "semaphore" and resource */
+};
+
+#define ceiling2sem(c) container_of(c, struct srp_semaphore, ceiling) 
+
 static int srp_exceeds_ceiling(struct task_struct* first,
 			       struct srp* srp)
 {
 	return list_empty(&srp->ceiling) ||
 	       get_rt_period(first) < system_ceiling(srp)->period ||
 	       (get_rt_period(first) == system_ceiling(srp)->period &&
-		first->pid < system_ceiling(srp)->pid);
+		first->pid < system_ceiling(srp)->pid) || 
+		ceiling2sem(system_ceiling(srp))->owner == first;
 }
 
 static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 {
 	struct list_head *pos;
 	if (in_list(&prio->list)) {
-		TRACE_CUR("WARNING: SRP violation detected, prio is already in "
-			  "ceiling list!\n");
+		printk(KERN_CRIT "WARNING: SRP violation detected, prio is already in "
+		       "ceiling list!\n");
 		return;
 	}
 	list_for_each(pos, &srp->ceiling)
@@ -344,16 +358,6 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 
 	list_add_tail(&prio->list, &srp->ceiling);
 }
-
-#define UNDEF_SEM -2
-
-
-/* struct for uniprocessor SRP "semaphore" */
-struct srp_semaphore {
-	struct srp_priority ceiling;
-	int cpu; /* cpu associated with this "semaphore" and resource */
-	int claimed; /* is the resource claimed (ceiling should be used)? */
-};
 
 
 static void* create_srp_semaphore(void)
@@ -366,8 +370,8 @@ static void* create_srp_semaphore(void)
 
 	INIT_LIST_HEAD(&sem->ceiling.list);
 	sem->ceiling.period = 0;
-	sem->claimed = 0;
 	sem->cpu     = UNDEF_SEM;
+	sem->owner   = NULL;
 	atomic_inc(&srp_objects_in_use);
 	return sem;
 }
@@ -430,22 +434,20 @@ __initcall(srp_sema_boot_init);
 
 void do_srp_down(struct srp_semaphore* sem)
 {
-	/* claim... */
-        sem->claimed = 1;
-	/* ...and update ceiling */
+	/* Update ceiling. */
 	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
+	WARN_ON(sem->owner != NULL);
+	sem->owner = current;
 }
 
 void do_srp_up(struct srp_semaphore* sem)
-{
-	sem->claimed = 0;
-
+{	
 	/* Determine new system priority ceiling for this CPU. */
-	if (in_list(&sem->ceiling.list))
+	WARN_ON(!in_list(&sem->ceiling.list));
+	if (!in_list(&sem->ceiling.list))
 		list_del(&sem->ceiling.list);
-	else
-		TRACE_CUR("WARNING: SRP violation detected, prio not in ceiling"
-			  " list!\n");
+
+	sem->owner = NULL;
 
 	/* Wake tasks on this CPU, if they exceed current ceiling. */
 	wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
