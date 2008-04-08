@@ -153,8 +153,6 @@ asmlinkage long sys_complete_job(void)
 	 * appropriate queue and call schedule
 	 */
 	retval = litmus->complete_job();
-	if (!retval)
-		srp_ceiling_block();
       out:
 	return retval;
 }
@@ -200,15 +198,10 @@ asmlinkage long sys_wait_for_job_release(unsigned int job)
 	 * FIXME: At least problem 2 should be taken care of eventually.
 	 */
 	while (!retval && job > current->rt_param.job_params.job_no)
-	  /* If the last job overran then job <= job_no and we
-	   * don't send the task to sleep.
-	   */
-	  retval = litmus->complete_job();
-
-	/* We still have to honor the SRP after the actual release.
-	 */
-	if (!retval)
-		srp_ceiling_block();
+		/* If the last job overran then job <= job_no and we
+		 * don't send the task to sleep.
+		 */
+		retval = litmus->complete_job();
       out:
 	return retval;
 }

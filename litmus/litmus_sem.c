@@ -317,6 +317,24 @@ atomic_t srp_objects_in_use = ATOMIC_INIT(0);
 
 DEFINE_PER_CPU(struct srp, srp);
 
+
+/* Initialize SRP semaphores at boot time. */
+static int __init srp_init(void)
+{
+	int i;
+
+	printk("Initializing SRP per-CPU ceilings...");
+	for (i = 0; i < NR_CPUS; i++) {
+		init_waitqueue_head(&per_cpu(srp, i).ceiling_blocked);
+		INIT_LIST_HEAD(&per_cpu(srp, i).ceiling);
+	}
+	printk(" done!\n");
+
+	return 0;
+}
+module_init(srp_init);
+
+
 #define system_ceiling(srp) list2prio(srp->ceiling.next)
 
 
@@ -347,7 +365,7 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 	struct list_head *pos;
 	if (in_list(&prio->list)) {
 		printk(KERN_CRIT "WARNING: SRP violation detected, prio is already in "
-		       "ceiling list!\n");
+		       "ceiling list! cpu=%d, srp=%p\n", smp_processor_id(), ceiling2sem(prio));
 		return;
 	}
 	list_for_each(pos, &srp->ceiling)
@@ -384,6 +402,8 @@ static noinline int open_srp_semaphore(struct od_table_entry* entry, void* __use
 	struct srp_priority t_prio;
 
 	TRACE("opening SRP semaphore %p, cpu=%d\n", sem, sem->cpu);
+	if (!srp_active())
+		return -EBUSY;
 
 	if (sem->cpu == UNDEF_SEM)
 		sem->cpu = get_partition(t);
@@ -415,22 +435,6 @@ struct fdso_ops srp_sem_ops = {
 	.destroy = destroy_srp_semaphore
 };
 
-/* Initialize SRP semaphores at boot time. */
-static int __init srp_sema_boot_init(void)
-{
-	int i;
-
-	printk("Initializing SRP per-CPU ceilings...");
-	for (i = 0; i < NR_CPUS; i++) {
-		init_waitqueue_head(&per_cpu(srp, i).ceiling_blocked);
-		INIT_LIST_HEAD(&per_cpu(srp, i).ceiling);
-	}
-	printk(" done!\n");
-
-	return 0;
-}
-__initcall(srp_sema_boot_init);
-
 
 void do_srp_down(struct srp_semaphore* sem)
 {
@@ -438,18 +442,20 @@ void do_srp_down(struct srp_semaphore* sem)
 	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
 	WARN_ON(sem->owner != NULL);
 	sem->owner = current;
+	TRACE_CUR("acquired srp 0x%p\n", sem);
 }
 
 void do_srp_up(struct srp_semaphore* sem)
 {	
 	/* Determine new system priority ceiling for this CPU. */
 	WARN_ON(!in_list(&sem->ceiling.list));
-	if (!in_list(&sem->ceiling.list))
+	if (in_list(&sem->ceiling.list))
 		list_del(&sem->ceiling.list);
 
 	sem->owner = NULL;
 
 	/* Wake tasks on this CPU, if they exceed current ceiling. */
+	TRACE_CUR("released srp 0x%p\n", sem);
 	wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
 }
 
@@ -522,36 +528,50 @@ static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 }
 
 
-/* Wait for current task priority to exceed system-wide priority ceiling.
- * Can be used to determine when it is safe to run a job after its release.
- */
-void srp_ceiling_block(void)
+
+static void do_ceiling_block(struct task_struct *tsk)
 {
-	struct task_struct *tsk = current;
 	wait_queue_t wait = {
 		.private   = tsk,
 		.func      = srp_wake_up,
 		.task_list = {NULL, NULL}
 	};
 
-	/* bail out early if there aren't any SRP resources around */
-	if (!atomic_read(&srp_objects_in_use))
+	tsk->state = TASK_UNINTERRUPTIBLE;
+	add_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
+	tsk->rt_param.srp_non_recurse = 1;
+	preempt_enable_no_resched();
+	schedule();
+	preempt_disable();
+	tsk->rt_param.srp_non_recurse = 0;
+	remove_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
+}
+
+/* Wait for current task priority to exceed system-wide priority ceiling.
+ */
+void srp_ceiling_block(void)
+{
+	struct task_struct *tsk = current;
+
+	/* Only applies to real-time tasks, but optimize for RT tasks. */
+	if (unlikely(!is_realtime(tsk)))
+		return;
+
+	/* Avoid recursive ceiling blocking. */
+	if (unlikely(tsk->rt_param.srp_non_recurse))
+		return;
+
+	/* Bail out early if there aren't any SRP resources around. */
+	if (likely(!atomic_read(&srp_objects_in_use)))
 		return;
 
 	preempt_disable();
+	tsk->rt_param.srp_block = 0;
 	if (!srp_exceeds_ceiling(tsk, &__get_cpu_var(srp))) {
-		tsk->state = TASK_UNINTERRUPTIBLE;
-		add_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
 		TRACE_CUR("is priority ceiling blocked.\n");
-		preempt_enable_no_resched();
-		schedule();
-		/* Access to CPU var must occur with preemptions disabled,
-		 * otherwise Linux debug code complains loudly, even if it is
-		 * ok here.
-		 */
-		preempt_disable();
+		while (!srp_exceeds_ceiling(tsk, &__get_cpu_var(srp)))
+			do_ceiling_block(tsk);
 		TRACE_CUR("finally exceeds system ceiling.\n");
-		remove_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
 	} else
 		TRACE_CUR("is not priority ceiling blocked\n");	
 	preempt_enable();

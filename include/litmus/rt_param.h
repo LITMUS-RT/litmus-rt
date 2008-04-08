@@ -73,6 +73,9 @@ struct rt_param {
 	/* is the task sleeping? */
 	unsigned int 		flags:8;
 
+	/* do we need to check for srp blocking? */
+	unsigned int		srp_non_recurse:1;
+
 	/* user controlled parameters */
 	struct rt_task 		task_params;
 

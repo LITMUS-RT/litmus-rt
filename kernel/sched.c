@@ -3688,6 +3688,8 @@ need_resched_nonpreemptible:
 	preempt_enable_no_resched();
 	if (unlikely(test_thread_flag(TIF_NEED_RESCHED)))
 		goto need_resched;
+	if (srp_active())
+		srp_ceiling_block();
 }
 EXPORT_SYMBOL(schedule);
 

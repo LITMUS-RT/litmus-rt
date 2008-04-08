@@ -200,5 +200,6 @@ static inline lt_t litmus_clock(void)
 #define make_np(t) do {t->rt_param.kernel_np++;} while(0);
 #define take_np(t) do {t->rt_param.kernel_np--;} while(0);
 
+void srp_ceiling_block(void);
 
 #endif
