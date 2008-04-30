@@ -74,9 +74,10 @@ void edf_release_at(struct task_struct *t, lt_t start)
 	set_rt_flags(t, RT_F_RUNNING);
 }
 
-void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched)
+void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
+		     release_at_t release)
 {
-	rt_domain_init(rt, resched, edf_ready_order);
+	rt_domain_init(rt, resched, release, edf_ready_order);
 }
 
 void edf_prepare_for_next_period(struct task_struct *t)

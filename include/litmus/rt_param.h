@@ -42,6 +42,10 @@ struct rt_job {
 	lt_t	release;
 	/* What is the current deadline? */
 	lt_t   	deadline;
+
+	/* The high-resolution timer used to control its release. */
+	struct hrtimer release_timer;
+
 	/* How much service has this job received so far?
 	 */
 	lt_t	exec_time;

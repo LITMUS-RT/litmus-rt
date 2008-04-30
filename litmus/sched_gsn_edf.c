@@ -264,7 +264,7 @@ static noinline void requeue(struct task_struct* task)
 		 * the release and
 		 * deadline. We just must check if it has been released.
 		 */
-		if (is_released(task, sched_clock()))
+		if (is_released(task, litmus_clock()))
 			__add_ready(&gsnedf, task);
 		else {
 			/* it has got to wait */
@@ -306,17 +306,16 @@ static noinline void gsnedf_job_arrival(struct task_struct* task)
 }
 
 /* check for current job releases */
-static noinline  void gsnedf_release_jobs(void)
+static noinline void gsnedf_release_jobs(void)
 {
 	struct list_head *pos, *save;
 	struct task_struct   *queued;
-	lt_t now = sched_clock();
-
+	lt_t now = litmus_clock();
 
 	list_for_each_safe(pos, save, &gsnedf.release_queue) {
 		queued = list_entry(pos, struct task_struct, rt_list);
 		if (likely(is_released(queued, now))) {
-			/* this one is ready to go*/
+			/* this one is ready to go */
 			list_del(pos);
 			set_rt_flags(queued, RT_F_RUNNING);
 
@@ -329,6 +328,37 @@ static noinline  void gsnedf_release_jobs(void)
 	}
 }
 
+/* handles job releases when a timer expires */
+static enum hrtimer_restart gsnedf_release_job_timer(struct hrtimer *timer)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&gsnedf_lock, flags);
+
+	/* Release all pending ready jobs. */
+	gsnedf_release_jobs();
+
+	spin_unlock_irqrestore(&gsnedf_lock, flags);
+
+	return HRTIMER_NORESTART;
+}
+
+/* setup a new job release timer */
+static void gsnedf_setup_release_job_timer(struct task_struct *task)
+{
+        hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+        release_timer(task).function = gsnedf_release_job_timer;
+#ifdef CONFIG_HIGH_RES_TIMERS
+        release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
+#endif
+
+        /* Expiration time of timer is release time of task. */
+	release_timer(task).expires = ns_to_ktime(get_release(task));
+
+	hrtimer_start(&release_timer(task), release_timer(task).expires,
+		      HRTIMER_MODE_ABS);
+}
+
 /* gsnedf_tick - this function is called for every local timer
  *                         interrupt.
  *
@@ -337,8 +367,6 @@ static noinline  void gsnedf_release_jobs(void)
  */
 static void gsnedf_tick(struct task_struct* t)
 {
-	unsigned long 		flags;
-
 	if (is_realtime(t) && budget_exhausted(t)) {
 		if (!is_np(t)) {
 			/* np tasks will be preempted when they become
@@ -355,21 +383,6 @@ static void gsnedf_tick(struct task_struct* t)
 			      "preemption delayed.\n", t->pid);
 			request_exit_np(t);
 		}
-	}
-
-	/* only the first CPU needs to release jobs */
-	/* FIXME: drive this from a hrtimer */
-	if (smp_processor_id() == 0) {
-		spin_lock_irqsave(&gsnedf_lock, flags);
-
-		/* Try to release pending jobs */
-		gsnedf_release_jobs();
-
-		/* We don't need to check linked != scheduled since
-		 * set_tsk_need_resched has been set by preempt() if necessary.
-		 */
-
-		spin_unlock_irqrestore(&gsnedf_lock, flags);
 	}
 }
 
@@ -524,7 +537,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 	t->rt_param.linked_on          = NO_CPU;
 
 	/* setup job params */
-	edf_release_at(t, sched_clock());
+	edf_release_at(t, litmus_clock());
 
 	gsnedf_job_arrival(t);
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
@@ -543,7 +556,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 	if (get_rt_flags(task) == RT_F_EXIT_SEM) {
 		set_rt_flags(task, RT_F_RUNNING);
 	} else {
-		now = sched_clock();
+		now = litmus_clock();
 		if (is_tardy(task, now)) {
 			/* new sporadic release */
 			edf_release_at(task, now);
@@ -711,7 +724,7 @@ static int __init init_gsn_edf(void)
 		INIT_LIST_HEAD(&entry->list);
 	}
 
-	edf_domain_init(&gsnedf, NULL);
+	edf_domain_init(&gsnedf, NULL, gsnedf_setup_release_job_timer);
 	return register_sched_plugin(&gsn_edf_plugin);
 }
 
