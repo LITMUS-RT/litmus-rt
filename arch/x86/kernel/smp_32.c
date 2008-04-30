@@ -641,6 +641,7 @@ static void native_smp_send_stop(void)
 fastcall void smp_reschedule_interrupt(struct pt_regs *regs)
 {
 	ack_APIC_irq();
+	set_tsk_need_resched(current);
 	__get_cpu_var(irq_stat).irq_resched_count++;
 }
 
