@@ -568,6 +568,22 @@ static enum hrtimer_restart tick_sched_timer(struct hrtimer *timer)
 }
 
 /**
+ * tick_set_quanta_type - get the quanta type as a boot option
+ * Default is standard setup with ticks staggered over first
+ * half of tick period.
+ */
+int quanta_type = LINUX_DEFAULT_TICKS;
+static int __init tick_set_quanta_type(char *str)
+{
+	if (strcmp("aligned", str) == 0)
+		quanta_type = LITMUS_ALIGNED_TICKS;
+	else if (strcmp("staggered", str) == 0)
+		quanta_type = LITMUS_STAGGERED_TICKS;
+	return 1;
+}
+__setup("quanta=", tick_set_quanta_type);
+
+/**
  * tick_setup_sched_timer - setup the tick emulation timer
  */
 void tick_setup_sched_timer(void)
@@ -585,9 +601,24 @@ void tick_setup_sched_timer(void)
 
 	/* Get the next period (per cpu) */
 	ts->sched_timer.expires = tick_init_jiffy_update();
-	offset = ktime_to_ns(tick_period) >> 1;
-	do_div(offset, num_possible_cpus());
-	offset *= smp_processor_id();
+
+	/* Offset must be set correctly to achieve desired quanta type. */
+	switch (quanta_type) {
+		case LITMUS_ALIGNED_TICKS:
+			offset = 0;
+			break;
+		case LITMUS_STAGGERED_TICKS:
+			offset = ktime_to_ns(tick_period);
+			do_div(offset, num_possible_cpus());
+			offset *= smp_processor_id();
+			break;
+		default:
+			offset = ktime_to_ns(tick_period) >> 1;
+			do_div(offset, num_possible_cpus());
+			offset *= smp_processor_id();
+	}
+
+	/* Add correct offset to expiration time. */
 	ts->sched_timer.expires = ktime_add_ns(ts->sched_timer.expires, offset);
 
 	for (;;) {
