@@ -8,7 +8,7 @@
 struct _rt_domain;
 
 typedef int (*check_resched_needed_t)(struct _rt_domain *rt);
-typedef void (*release_at_t)(struct task_struct *t, lt_t start);
+typedef void (*release_at_t)(struct task_struct *t);
 
 typedef struct _rt_domain {
 	/* runnable rt tasks are in here */
@@ -22,6 +22,9 @@ typedef struct _rt_domain {
 	/* how do we check if we need to kick another CPU? */
 	check_resched_needed_t		check_resched;
 
+	/* how do we setup a job release? */
+	release_at_t			setup_release;
+
 	/* how are tasks ordered in the ready queue? */
 	list_cmp_t			order;
 } rt_domain_t;
@@ -33,7 +36,7 @@ typedef struct _rt_domain {
 	(!list_empty(&(rt)->ready_queue))
 
 void rt_domain_init(rt_domain_t *rt, check_resched_needed_t f,
-		    list_cmp_t order);
+		    release_at_t g, list_cmp_t order);
 
 void __add_ready(rt_domain_t* rt, struct task_struct *new);
 void __add_release(rt_domain_t* rt, struct task_struct *task);

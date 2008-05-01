@@ -163,6 +163,18 @@ inline static int budget_exhausted(struct task_struct* t)
 
 #define get_release(t) ((t)->rt_param.job_params.release)
 
+/* Our notion of time within LITMUS: kernel monotonic time. */
+static inline lt_t litmus_clock(void)
+{
+	return ktime_to_ns(ktime_get());
+}
+
+/* A macro to convert from nanoseconds to ktime_t. */
+#define ns_to_ktime(t)		ktime_add_ns(ktime_set(0, 0), t)
+
+/* The high-resolution release timer for a task. */
+#define release_timer(t) ((t)->rt_param.job_params.release_timer)
+
 /* Honor the flag in the preempt_count variable that is set
  * when scheduling is in progress.
  */

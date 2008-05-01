@@ -43,9 +43,10 @@ DEFINE_PER_CPU(psnedf_domain_t, psnedf_domains);
 
 static void psnedf_domain_init(psnedf_domain_t* pedf,
 				 check_resched_needed_t check,
+				 release_at_t release,
 				 int cpu)
 {
-	edf_domain_init(&pedf->domain, check);
+	edf_domain_init(&pedf->domain, check, release);
 	pedf->cpu      		= cpu;
 	pedf->lock     		= SPIN_LOCK_UNLOCKED;
 	pedf->scheduled		= NULL;
@@ -60,7 +61,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING");
 
 	set_rt_flags(t, RT_F_RUNNING);
-	if (is_released(t, sched_clock()))
+	if (is_released(t, litmus_clock()))
 		__add_ready(edf, t);
 	else
 		__add_release(edf, t); /* it has got to wait */
@@ -99,11 +100,41 @@ static int psnedf_check_resched(rt_domain_t *edf)
 	return ret;
 }
 
+/* handles job releases when a timer expires */
+static enum hrtimer_restart psnedf_release_job_timer(struct hrtimer *timer)
+{
+	unsigned long flags;
+	rt_domain_t        *edf          = local_edf;
+	psnedf_domain_t    *pedf         = local_pedf;
+
+	spin_lock_irqsave(&pedf->lock, flags);
+
+	/* Release all pending ready jobs. */
+	__release_pending(edf);
+
+	spin_unlock_irqrestore(&pedf->lock, flags);
+
+	return HRTIMER_NORESTART;
+}
+
+/* setup a new job release timer */
+static void psnedf_setup_release_job_timer(struct task_struct *task)
+{
+	hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	release_timer(task).function = psnedf_release_job_timer;
+#ifdef CONFIG_HIGH_RES_TIMERS
+	release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
+#endif
+
+	/* Expiration time of timer is release time of task. */
+	release_timer(task).expires = ns_to_ktime(get_release(task));
+
+	hrtimer_start(&release_timer(task), release_timer(task).expires,
+	              HRTIMER_MODE_ABS);
+}
 
 static void psnedf_tick(struct task_struct *t)
 {
-	unsigned long       flags;
-	rt_domain_t        *edf          = local_edf;
 	psnedf_domain_t    *pedf         = local_pedf;
 
 	/* Check for inconsistency. We don't need the lock for this since
@@ -122,11 +153,6 @@ static void psnedf_tick(struct task_struct *t)
 			request_exit_np(t);
 		}
 	}
-
-	spin_lock_irqsave(&pedf->lock, flags);
-	/* FIXME: release via hrtimer */
-	__release_pending(edf);
-	spin_unlock_irqrestore(&pedf->lock, flags);
 }
 
 static void job_completion(struct task_struct* t)
@@ -226,7 +252,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 		smp_processor_id(), t->pid, get_partition(t));
 
 	/* setup job parameters */
-	release_at(t, sched_clock());
+	release_at(t, litmus_clock());
 
 	/* The task should be running in the queue, otherwise signal
 	 * code will try to wake it up with fatal consequences.
@@ -259,7 +285,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	 *
 	 * FIXME: This should be done in some more predictable and userspace-controlled way.
 	 */
-	now = sched_clock();
+	now = litmus_clock();
 	if (is_tardy(task, now) &&
 	    get_rt_flags(task) != RT_F_EXIT_SEM) {
 		/* new sporadic release */
@@ -320,7 +346,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 				/* queued in domain*/
 				list_del(&t->rt_list);
 				/* readd to make priority change take place */
-				if (is_released(t, sched_clock()))
+				if (is_released(t, litmus_clock()))
 					__add_ready(edf, t);
 				else
 					__add_release(edf, t);
@@ -431,7 +457,8 @@ static int __init init_psn_edf(void)
 	for (i = 0; i < NR_CPUS; i++)
 	{
 		psnedf_domain_init(remote_pedf(i),
-				   psnedf_check_resched, i);
+				   psnedf_check_resched,
+				   psnedf_setup_release_job_timer, i);
 	}
 	return register_sched_plugin(&psn_edf_plugin);
 }

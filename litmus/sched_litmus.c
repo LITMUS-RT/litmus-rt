@@ -5,7 +5,7 @@
 
 static void update_time_litmus(struct rq *rq, struct task_struct *p)
 {
-	lt_t now = sched_clock();
+	lt_t now = litmus_clock();
 	p->rt_param.job_params.exec_time +=
 		now - p->rt_param.job_params.exec_start;
 	p->rt_param.job_params.exec_start = now;
@@ -88,7 +88,7 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq)
 	struct task_struct* picked = rq->litmus_next;
 	rq->litmus_next = NULL;
 	if (picked)
-		picked->rt_param.job_params.exec_start = sched_clock();
+		picked->rt_param.job_params.exec_start = litmus_clock();
 	return picked;
 }
 
@@ -103,7 +103,7 @@ static void task_tick_litmus(struct rq *rq, struct task_struct *p)
  */
 static void set_curr_task_litmus(struct rq *rq)
 {
-	rq->curr->rt_param.job_params.exec_start = sched_clock();
+	rq->curr->rt_param.job_params.exec_start = litmus_clock();
 }
 
 

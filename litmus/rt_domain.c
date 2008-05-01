@@ -22,26 +22,48 @@ static int dummy_resched(rt_domain_t *rt)
 	return 0;
 }
 
+static void dummy_setup_release(struct task_struct *t)
+{
+}
+
 static int dummy_order(struct list_head* a, struct list_head* b)
 {
 	return 0;
 }
 
+/* We now set or clear a per_cpu flag indicating if a plugin-specific call
+ * to setup a timer (that handles a job release) needs to be made. There is
+ * no need to setup multiple timers for jobs that are released at the same
+ * time. The actual clearing of this flag is a side effect of the release_order
+ * comparison function that is used when inserting a task into the
+ * release queue.
+ */
+DEFINE_PER_CPU(int, call_setup_release) = 1;
 int release_order(struct list_head* a, struct list_head* b)
 {
-	return earlier_release(
-		list_entry(a, struct task_struct, rt_list),
-		list_entry(b, struct task_struct, rt_list));
+	struct task_struct *task_a = list_entry(a, struct task_struct, rt_list);
+	struct task_struct *task_b = list_entry(b, struct task_struct, rt_list);
+
+	/* If the release times are equal, clear the flag. */
+	if (get_release(task_a) == get_release(task_b)) {
+		__get_cpu_var(call_setup_release) = 0;
+		return 0;
+	}
+
+	return earlier_release(task_a, task_b);
 }
 
 
 void rt_domain_init(rt_domain_t *rt,
 		    check_resched_needed_t f,
+		    release_at_t g,
 		    list_cmp_t order)
 {
 	BUG_ON(!rt);
 	if (!f)
 		f = dummy_resched;
+	if (!g)
+		g = dummy_setup_release;
 	if (!order)
 		order = dummy_order;
 	INIT_LIST_HEAD(&rt->ready_queue);
@@ -49,6 +71,7 @@ void rt_domain_init(rt_domain_t *rt,
 	rt->ready_lock  	= RW_LOCK_UNLOCKED;
 	rt->release_lock 	= SPIN_LOCK_UNLOCKED;
 	rt->check_resched 	= f;
+	rt->setup_release	= g;
 	rt->order		= order;
 }
 
@@ -57,9 +80,9 @@ void rt_domain_init(rt_domain_t *rt,
  */
 void __add_ready(rt_domain_t* rt, struct task_struct *new)
 {
-	TRACE("rt: adding %s/%d (%llu, %llu) to ready queue at %llu\n",
+	TRACE("rt: adding %s/%d (%llu, %llu) rel=%llu to ready queue at %llu\n",
 	      new->comm, new->pid, get_exec_cost(new), get_rt_period(new),
-	      sched_clock());
+	      get_release(new), litmus_clock());
 
 	if (!list_insert(&new->rt_list, &rt->ready_queue, rt->order))
 		rt->check_resched(rt);
@@ -92,14 +115,25 @@ void __add_release(rt_domain_t* rt, struct task_struct *task)
 	      task->comm, task->pid, get_exec_cost(task), get_rt_period(task),
 	      get_release(task));
 
+	/* Set flag assuming that we will need to setup another timer for
+	 * the release of this job. If it turns out that this is unnecessary
+	 * (because another job is already being released at that time,
+	 * and setting up two timers is redundant and inefficient), then
+	 * we will clear that flag so another release timer isn't setup.
+	 */
+	__get_cpu_var(call_setup_release) = 1;
 	list_insert(&task->rt_list, &rt->release_queue, release_order);
+
+	/* Setup a job release -- this typically involves a timer. */
+	if (__get_cpu_var(call_setup_release))
+		rt->setup_release(task);
 }
 
 void __release_pending(rt_domain_t* rt)
 {
 	struct list_head *pos, *save;
 	struct task_struct   *queued;
-	lt_t now = sched_clock();
+	lt_t now = litmus_clock();
 	list_for_each_safe(pos, save, &rt->release_queue) {
 		queued = list_entry(pos, struct task_struct, rt_list);
 		if (likely(is_released(queued, now))) {

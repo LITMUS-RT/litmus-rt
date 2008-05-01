@@ -12,7 +12,8 @@
 #include <litmus/rt_domain.h>
 
 
-void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched);
+void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
+		     release_at_t release);
 
 int edf_higher_prio(struct task_struct* first,
 		    struct task_struct* second);
