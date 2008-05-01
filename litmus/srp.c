@@ -236,12 +236,6 @@ asmlinkage long sys_srp_up(int sem_od)
 	return ret;
 }
 
-asmlinkage long sys_reg_task_srp_sem(int sem_od)
-{
-	/* unused */
-	return 0;
-}
-
 static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 		       void *key)
 {

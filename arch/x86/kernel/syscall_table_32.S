@@ -336,8 +336,7 @@ ENTRY(sys_call_table)
 	.long sys_fmlp_up
 	.long sys_srp_down
 	.long sys_srp_up		/* 335 */
-	.long sys_reg_task_srp_sem
 	.long sys_query_job_no
 	.long sys_wait_for_job_release
 	.long sys_wait_for_ts_release
-	.long sys_release_ts		/* 340 */
+	.long sys_release_ts		/* 339 */
