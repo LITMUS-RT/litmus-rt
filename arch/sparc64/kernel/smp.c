@@ -1033,6 +1033,7 @@ void smp_receive_signal(int cpu)
 void smp_receive_signal_client(int irq, struct pt_regs *regs)
 {
 	clear_softint(1 << irq);
+	set_tsk_need_resched(current);
 }
 
 void smp_new_mmu_context_version_client(int irq, struct pt_regs *regs)
