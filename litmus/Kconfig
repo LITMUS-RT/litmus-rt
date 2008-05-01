@@ -10,6 +10,9 @@ config SCHED_TASK_TRACE
 	  small overhead in the scheduling code. Disable if the overhead is not
 	  acceptable (e.g., benchmarking).
 
+	  Say Yes for debugging.
+	  Say No for overhead tracing.
+
 config SCHED_DEBUG_TRACE
 	bool "TRACE() debugging"
 	default y
@@ -19,6 +22,18 @@ config SCHED_DEBUG_TRACE
 	  in the kernel, and no overheads due to debugging statements will be
 	  incurred by the scheduler. Disable if the overhead is not acceptable
 	  (e.g. benchmarking).
+
+	  Say Yes for debugging.
+	  Say No for overhead tracing.
+
+config FEATHER_TRACE
+	bool "Feather-Trace Instrumentation Support"
+	default y
+	help
+	  Include Feather-Trace trace points. Currently not supported on
+	  sparc64.
+
+	  Say Yes for overhead tracing.
 
 
 endmenu

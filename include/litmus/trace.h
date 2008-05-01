@@ -1,6 +1,7 @@
-
 #ifndef _SYS_TRACE_H_
 #define	_SYS_TRACE_H_
+
+#ifdef CONFIG_FEATHER_TRACE
 
 #include <litmus/feather_trace.h>
 #include <litmus/feather_buffer.h>
@@ -25,6 +26,14 @@ extern struct ft_buffer* trace_ts_buf;
 asmlinkage void save_timestamp(unsigned long event);
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
+
+
+#else /* !CONFIG_FEATHER_TRACE */
+
+#define TIMESTAMP(id) /* no tracing */
+
+#endif
+
 
 /* Convention for timestamps
  * =========================
