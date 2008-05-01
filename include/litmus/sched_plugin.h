@@ -85,6 +85,8 @@ struct sched_plugin {
 	struct list_head	list;
 	/* 	basic info 		*/
 	char 			*plugin_name;
+	unsigned int		srp_active;
+	unsigned int		fmlp_active;
 
 	/* 	scheduler invocation 	*/
 	scheduler_tick_t        tick;
@@ -114,5 +116,15 @@ extern struct sched_plugin *litmus;
 int register_sched_plugin(struct sched_plugin* plugin);
 struct sched_plugin* find_sched_plugin(const char* name);
 int print_sched_plugins(char* buf, int max);
+
+static inline int srp_active(void)
+{
+	return litmus->srp_active;
+}
+
+static inline int fmlp_active(void)
+{
+	return litmus->fmlp_active;
+}
 
 #endif

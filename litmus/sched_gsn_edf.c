@@ -695,6 +695,7 @@ static long gsnedf_admit_task(struct task_struct* tsk)
 /*	Plugin object	*/
 static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "GSN-EDF",
+	.fmlp_active		= 1,
 	.finish_switch		= gsnedf_finish_switch,
 	.tick			= gsnedf_tick,
 	.task_new		= gsnedf_task_new,

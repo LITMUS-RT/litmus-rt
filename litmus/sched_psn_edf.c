@@ -436,6 +436,8 @@ static long psnedf_admit_task(struct task_struct* tsk)
 /*	Plugin object	*/
 static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PSN-EDF",
+	.fmlp_active		= 1,
+	.srp_active		= 1,
 	.tick			= psnedf_tick,
 	.task_new		= psnedf_task_new,
 	.complete_job		= complete_job,
