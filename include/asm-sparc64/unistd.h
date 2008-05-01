@@ -333,7 +333,11 @@
 #define __NR_eventfd		313
 #define __NR_fallocate		314
 
-#define NR_SYSCALLS		315
+#define __NR_LITMUS		315
+
+#include "litmus/unistd.h"
+
+#define NR_SYSCALLS		315 + NR_litmus_syscalls
 
 #ifdef __KERNEL__
 /* sysconf options, for SunOS compatibility */

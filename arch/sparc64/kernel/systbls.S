@@ -82,6 +82,13 @@ sys_call_table32:
 	.word compat_sys_set_mempolicy, compat_sys_kexec_load, compat_sys_move_pages, sys_getcpu, compat_sys_epoll_pwait
 /*310*/	.word compat_sys_utimensat, compat_sys_signalfd, compat_sys_timerfd, sys_eventfd, compat_sys_fallocate
 
+/*LITMUS, 315*/
+	.word sys_set_rt_task_param, sys_get_rt_task_param, sys_complete_job, sys_register_np_flag, sys_exit_np
+/*320*/
+	.word sys_od_open, sys_od_close, sys_fmlp_down, sys_fmlp_up, sys_srp_down
+/*325*/ .word sys_srp_up, sys_query_job_no, sys_wait_for_job_release, sys_wait_for_ts_release, sys_release_ts
+
+
 #endif /* CONFIG_COMPAT */
 
 	/* Now the 64-bit native Linux syscall table. */
@@ -154,6 +161,12 @@ sys_call_table:
 	.word sys_set_mempolicy, sys_kexec_load, sys_move_pages, sys_getcpu, sys_epoll_pwait
 /*310*/	.word sys_utimensat, sys_signalfd, sys_timerfd, sys_eventfd, sys_fallocate
 
+/*LITMUS, 315*/
+	.word sys_set_rt_task_param, sys_get_rt_task_param, sys_complete_job, sys_register_np_flag, sys_exit_np
+/*320*/
+	.word sys_od_open, sys_od_close, sys_fmlp_down, sys_fmlp_up, sys_srp_down
+/*325*/ .word sys_srp_up, sys_query_job_no, sys_wait_for_job_release, sys_wait_for_ts_release, sys_release_ts
+	
 #if defined(CONFIG_SUNOS_EMUL) || defined(CONFIG_SOLARIS_EMUL) || \
     defined(CONFIG_SOLARIS_EMUL_MODULE)
 	/* Now the 32-bit SunOS syscall table. */
@@ -271,6 +284,11 @@ sunos_sys_table:
 	.word sunos_nosys, sunos_nosys, sunos_nosys
 	.word sunos_nosys
 /*310*/	.word sunos_nosys, sunos_nosys, sunos_nosys
-	.word sunos_nosys, sunos_nosys
+	.word sunos_nosys, sunos_nosys, sunos_nosys
+	.word sunos_nosys, sunos_nosys, sunos_nosys
+	.word sunos_nosys
+/*320*/ .word sunos_nosys, sunos_nosys, sunos_nosys
+	.word sunos_nosys, sunos_nosys, sunos_nosys
+	.word sunos_nosys, sunos_nosys, sunos_nosys
 
 #endif
