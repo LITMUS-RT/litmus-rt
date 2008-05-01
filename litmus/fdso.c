@@ -18,11 +18,11 @@
 
 #include <litmus/fdso.h>
 
-extern struct fdso_ops pi_sem_ops;
+extern struct fdso_ops fmlp_sem_ops;
 extern struct fdso_ops srp_sem_ops;
 
 static const struct fdso_ops* fdso_ops[] = {
-	&pi_sem_ops,
+	&fmlp_sem_ops,
 	&srp_sem_ops,
 };
 

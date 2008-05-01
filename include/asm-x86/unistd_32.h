@@ -337,8 +337,8 @@
 #define __NR_exit_np            329
 #define __NR_od_open		330
 #define __NR_od_close		331
-#define __NR_pi_down		332
-#define __NR_pi_up		333
+#define __NR_fmlp_down		332
+#define __NR_fmlp_up		333
 #define __NR_srp_down		334
 #define __NR_srp_up		335
 #define __NR_reg_task_srp_sem	336
@@ -349,7 +349,7 @@
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 339
+#define NR_syscalls 340
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR

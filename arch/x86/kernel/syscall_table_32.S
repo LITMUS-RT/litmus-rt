@@ -332,8 +332,8 @@ ENTRY(sys_call_table)
 	.long sys_exit_np
 	.long sys_od_open		/* 330 */
 	.long sys_od_close
-	.long sys_pi_down
-	.long sys_pi_up
+	.long sys_fmlp_down
+	.long sys_fmlp_up
 	.long sys_srp_down
 	.long sys_srp_up		/* 335 */
 	.long sys_reg_task_srp_sem

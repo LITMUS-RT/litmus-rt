@@ -16,7 +16,7 @@
 typedef enum  {
 	MIN_OBJ_TYPE 	= 0,
 
-	PI_SEM 		= 0,
+	FMLP_SEM	= 0,
 	SRP_SEM		= 1,
 
 	MAX_OBJ_TYPE	= 1
@@ -61,7 +61,7 @@ static inline void* od_lookup(int od, obj_type_t type)
 	return e && e->obj->type == type ? e->obj->obj : NULL;
 }
 
-#define lookup_pi_sem(od)  ((struct pi_semaphore*)  od_lookup(od, PI_SEM))
+#define lookup_fmlp_sem(od)((struct pi_semaphore*)  od_lookup(od, FMLP_SEM))
 #define lookup_srp_sem(od) ((struct srp_semaphore*) od_lookup(od, SRP_SEM))
 #define lookup_ics(od)     ((struct ics*)           od_lookup(od, ICS_ID))
 

@@ -20,7 +20,7 @@
 /*                          PRIORITY INHERITANCE                              */
 /* ************************************************************************** */
 
-static  void* create_pi_semaphore(void)
+static  void* create_fmlp_semaphore(void)
 {
 	struct pi_semaphore* sem;
 	int i;
@@ -38,15 +38,23 @@ static  void* create_pi_semaphore(void)
 	return sem;
 }
 
-static void destroy_pi_semaphore(void* sem)
+static int open_fmlp_semaphore(struct od_table_entry* entry, void* __user arg)
+{
+	if (!fmlp_active())
+		return -EBUSY;
+	return 0;
+}
+
+static void destroy_fmlp_semaphore(void* sem)
 {
 	/* XXX assert invariants */
 	kfree(sem);
 }
 
-struct fdso_ops pi_sem_ops = {
-	.create  = create_pi_semaphore,
-	.destroy = destroy_pi_semaphore
+struct fdso_ops fmlp_sem_ops = {
+	.create  = create_fmlp_semaphore,
+	.open    = open_fmlp_semaphore,
+	.destroy = destroy_fmlp_semaphore
 };
 
 struct wq_pair {
@@ -120,7 +128,7 @@ int edf_set_hp_cpu_task(struct pi_semaphore *sem, int cpu)
 	return ret;
 }
 
-int do_pi_down(struct pi_semaphore* sem)
+int do_fmlp_down(struct pi_semaphore* sem)
 {
 	unsigned long flags;
 	struct task_struct *tsk = current;
@@ -179,7 +187,7 @@ int do_pi_down(struct pi_semaphore* sem)
 	return suspended;
 }
 
-void do_pi_up(struct pi_semaphore* sem)
+void do_fmlp_up(struct pi_semaphore* sem)
 {
 	unsigned long flags;
 
@@ -195,7 +203,7 @@ void do_pi_up(struct pi_semaphore* sem)
 	spin_unlock_irqrestore(&sem->wait.lock, flags);
 }
 
-asmlinkage long sys_pi_down(int sem_od)
+asmlinkage long sys_fmlp_down(int sem_od)
 {
 	long ret = 0;
 	struct pi_semaphore * sem;
@@ -204,9 +212,9 @@ asmlinkage long sys_pi_down(int sem_od)
 	preempt_disable();
 	TS_PI_DOWN_START;
 
-	sem = lookup_pi_sem(sem_od);
+	sem = lookup_fmlp_sem(sem_od);
 	if (sem)
-		suspended = do_pi_down(sem);
+		suspended = do_fmlp_down(sem);
 	else
 		ret = -EINVAL;
 
@@ -218,7 +226,7 @@ asmlinkage long sys_pi_down(int sem_od)
 	return ret;
 }
 
-asmlinkage long sys_pi_up(int sem_od)
+asmlinkage long sys_fmlp_up(int sem_od)
 {
 	long ret = 0;
 	struct pi_semaphore * sem;
@@ -226,9 +234,9 @@ asmlinkage long sys_pi_up(int sem_od)
 	preempt_disable();
 	TS_PI_UP_START;
 
-	sem = lookup_pi_sem(sem_od);
+	sem = lookup_fmlp_sem(sem_od);
 	if (sem)
-		do_pi_up(sem);
+		do_fmlp_up(sem);
 	else
 		ret = -EINVAL;
 
@@ -238,45 +246,3 @@ asmlinkage long sys_pi_up(int sem_od)
 
 	return ret;
 }
-
-/* Clear wait queue and wakeup waiting tasks, and free semaphore. */
-/*
-asmlinkage long sys_pi_sema_free(int sem_id)
-{
-        struct list_head *tmp, *next;
-	unsigned long flags;
-
-        if (sem_id < 0 || sem_id >= MAX_PI_SEMAPHORES)
-		return -EINVAL;
-
-	if (!pi_sems[sem_id].used)
-		return -EINVAL;
-
-	spin_lock_irqsave(&pi_sems[sem_id].wait.lock, flags);
-	if (waitqueue_active(&pi_sems[sem_id].wait)) {
-		list_for_each_safe(tmp, next,
-				   &pi_sems[sem_id].wait.task_list) {
-			wait_queue_t *curr = list_entry(tmp, wait_queue_t,
-					                task_list);
-			list_del(tmp);
-			set_rt_flags((struct task_struct*)curr->private,
-				     RT_F_EXIT_SEM);
-			curr->func(curr,
-				   TASK_UNINTERRUPTIBLE | TASK_INTERRUPTIBLE,
-				   0, NULL);
-		}
-	}
-
-	spin_unlock_irqrestore(&pi_sems[sem_id].wait.lock, flags);
-	pi_sems[sem_id].used = 0;
-
-	return 0;
-}
-*/
-
-
-
-/* ************************************************************************** */
-
-
-
