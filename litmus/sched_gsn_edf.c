@@ -354,6 +354,9 @@ static void gsnedf_setup_release_job_timer(struct task_struct *task)
 #endif
 
         /* Expiration time of timer is release time of task. */
+	TRACE_TASK(task, "prog timer, rel=%llu, at %llu\n", 
+		   get_release(task),
+		   litmus_clock());
 	release_timer(task).expires = ns_to_ktime(get_release(task));
 
 	hrtimer_start(&release_timer(task), release_timer(task).expires,
@@ -453,6 +456,17 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
 	preempt     = entry->scheduled != entry->linked;
 
+	if (exists)
+		TRACE_TASK(prev, 
+			   "blocks:%d out_of_time:%d np:%d sleep:%d preempt:%d "
+			   "state:%d sig:%d\n",
+			   blocks, out_of_time, np, sleep, preempt, 
+			   prev->state, signal_pending(prev));
+	if (entry->linked && preempt)
+		TRACE_TASK(prev, "will be preempted by %s/%d\n", 
+			   entry->linked->comm, entry->linked->pid);
+	     
+
 	/* If a task blocks we have no choice but to reschedule.
 	 */
 	if (blocks)
@@ -497,6 +511,10 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 
 	spin_unlock(&gsnedf_lock);
 
+	if (next)
+		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
+	else if (exists && !next)
+		TRACE("becomes idle at %llu.\n", litmus_clock());
 	/* don't race with a concurrent switch */
 	if (next && prev != next)
 		while (next->rt_param.scheduled_on != NO_CPU)
@@ -549,6 +567,8 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 	unsigned long flags;
 	lt_t now;
 
+	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
+
 	spin_lock_irqsave(&gsnedf_lock, flags);
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
@@ -575,6 +595,8 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 static void gsnedf_task_block(struct task_struct *t)
 {
 	unsigned long flags;
+
+	TRACE_TASK(t, "block at %llu\n", litmus_clock());
 
 	/* unlink if necessary */
 	spin_lock_irqsave(&gsnedf_lock, flags);
