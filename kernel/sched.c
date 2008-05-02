@@ -3649,9 +3649,10 @@ need_resched_nonpreemptible:
 	/* do litmus scheduling outside of rq lock, so that we
 	 * can do proper migrations for global schedulers
 	 */
-	litmus_schedule(rq, prev);
+       
 	spin_lock(&rq->lock);
 	clear_tsk_need_resched(prev);
+	litmus_schedule(rq, prev);
 
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
 		if (unlikely((prev->state & TASK_INTERRUPTIBLE) &&
