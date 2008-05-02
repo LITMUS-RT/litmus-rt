@@ -78,7 +78,7 @@ asmlinkage long sys_release_ts(lt_t __user *__delay)
 
 	ret = copy_from_user(&delay, __delay, sizeof(lt_t));
 	if (ret == 0)
-		ret = do_release_ts(sched_clock() + delay);
+		ret = do_release_ts(litmus_clock() + delay);
 
 	return ret;
 }
