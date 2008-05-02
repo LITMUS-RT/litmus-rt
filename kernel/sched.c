@@ -4536,10 +4536,11 @@ long sched_setaffinity(pid_t pid, cpumask_t new_mask)
 	read_lock(&tasklist_lock);
 
 	p = find_process_by_pid(pid);
-	if (!p) {
+	if (!p || is_realtime(p)) {
+		/* LITMUS tasks don't get to do this, transition to BE first */
 		read_unlock(&tasklist_lock);
 		mutex_unlock(&sched_hotcpu_mutex);
-		return -ESRCH;
+		return p ? -EPERM : -ESRCH;
 	}
 
 	/*
