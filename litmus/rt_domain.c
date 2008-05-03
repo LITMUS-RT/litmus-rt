@@ -22,57 +22,80 @@ static int dummy_resched(rt_domain_t *rt)
 	return 0;
 }
 
-static void dummy_setup_release(struct task_struct *t)
-{
-}
-
 static int dummy_order(struct list_head* a, struct list_head* b)
 {
 	return 0;
 }
 
-/* We now set or clear a per_cpu flag indicating if a plugin-specific call
- * to setup a timer (that handles a job release) needs to be made. There is
- * no need to setup multiple timers for jobs that are released at the same
- * time. The actual clearing of this flag is a side effect of the release_order
- * comparison function that is used when inserting a task into the
- * release queue.
- */
-DEFINE_PER_CPU(int, call_setup_release) = 1;
-int release_order(struct list_head* a, struct list_head* b)
+/* default implementation: use default lock */
+static void default_release_job(struct task_struct* t, rt_domain_t* rt)
 {
-	struct task_struct *task_a = list_entry(a, struct task_struct, rt_list);
-	struct task_struct *task_b = list_entry(b, struct task_struct, rt_list);
+	add_ready(rt, t);
+}
 
-	/* If the release times are equal, clear the flag. */
-	if (get_release(task_a) == get_release(task_b)) {
-		__get_cpu_var(call_setup_release) = 0;
-		return 0;
+static enum hrtimer_restart release_job_timer(struct hrtimer *timer)
+{
+	/* call the current plugin */
+	return HRTIMER_NORESTART;
+}
+
+static void setup_job_release_timer(struct task_struct *task)
+{
+        hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+        release_timer(task).function = release_job_timer;
+#ifdef CONFIG_HIGH_RES_TIMERS
+        release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_SOFTIRQ;
+#endif
+        /* Expiration time of timer is release time of task. */
+	release_timer(task).expires = ns_to_ktime(get_release(task));
+
+	TRACE_TASK(task, "arming release timer rel=%llu at\n",
+		   get_release(task), litmus_clock());
+
+	hrtimer_start(&release_timer(task), release_timer(task).expires,
+		      HRTIMER_MODE_ABS);
+}
+
+static void arm_release_timers(unsigned long _rt)
+{
+	rt_domain_t *rt = (rt_domain_t*) _rt;
+	unsigned long flags;
+	struct list_head *pos, *safe;
+	struct task_struct* t;
+
+	spin_lock_irqsave(&rt->release_lock, flags);
+	
+	list_for_each_safe(pos, safe, &rt->release_queue) {
+		t = list_entry(pos, struct task_struct, rt_list);
+		list_del(pos);
+		setup_job_release_timer(t);
 	}
 
-	return earlier_release(task_a, task_b);
+	spin_unlock_irqrestore(&rt->release_lock, flags);
 }
 
 
 void rt_domain_init(rt_domain_t *rt,
-		    check_resched_needed_t f,
-		    release_at_t g,
-		    list_cmp_t order)
+		    list_cmp_t order,
+		    check_resched_needed_t check,
+		    release_job_t release
+		   )
 {
 	BUG_ON(!rt);
-	if (!f)
-		f = dummy_resched;
-	if (!g)
-		g = dummy_setup_release;
+	if (!check)
+		check = dummy_resched;
+	if (!release)
+		release = default_release_job;
 	if (!order)
 		order = dummy_order;
 	INIT_LIST_HEAD(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->release_queue);
-	rt->ready_lock  	= RW_LOCK_UNLOCKED;
+	rt->ready_lock  	= SPIN_LOCK_UNLOCKED;
 	rt->release_lock 	= SPIN_LOCK_UNLOCKED;
-	rt->check_resched 	= f;
-	rt->setup_release	= g;
+	rt->check_resched 	= check;
+	rt->release_job		= release;
 	rt->order		= order;
+	tasklet_init(&rt->release_tasklet, arm_release_timers, (unsigned long) rt);
 }
 
 /* add_ready - add a real-time task to the rt ready queue. It must be runnable.
@@ -111,54 +134,7 @@ struct task_struct* __peek_ready(rt_domain_t* rt)
  */
 void __add_release(rt_domain_t* rt, struct task_struct *task)
 {
-	TRACE("rt: adding %s/%d (%llu, %llu) rel=%llu to release queue\n",
-	      task->comm, task->pid, get_exec_cost(task), get_rt_period(task),
-	      get_release(task));
-
-	/* Set flag assuming that we will need to setup another timer for
-	 * the release of this job. If it turns out that this is unnecessary
-	 * (because another job is already being released at that time,
-	 * and setting up two timers is redundant and inefficient), then
-	 * we will clear that flag so another release timer isn't setup.
-	 */
-	__get_cpu_var(call_setup_release) = 1;
-	list_insert(&task->rt_list, &rt->release_queue, release_order);
-
-	/* Setup a job release -- this typically involves a timer. */
-	if (__get_cpu_var(call_setup_release))
-		rt->setup_release(task);
+	list_add(&task->rt_list, &rt->release_queue);
+	tasklet_hi_schedule(&rt->release_tasklet);
 }
 
-void __release_pending(rt_domain_t* rt)
-{
-	struct list_head *pos, *save;
-	struct task_struct   *queued;
-	lt_t now = litmus_clock();
-	list_for_each_safe(pos, save, &rt->release_queue) {
-		queued = list_entry(pos, struct task_struct, rt_list);
-		if (likely(is_released(queued, now))) {
-			/* this one is ready to go*/
-			list_del(pos);
-			set_rt_flags(queued, RT_F_RUNNING);
-
-			sched_trace_job_release(queued);
-
-			/* now it can be picked up */
-			barrier();
-			add_ready(rt, queued);
-		}
-		else
-			/* the release queue is ordered */
-			break;
-	}
-}
-
-void try_release_pending(rt_domain_t* rt)
-{
-	unsigned long flags;
-
-	if (spin_trylock_irqsave(&rt->release_lock, flags)) {
-		__release_pending(rt);
-		spin_unlock_irqrestore(&rt->release_lock, flags);
-	}
-}
