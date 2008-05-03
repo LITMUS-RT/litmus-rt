@@ -67,6 +67,8 @@
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
 
+#include <litmus/norqlock.h>
+
 /*
  * Scheduler clock - returns current time in nanosec units.
  * This is default implementation.
@@ -1654,7 +1656,7 @@ out_running:
 	p->state = TASK_RUNNING;
 out:
 	task_rq_unlock(rq, &flags);
-
+	tick_no_rqlock();
 	return success;
 }
 
@@ -3680,6 +3682,8 @@ need_resched_nonpreemptible:
 		context_switch(rq, prev, next); /* unlocks the rq */
 	} else
 		spin_unlock_irq(&rq->lock);
+
+	tick_no_rqlock();
 
 	if (unlikely(reacquire_kernel_lock(current) < 0)) {
 		cpu = smp_processor_id();
