@@ -38,17 +38,15 @@ struct rt_task {
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
 
+struct _rt_domain;
+
 struct rt_job {
 	/* Time instant the the job was or will be released.  */
 	lt_t	release;
 	/* What is the current deadline? */
 	lt_t   	deadline;
 
-	/* The high-resolution timer used to control its release. */
-	struct hrtimer release_timer;
-
-	/* How much service has this job received so far?
-	 */
+	/* How much service has this job received so far? */
 	lt_t	exec_time;
 
 	/* Which job is this. This is used to let user space
@@ -125,6 +123,12 @@ struct rt_param {
 	 */
 	int old_policy;
 	int old_prio;
+
+	/* The high-resolution timer used to control its release. */
+	struct hrtimer release_timer;
+
+	/* ready queue for this task */
+	struct _rt_domain* domain;
 };
 
 /*	Possible RT flags	*/

@@ -5,7 +5,7 @@
 #ifndef __UNC_RT_DOMAIN_H__
 #define __UNC_RT_DOMAIN_H__
 
-#include <linux/interrupt.h>
+#include <litmus/norqlock.h>
 
 struct _rt_domain;
 
@@ -13,7 +13,7 @@ typedef int (*check_resched_needed_t)(struct _rt_domain *rt);
 typedef void (*release_job_t)(struct task_struct *t, struct _rt_domain *rt);
 
 typedef struct _rt_domain {
-	struct tasklet_struct		release_tasklet;
+	struct no_rqlock_work		arm_timers;
 
 	/* runnable rt tasks are in here */
 	spinlock_t 			ready_lock;

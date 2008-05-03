@@ -35,7 +35,13 @@ static void default_release_job(struct task_struct* t, rt_domain_t* rt)
 
 static enum hrtimer_restart release_job_timer(struct hrtimer *timer)
 {
-	/* call the current plugin */
+	struct task_struct *t;
+	
+	t = container_of(timer, struct task_struct, 
+			 rt_param.release_timer);
+
+	get_domain(t)->release_job(t, get_domain(t));
+
 	return HRTIMER_NORESTART;
 }
 
@@ -44,7 +50,7 @@ static void setup_job_release_timer(struct task_struct *task)
         hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
         release_timer(task).function = release_job_timer;
 #ifdef CONFIG_HIGH_RES_TIMERS
-        release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_SOFTIRQ;
+        release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
 #endif
         /* Expiration time of timer is release time of task. */
 	release_timer(task).expires = ns_to_ktime(get_release(task));
@@ -95,7 +101,7 @@ void rt_domain_init(rt_domain_t *rt,
 	rt->check_resched 	= check;
 	rt->release_job		= release;
 	rt->order		= order;
-	tasklet_init(&rt->release_tasklet, arm_release_timers, (unsigned long) rt);
+	init_no_rqlock_work(&rt->arm_timers, arm_release_timers, (unsigned long) rt);
 }
 
 /* add_ready - add a real-time task to the rt ready queue. It must be runnable.
@@ -135,6 +141,7 @@ struct task_struct* __peek_ready(rt_domain_t* rt)
 void __add_release(rt_domain_t* rt, struct task_struct *task)
 {
 	list_add(&task->rt_list, &rt->release_queue);
-	tasklet_hi_schedule(&rt->release_tasklet);
+	task->rt_param.domain = rt;
+	do_without_rqlock(&rt->arm_timers);
 }
 

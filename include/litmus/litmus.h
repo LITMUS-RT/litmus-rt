@@ -173,7 +173,10 @@ static inline lt_t litmus_clock(void)
 #define ns_to_ktime(t)		ktime_add_ns(ktime_set(0, 0), t)
 
 /* The high-resolution release timer for a task. */
-#define release_timer(t) ((t)->rt_param.job_params.release_timer)
+#define release_timer(t) ((t)->rt_param.release_timer)
+
+/* The high-resolution release timer for a task. */
+#define get_domain(t) ((t)->rt_param.domain)
 
 /* Honor the flag in the preempt_count variable that is set
  * when scheduling is in progress.
