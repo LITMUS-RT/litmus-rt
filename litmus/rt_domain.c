@@ -55,7 +55,7 @@ static void setup_job_release_timer(struct task_struct *task)
         /* Expiration time of timer is release time of task. */
 	release_timer(task).expires = ns_to_ktime(get_release(task));
 
-	TRACE_TASK(task, "arming release timer rel=%llu at\n",
+	TRACE_TASK(task, "arming release timer rel=%llu at %llu\n",
 		   get_release(task), litmus_clock());
 
 	hrtimer_start(&release_timer(task), release_timer(task).expires,
