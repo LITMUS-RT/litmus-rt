@@ -26,9 +26,13 @@ typedef struct {
 	rt_domain_t 		domain;
 	int          		cpu;
 	struct task_struct* 	scheduled; /* only RT tasks */
-	spinlock_t   		lock;      /* protects the domain and
-                                            * serializes scheduling decisions
-					    */
+
+/* scheduling lock
+ */
+#define slock domain.ready_lock
+/* protects the domain and
+ * serializes scheduling decisions
+ */
 } psnedf_domain_t;
 
 DEFINE_PER_CPU(psnedf_domain_t, psnedf_domains);
@@ -42,13 +46,12 @@ DEFINE_PER_CPU(psnedf_domain_t, psnedf_domains);
 
 
 static void psnedf_domain_init(psnedf_domain_t* pedf,
-				 check_resched_needed_t check,
-				 release_at_t release,
-				 int cpu)
+			       check_resched_needed_t check,
+			       release_job_t release,
+			       int cpu)
 {
 	edf_domain_init(&pedf->domain, check, release);
 	pedf->cpu      		= cpu;
-	pedf->lock     		= SPIN_LOCK_UNLOCKED;
 	pedf->scheduled		= NULL;
 }
 
@@ -64,7 +67,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 	if (is_released(t, litmus_clock()))
 		__add_ready(edf, t);
 	else
-		__add_release(edf, t); /* it has got to wait */
+		add_release(edf, t); /* it has got to wait */
 }
 
 /* we assume the lock is being held */
@@ -98,39 +101,6 @@ static int psnedf_check_resched(rt_domain_t *edf)
 		ret = 1;
 	}
 	return ret;
-}
-
-/* handles job releases when a timer expires */
-static enum hrtimer_restart psnedf_release_job_timer(struct hrtimer *timer)
-{
-	unsigned long flags;
-	rt_domain_t        *edf          = local_edf;
-	psnedf_domain_t    *pedf         = local_pedf;
-
-	spin_lock_irqsave(&pedf->lock, flags);
-
-	/* Release all pending ready jobs. */
-	__release_pending(edf);
-
-	spin_unlock_irqrestore(&pedf->lock, flags);
-
-	return HRTIMER_NORESTART;
-}
-
-/* setup a new job release timer */
-static void psnedf_setup_release_job_timer(struct task_struct *task)
-{
-	hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-	release_timer(task).function = psnedf_release_job_timer;
-#ifdef CONFIG_HIGH_RES_TIMERS
-	release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
-#endif
-
-	/* Expiration time of timer is release time of task. */
-	release_timer(task).expires = ns_to_ktime(get_release(task));
-
-	hrtimer_start(&release_timer(task), release_timer(task).expires,
-	              HRTIMER_MODE_ABS);
 }
 
 static void psnedf_tick(struct task_struct *t)
@@ -171,7 +141,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	int 			out_of_time, sleep, preempt,
 				np, exists, blocks, resched;
 
-	spin_lock(&pedf->lock);
+	spin_lock(&pedf->slock);
 
 	/* sanity checking */
 	BUG_ON(pedf->scheduled && pedf->scheduled != prev);
@@ -234,7 +204,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 		set_rt_flags(next, RT_F_RUNNING);
 
 	pedf->scheduled = next;
-	spin_unlock(&pedf->lock);
+	spin_unlock(&pedf->slock);
 	return next;
 }
 
@@ -257,7 +227,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 	/* The task should be running in the queue, otherwise signal
 	 * code will try to wake it up with fatal consequences.
 	 */
-	spin_lock_irqsave(&pedf->lock, flags);
+	spin_lock_irqsave(&pedf->slock, flags);
 	if (running) {
 		/* there shouldn't be anything else running at the time */
 		BUG_ON(pedf->scheduled);
@@ -267,7 +237,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 		/* maybe we have to reschedule */
 		preempt(pedf);
 	}
-	spin_unlock_irqrestore(&pedf->lock, flags);
+	spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static void psnedf_task_wake_up(struct task_struct *task)
@@ -277,7 +247,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	rt_domain_t* 		edf  = task_edf(task);
 	lt_t			now;
 
-	spin_lock_irqsave(&pedf->lock, flags);
+	spin_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(in_list(&task->rt_list));
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
@@ -293,7 +263,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 		sched_trace_job_release(task);
 	}
 	requeue(task, edf);
-	spin_unlock_irqrestore(&pedf->lock, flags);
+	spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static void psnedf_task_block(struct task_struct *t)
@@ -308,13 +278,13 @@ static void psnedf_task_exit(struct task_struct * t)
 	unsigned long flags;
 	psnedf_domain_t* 	pedf = task_pedf(t);
 
-	spin_lock_irqsave(&pedf->lock, flags);
+	spin_lock_irqsave(&pedf->slock, flags);
 
 	if (in_list(&t->rt_list))
 		/* dequeue */
 		list_del(&t->rt_list);
 	preempt(pedf);
-	spin_unlock_irqrestore(&pedf->lock, flags);
+	spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static long psnedf_pi_block(struct pi_semaphore *sem,
@@ -333,7 +303,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 		edf  = task_edf(new_waiter);
 
 		/* interrupts already disabled */
-		spin_lock(&pedf->lock);
+		spin_lock(&pedf->slock);
 
 		/* store new highest-priority task */
 		sem->hp.cpu_task[cpu] = new_waiter;
@@ -357,7 +327,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 		if (edf_preemption_needed(edf, current))
 			preempt(pedf);
 
-		spin_unlock(&pedf->lock);
+		spin_unlock(&pedf->slock);
 	}
 
 	return 0;
@@ -411,7 +381,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 		TRACE_CUR("return priority of %s/%d\n",
 			  current->rt_param.inh_task->comm,
 			  current->rt_param.inh_task->pid);
-		spin_lock(&pedf->lock);
+		spin_lock(&pedf->slock);
 
 		/* Reset inh_task to NULL. */
 		current->rt_param.inh_task = NULL;
@@ -420,7 +390,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 		if (edf_preemption_needed(edf, current))
 			preempt(pedf);
 
-		spin_unlock(&pedf->lock);
+		spin_unlock(&pedf->slock);
 	} else
 		TRACE_CUR(" no priority to return %p\n", sem);
 
@@ -460,7 +430,7 @@ static int __init init_psn_edf(void)
 	{
 		psnedf_domain_init(remote_pedf(i),
 				   psnedf_check_resched,
-				   psnedf_setup_release_job_timer, i);
+				   NULL, i);
 	}
 	return register_sched_plugin(&psn_edf_plugin);
 }

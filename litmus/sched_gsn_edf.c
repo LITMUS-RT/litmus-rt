@@ -109,15 +109,11 @@ DEFINE_PER_CPU(cpu_entry_t, gsnedf_cpu_entries);
 
 #define NO_CPU 0xffffffff
 
-/* The gsnedf_lock is used to serialize all scheduling events.
- * It protects
- */
-static DEFINE_SPINLOCK(gsnedf_lock);
 /* the cpus queue themselves according to priority in here */
 static LIST_HEAD(gsnedf_cpu_queue);
 
 static rt_domain_t gsnedf;
-
+#define gsnedf_lock (gsnedf.ready_lock)
 
 /* update_cpu_position - Move the cpu entry to the correct place to maintain
  *                       order in the cpu queue. Caller must hold gsnedf lock.
@@ -269,7 +265,7 @@ static noinline void requeue(struct task_struct* task)
 			__add_ready(&gsnedf, task);
 		else {
 			/* it has got to wait */
-			__add_release(&gsnedf, task);
+			add_release(&gsnedf, task);
 		}
 
 	} else
@@ -307,60 +303,37 @@ static noinline void gsnedf_job_arrival(struct task_struct* task)
 }
 
 /* check for current job releases */
-static noinline void gsnedf_release_jobs(void)
-{
-	struct list_head *pos, *save;
-	struct task_struct   *queued;
-	lt_t now = litmus_clock();
-
-	list_for_each_safe(pos, save, &gsnedf.release_queue) {
-		queued = list_entry(pos, struct task_struct, rt_list);
-		if (likely(is_released(queued, now))) {
-			/* this one is ready to go */
-			list_del(pos);
-			set_rt_flags(queued, RT_F_RUNNING);
-
-			sched_trace_job_release(queued);
-			gsnedf_job_arrival(queued);
-		}
-		else
-			/* the release queue is ordered */
-			break;
-	}
-}
-
-/* handles job releases when a timer expires */
-static enum hrtimer_restart gsnedf_release_job_timer(struct hrtimer *timer)
+static void gsnedf_job_release(struct task_struct* t, rt_domain_t* _)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&gsnedf_lock, flags);
 
-	/* Release all pending ready jobs. */
-	gsnedf_release_jobs();
+	sched_trace_job_release(queued);
+	gsnedf_job_arrival(t);
 
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
-
-	return HRTIMER_NORESTART;
 }
 
-/* setup a new job release timer */
-static void gsnedf_setup_release_job_timer(struct task_struct *task)
+/* caller holds gsnedf_lock */
+static noinline void job_completion(struct task_struct *t)
 {
-        hrtimer_init(&release_timer(task), CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-        release_timer(task).function = gsnedf_release_job_timer;
-#ifdef CONFIG_HIGH_RES_TIMERS
-        release_timer(task).cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
-#endif
+	BUG_ON(!t);
 
-        /* Expiration time of timer is release time of task. */
-	TRACE_TASK(task, "prog timer, rel=%llu, at %llu\n", 
-		   get_release(task),
-		   litmus_clock());
-	release_timer(task).expires = ns_to_ktime(get_release(task));
+	sched_trace_job_completion(t);
 
-	hrtimer_start(&release_timer(task), release_timer(task).expires,
-		      HRTIMER_MODE_ABS);
+	TRACE_TASK(t, "job_completion().\n");
+
+	/* set flags */
+	set_rt_flags(t, RT_F_SLEEP);
+	/* prepare for next period */
+	prepare_for_next_period(t);
+	/* unlink */
+	unlink(t);
+	/* requeue
+	 * But don't requeue a blocking task. */
+	if (is_running(t))
+		gsnedf_job_arrival(t);
 }
 
 /* gsnedf_tick - this function is called for every local timer
@@ -389,28 +362,6 @@ static void gsnedf_tick(struct task_struct* t)
 		}
 	}
 }
-
-/* caller holds gsnedf_lock */
-static noinline void job_completion(struct task_struct *t)
-{
-	BUG_ON(!t);
-
-	sched_trace_job_completion(t);
-
-	TRACE_TASK(t, "job_completion().\n");
-
-	/* set flags */
-	set_rt_flags(t, RT_F_SLEEP);
-	/* prepare for next period */
-	prepare_for_next_period(t);
-	/* unlink */
-	unlink(t);
-	/* requeue
-	 * But don't requeue a blocking task. */
-	if (is_running(t))
-		gsnedf_job_arrival(t);
-}
-
 
 /* Getting schedule() right is a bit tricky. schedule() may not make any
  * assumptions on the state of the current task since it may be called for a
@@ -748,7 +699,7 @@ static int __init init_gsn_edf(void)
 		INIT_LIST_HEAD(&entry->list);
 	}
 
-	edf_domain_init(&gsnedf, NULL, gsnedf_setup_release_job_timer);
+	edf_domain_init(&gsnedf, NULL, gsnedf_job_release);
 	return register_sched_plugin(&gsn_edf_plugin);
 }
 

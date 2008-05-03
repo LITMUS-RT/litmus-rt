@@ -68,9 +68,9 @@ int edf_ready_order(struct list_head* a, struct list_head* b)
 }
 
 void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
-		     release_at_t release)
+		      release_job_t release)
 {
-	rt_domain_init(rt, resched, release, edf_ready_order);
+	rt_domain_init(rt,  edf_ready_order, resched, release);
 }
 
 /* need_to_preempt - check whether the task t needs to be preempted
