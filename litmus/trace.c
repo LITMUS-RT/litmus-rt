@@ -116,6 +116,9 @@ static int trace_release(struct inode *in, struct file *filp)
 		trace_ts_buf = NULL;
 	}
 
+	/* dummy entry to make linker happy */
+	ft_event0(666, save_timestamp);
+
 	use_count--;
 	up(&feather_lock);
 out:
@@ -292,8 +295,6 @@ static int __init init_sched_trace(void)
 	int error = 0;
 
 	printk("Initializing Feather-Trace device\n");
-	/* dummy entry to make linker happy */
-	ft_event0(666, save_timestamp);
 
 	error = register_buffer_dev("ft_trace", &ft_trace_fops,
 				    FT_TRACE_MAJOR, 1);
