@@ -57,9 +57,6 @@ static void psnedf_domain_init(psnedf_domain_t* pedf,
 
 static void requeue(struct task_struct* t, rt_domain_t *edf)
 {
-	/* only requeue if t is actually running */
-	BUG_ON(!is_running(t));
-
 	if (t->state != TASK_RUNNING)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING");
 
@@ -176,7 +173,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this.
 	 */
-	if (!np && (out_of_time || sleep)) {
+	if (!np && (out_of_time || sleep) && !blocks) {
 		job_completion(pedf->scheduled);
 		resched = 1;
 	}

@@ -435,9 +435,10 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 
 	/* Any task that is preemptable and either exhausts its execution
 	 * budget or wants to sleep completes. We may have to reschedule after
-	 * this.
+	 * this. Don't do a job completion if we block (can't have timers running
+	 * for blocked jobs). Preemption go first for the same reason.
 	 */
-	if (!np && (out_of_time || sleep))
+	if (!np && (out_of_time || sleep) && !blocks && !preempt)
 		job_completion(entry->scheduled);
 
 	/* Link pending task if we became unlinked.
@@ -446,15 +447,22 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		link_task_to_cpu(__take_ready(&gsnedf), entry);
 
 	/* The final scheduling decision. Do we need to switch for some reason?
-	 * If linked different from scheduled select linked as next.
+	 * If linked is different from scheduled, then select linked as next.
 	 */
 	if ((!np || blocks) &&
 	    entry->linked != entry->scheduled) {
 		/* Schedule a linked job? */
-		if (entry->linked)
+		if (entry->linked) {
+			entry->linked->rt_param.scheduled_on = entry->cpu;
 			next = entry->linked;
+		}
+		if (entry->scheduled) {
+			/* not gonna be scheduled soon */
+			entry->scheduled->rt_param.scheduled_on = NO_CPU;
+			TRACE_TASK(entry->scheduled, "scheduled_on = NO_CPU\n");
+		}
 	} else
-		/* Only override Linux scheduler if we have real-time task
+		/* Only override Linux scheduler if we have a real-time task
 		 * scheduled that needs to continue.
 		 */
 		if (exists)
