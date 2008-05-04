@@ -111,6 +111,16 @@ struct rt_param {
 	 */
 	volatile int		scheduled_on;
 
+	/* Is the stack of the task currently in use? Currently, this
+	 * is the responsibility of the plugin to update this field.
+	 * Maybe become part of the LITMUS core some day.
+	 * 
+	 * Used by GSN-EDF.
+	 *
+	 * Be careful to avoid deadlocks!
+	 */
+	volatile int		stack_in_use;
+
 	/* This field can be used by plugins to store where the task
 	 * is currently linked. It is the responsibility of the plugin
 	 * to avoid race conditions.

@@ -1897,6 +1897,7 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	finish_arch_switch(prev);
 	litmus->finish_switch(prev);
 	finish_lock_switch(rq, prev);
+	prev->rt_param.stack_in_use = NO_CPU;
 	fire_sched_in_preempt_notifiers(current);
 	if (mm)
 		mmdrop(mm);
@@ -3679,6 +3680,7 @@ need_resched_nonpreemptible:
 		rq->curr = next;
 		++*switch_count;
 
+		TRACE_TASK(next, "switched to\n");
 		context_switch(rq, prev, next); /* unlocks the rq */
 	} else
 		spin_unlock_irq(&rq->lock);
@@ -4391,8 +4393,10 @@ recheck:
 	oldprio = p->prio;
 	__setscheduler(rq, p, policy, param->sched_priority);
 
-	if (policy == SCHED_LITMUS)
+	if (policy == SCHED_LITMUS) {
+		p->rt_param.stack_in_use = running ? rq->cpu : NO_CPU;
 		litmus->task_new(p, on_rq, running);
+	}
 
 	if (on_rq) {
 		if (running)

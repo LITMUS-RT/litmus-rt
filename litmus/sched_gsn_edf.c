@@ -466,10 +466,8 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
 	else if (exists && !next)
 		TRACE("becomes idle at %llu.\n", litmus_clock());
-	/* don't race with a concurrent switch */
-	if (next && prev != next)
-		while (next->rt_param.scheduled_on != NO_CPU)
-			cpu_relax();
+
+	
 	return next;
 }
 
@@ -481,9 +479,6 @@ static void gsnedf_finish_switch(struct task_struct *prev)
 	cpu_entry_t* 	entry = &__get_cpu_var(gsnedf_cpu_entries);
 
 	entry->scheduled = is_realtime(current) ? current : NULL;
-
-	prev->rt_param.scheduled_on    = NO_CPU;
-	current->rt_param.scheduled_on = smp_processor_id();
 }
 
 

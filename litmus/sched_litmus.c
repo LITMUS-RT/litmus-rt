@@ -21,10 +21,13 @@ static void litmus_tick(struct rq *rq, struct task_struct *p)
 	litmus->tick(p);
 }
 
+#define NO_CPU -1
+
 static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
 	struct rq* other_rq;
 	long prev_state;
+	lt_t _maybe_deadlock = 0;
 	/* WARNING: rq is _not_ locked! */
 	if (is_realtime(prev))
 		update_time_litmus(rq, prev);
@@ -43,11 +46,43 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 */
 		prev_state = prev->state;
 		spin_unlock(&rq->lock);
+
+		/* Don't race with a concurrent switch.
+		 * This could deadlock in the case of cross or circular migrations.
+		 * It's the job of the plugin to make sure that doesn't happen.
+		 */
+		TRACE_TASK(rq->litmus_next, "stack_in_use=%d\n", 
+			   rq->litmus_next->rt_param.stack_in_use);
+		if (rq->litmus_next->rt_param.stack_in_use != NO_CPU) {
+			TRACE_TASK(rq->litmus_next, "waiting to deschedule\n");
+			_maybe_deadlock = litmus_clock();
+		}
+		while (rq->litmus_next->rt_param.stack_in_use != NO_CPU) {
+			cpu_relax();
+			mb();
+			if (rq->litmus_next->rt_param.stack_in_use == NO_CPU)
+				TRACE_TASK(rq->litmus_next, "descheduled. Proceeding.\n");
+			if (lt_before(_maybe_deadlock + 10000000, litmus_clock())) {
+				/* We've been spinning for 10ms.
+				 * Something can't be right!
+				 * Let's abandon the task and bail out; at least 
+				 * we will have debug info instead of a hard deadlock.
+				 */
+				TRACE_TASK(rq->litmus_next, 
+					   "stack too long in use. Deadlock?\n");
+				rq->litmus_next = NULL;
+				
+				/* bail out */
+				spin_lock(&rq->lock);
+				return;
+			}
+		}
+		
 		double_rq_lock(rq, other_rq);
 		if (prev->state != prev_state) {
 			TRACE_TASK(prev, 
 				   "state changed while we dropped"
-				   " the lock: now=%d, old=%d",
+				   " the lock: now=%d, old=%d\n",
 				   prev->state, prev_state);
 			if (prev_state && !prev->state) {
 				/* prev task became unblocked
@@ -61,7 +96,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 		set_task_cpu(rq->litmus_next, smp_processor_id());
 
-		/* now that we have the lock we need to make sure a
+		/* DEBUG: now that we have the lock we need to make sure a
 		 *  couple of things still hold:
 		 *  - it is still a real-time task
 		 *  - it is still runnable (could have been stopped)
@@ -71,12 +106,16 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 			/* BAD BAD BAD */
 			TRACE_TASK(rq->litmus_next, 
 				   "migration invariant FAILED: rt=%d running=%d\n",
-				   is_realtime(rq->litmus_next),
+				   is_realtime(rq->litmus_next),			   
 				   is_running(rq->litmus_next));
+			/* drop the task */
+			rq->litmus_next = NULL;
 		}
 		/* release the other CPU's runqueue, but keep ours */
 		spin_unlock(&other_rq->lock);
-	} 
+	}
+	if (rq->litmus_next)
+		rq->litmus_next->rt_param.stack_in_use = rq->cpu;
 }
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p, int wakeup)
