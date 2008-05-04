@@ -99,6 +99,8 @@ typedef struct  {
 } cpu_entry_t;
 DEFINE_PER_CPU(cpu_entry_t, gsnedf_cpu_entries);
 
+cpu_entry_t* gsnedf_cpus[NR_CPUS];
+
 #define set_will_schedule() \
 	(atomic_set(&__get_cpu_var(gsnedf_cpu_entries).will_schedule, 1))
 #define clear_will_schedule() \
@@ -292,7 +294,7 @@ static noinline void gsnedf_job_arrival(struct task_struct* task)
 	if (edf_preemption_needed(&gsnedf, last->linked)) {
 		/* preemption necessary */
 		task = __take_ready(&gsnedf);
-		TRACE("job_arrival: task %d linked to %d\n",
+		TRACE("job_arrival: attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
 		if (last->linked)
 			requeue(last->linked);
@@ -386,8 +388,8 @@ static void gsnedf_tick(struct task_struct* t)
  */
 static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 {
-	cpu_entry_t* 	entry = &__get_cpu_var(gsnedf_cpu_entries);
-	int 			out_of_time, sleep, preempt, np, exists, blocks;
+	cpu_entry_t* entry = &__get_cpu_var(gsnedf_cpu_entries);
+	int out_of_time, sleep, preempt, np, exists, blocks;	
 	struct task_struct* next = NULL;
 
 	/* Will be released in finish_switch. */
@@ -695,6 +697,7 @@ static int __init init_gsn_edf(void)
 	/* initialize CPU state */
 	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
+		gsnedf_cpus[cpu] = entry;
 		atomic_set(&entry->will_schedule, 0);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
