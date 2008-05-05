@@ -179,6 +179,9 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 			 * the caller to get things right.
 			 */
 			if (entry != sched) {
+				TRACE_TASK(linked, 
+					   "already scheduled on %d, updating link.\n", 
+					   sched->cpu);
 				tmp = sched->linked;
 				linked->rt_param.linked_on = sched->cpu;
 				sched->linked = linked;
@@ -190,6 +193,10 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 			linked->rt_param.linked_on = entry->cpu;
 	}
 	entry->linked = linked;
+	if (linked)
+		TRACE_TASK(linked, "linked to %d.\n", entry->cpu);
+	else
+		TRACE("NULL linked to %d.\n", entry->cpu);
 	update_cpu_position(entry);
 }
 
@@ -408,6 +415,8 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	np 	    = exists && is_np(entry->scheduled);
 	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
 	preempt     = entry->scheduled != entry->linked;
+
+	TRACE_TASK(prev, "invoked gsnedf_schedule.\n");
 
 	if (exists)
 		TRACE_TASK(prev, 
