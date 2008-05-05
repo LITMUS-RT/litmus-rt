@@ -3602,11 +3602,13 @@ pick_next_task(struct rq *rq, struct task_struct *prev)
 	 * Optimization: we know that if all tasks are in
 	 * the fair class we can call that function directly:
 	 */
-	if (likely(rq->nr_running == rq->cfs.nr_running)) {
+	/* Don't do that for LITMUS.
+	  if (likely(rq->nr_running == rq->cfs.nr_running)) {
 		p = fair_sched_class.pick_next_task(rq);
 		if (likely(p))
 			return p;
 	}
+	*/
 
 	class = sched_class_highest;
 	for ( ; ; ) {
