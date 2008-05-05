@@ -455,9 +455,7 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 	__user short   *np_flag     = NULL;
 
 	if (restore) {
-		/* Safe user-space provided configuration data.
-		 * FIXME: This is missing service levels for adaptive tasks.
-		 */
+		/* Safe user-space provided configuration data. */
 		user_config = p->rt_param.task_params;
 		np_flag     = p->rt_param.np_flag;
 	}
