@@ -79,7 +79,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		}
 		
 		double_rq_lock(rq, other_rq);
-		if (prev->state != prev_state) {
+		if (prev->state != prev_state && is_realtime(prev)) {
 			TRACE_TASK(prev, 
 				   "state changed while we dropped"
 				   " the lock: now=%d, old=%d\n",
