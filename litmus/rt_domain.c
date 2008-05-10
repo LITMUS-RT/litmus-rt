@@ -97,8 +97,8 @@ void rt_domain_init(rt_domain_t *rt,
 		order = dummy_order;
 	INIT_LIST_HEAD(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->release_queue);
-	rt->ready_lock  	= SPIN_LOCK_UNLOCKED;
-	rt->release_lock 	= SPIN_LOCK_UNLOCKED;
+	spin_lock_init(&rt->ready_lock);
+	spin_lock_init(&rt->release_lock);
 	rt->check_resched 	= check;
 	rt->release_job		= release;
 	rt->order		= order;
