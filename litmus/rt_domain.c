@@ -66,18 +66,19 @@ static void arm_release_timers(unsigned long _rt)
 {
 	rt_domain_t *rt = (rt_domain_t*) _rt;
 	unsigned long flags;
+	struct list_head alt;
 	struct list_head *pos, *safe;
 	struct task_struct* t;
 
 	spin_lock_irqsave(&rt->release_lock, flags);
+	list_replace_init(&rt->release_queue, &alt);
+	spin_unlock_irqrestore(&rt->release_lock, flags);
 	
-	list_for_each_safe(pos, safe, &rt->release_queue) {
+	list_for_each_safe(pos, safe, &alt) {
 		t = list_entry(pos, struct task_struct, rt_list);
 		list_del(pos);
 		setup_job_release_timer(t);
 	}
-
-	spin_unlock_irqrestore(&rt->release_lock, flags);
 }
 
 
