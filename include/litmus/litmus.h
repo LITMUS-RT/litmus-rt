@@ -9,40 +9,14 @@
 #include <linux/jiffies.h>
 #include <litmus/sched_trace.h>
 
-typedef enum {
-	SCHED_LINUX 		=  0,
-	SCHED_GSN_EDF		= 10,
-	SCHED_PSN_EDF		= 11,
-	/*      Add your scheduling policy here */
-
-	SCHED_DEFAULT 		=  0,
-	SCHED_INVALID 		= -1,
-} spolicy;
-
-
-typedef enum {
-	LITMUS_RESERVED_RANGE = 1024,
-
-} sched_setup_cmd_t;
-
-/*	per-task modes */
-enum rt_task_mode_t {
-	BACKGROUND_TASK = 0,
-	LITMUS_RT_TASK  = 1
-};
-
-/*	Plugin boot options, for convenience */
-#define PLUGIN_LINUX  		"linux"
-#define PLUGIN_GSN_EDF		"gsn_edf"
-#define PLUGIN_PSN_EDF		"psn_edf"
-
-extern spolicy sched_policy;
-
 /*	RT mode start time	*/
 extern volatile unsigned long rt_start_time;
 
+extern atomic_t __log_seq_no;
+
 #define TRACE(fmt, args...) \
-	sched_trace_log_message("%d: " fmt, raw_smp_processor_id(), ## args)
+	sched_trace_log_message("%d P%d: " fmt, atomic_add_return(1, &__log_seq_no), \
+				raw_smp_processor_id(), ## args)
 
 #define TRACE_TASK(t, fmt, args...) \
 	TRACE("(%s/%d) " fmt, (t)->comm, (t)->pid, ##args)

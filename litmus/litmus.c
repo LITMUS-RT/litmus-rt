@@ -19,6 +19,9 @@
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(task_transition_lock);
 
+/* Give log messages sequential IDs. */
+atomic_t __log_seq_no = ATOMIC_INIT(0);
+
 /* To send signals from the scheduler
  * Must drop locks first.
  */
