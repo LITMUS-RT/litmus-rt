@@ -47,8 +47,8 @@ void tick_no_rqlock(void)
 		todo = next;
 		next = next->next;
 		todo->next = NULL;
-		mb();
-		todo->active = 0;
+		smp_mb__before_clear_bit();
+		clear_bit(0, (void*) &todo->active);
 		todo->work(todo->arg);
 	}
 
