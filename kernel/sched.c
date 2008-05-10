@@ -1521,6 +1521,8 @@ static int try_to_wake_up(struct task_struct *p, unsigned int state, int sync)
 	int new_cpu;
 #endif
 
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up()\n");
 	rq = task_rq_lock(p, &flags);
 	old_state = p->state;
 	if (!(old_state & state))
@@ -1655,6 +1657,8 @@ out_activate:
 out_running:
 	p->state = TASK_RUNNING;
 out:
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up() done, p->state=%d\n", p->state);
 	task_rq_unlock(rq, &flags);
 	tick_no_rqlock();
 	return success;
@@ -1896,8 +1900,8 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	prev_state = prev->state;
 	finish_arch_switch(prev);
 	litmus->finish_switch(prev);
-	finish_lock_switch(rq, prev);
 	prev->rt_param.stack_in_use = NO_CPU;
+	finish_lock_switch(rq, prev);
 	fire_sched_in_preempt_notifiers(current);
 	if (mm)
 		mmdrop(mm);
@@ -3651,10 +3655,6 @@ need_resched_nonpreemptible:
 	 */
 	local_irq_disable();
 	__update_rq_clock(rq);
-	/* do litmus scheduling outside of rq lock, so that we
-	 * can do proper migrations for global schedulers
-	 */
-       
 	spin_lock(&rq->lock);
 	clear_tsk_need_resched(prev);
 	litmus_schedule(rq, prev);
