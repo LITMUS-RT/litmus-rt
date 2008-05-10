@@ -45,6 +45,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * state
 		 */
 		prev_state = prev->state;
+		mb();
 		spin_unlock(&rq->lock);
 
 		/* Don't race with a concurrent switch.
@@ -61,12 +62,14 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 			cpu_relax();
 			mb();
 			if (rq->litmus_next->rt_param.stack_in_use == NO_CPU)
-				TRACE_TASK(rq->litmus_next, "descheduled. Proceeding.\n");
+				TRACE_TASK(rq->litmus_next,
+					   "descheduled. Proceeding.\n");
 			if (lt_before(_maybe_deadlock + 10000000, litmus_clock())) {
 				/* We've been spinning for 10ms.
 				 * Something can't be right!
 				 * Let's abandon the task and bail out; at least 
-				 * we will have debug info instead of a hard deadlock.
+				 * we will have debug info instead of a hard
+				 * deadlock.
 				 */
 				TRACE_TASK(rq->litmus_next, 
 					   "stack too long in use. Deadlock?\n");
@@ -77,8 +80,16 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 				return;
 			}
 		}
-		
+#ifdef  __ARCH_WANT_UNLOCKED_CTXSW
+		if (rq->litmus_next->oncpu)
+			TRACE_TASK(rq->litmus_next, "waiting for !oncpu");
+		while (rq->litmus_next->oncpu) {
+			cpu_relax();
+			mb();
+		}
+#endif
 		double_rq_lock(rq, other_rq);
+		mb();
 		if (prev->state != prev_state && is_realtime(prev)) {
 			TRACE_TASK(prev, 
 				   "state changed while we dropped"
