@@ -373,6 +373,9 @@ static int trace_open(struct inode *in, struct file *filp)
 	return error;
 }
 
+
+extern int trace_override;
+
 /* log_open - open the global log message ring buffer.
  */
 static int log_open(struct inode *in, struct file *filp)
@@ -398,8 +401,33 @@ static int log_open(struct inode *in, struct file *filp)
 
 	error = 0;
 	filp->private_data = buf;
-
+	printk(KERN_DEBUG "sched_trace buf: from 0x%p to 0x%p  length: %lx\n",
+	       buf->buf.buf, buf->buf.end, buf->buf.end - buf->buf.buf);
+	trace_override++;
  out_unlock:
+	up(&buf->reader_mutex);
+ out:
+	return error;
+}
+
+static int log_release(struct inode *in, struct file *filp)
+{
+	int error 		= -EINVAL;
+	trace_buffer_t* buf 	= filp->private_data;
+
+	BUG_ON(!filp->private_data);
+
+	if (down_interruptible(&buf->reader_mutex)) {
+		error = -ERESTARTSYS;
+		goto out;
+	}
+
+	/*	last release must deallocate buffers 	*/
+	if (atomic_dec_return(&buf->reader_cnt) == 0) {
+		error = rb_free_buf(&buf->buf);
+	}
+
+	trace_override--;
 	up(&buf->reader_mutex);
  out:
 	return error;
@@ -434,7 +462,7 @@ struct file_operations trace_fops = {
 struct file_operations log_fops = {
 	.owner   = THIS_MODULE,
 	.open    = log_open,
-	.release = trace_release,
+	.release = log_release,
 	.read    = trace_read,
 };
 

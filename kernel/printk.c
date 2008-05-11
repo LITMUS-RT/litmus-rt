@@ -54,6 +54,12 @@ int console_printk[4] = {
 	DEFAULT_CONSOLE_LOGLEVEL,	/* default_console_loglevel */
 };
 
+/* divert printk() messages when we have a LITMUS^RT
+ * debug listener
+ */
+#include <litmus/litmus.h>
+int trace_override = 0;
+
 /*
  * Low level drivers may need that to know if they can schedule in
  * their unblank() callback or not. So let's export it.
@@ -652,6 +658,8 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 
 	/* Emit the output into the temporary buffer */
 	printed_len = vscnprintf(printk_buf, sizeof(printk_buf), fmt, args);
+	if (trace_override)
+		TRACE("%s", printk_buf);
 
 	/*
 	 * Copy the output into log_buf.  If the caller didn't provide
@@ -932,7 +940,7 @@ int is_console_locked(void)
 
 void wake_up_klogd(void)
 {
-	if (!oops_in_progress && waitqueue_active(&log_wait))
+	if (!trace_override && !oops_in_progress && waitqueue_active(&log_wait))
 		wake_up_interruptible(&log_wait);
 }
 
