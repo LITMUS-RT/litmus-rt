@@ -58,7 +58,7 @@ static void psnedf_domain_init(psnedf_domain_t* pedf,
 static void requeue(struct task_struct* t, rt_domain_t *edf)
 {
 	if (t->state != TASK_RUNNING)
-		TRACE_TASK(t, "requeue: !TASK_RUNNING");
+		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
 
 	set_rt_flags(t, RT_F_RUNNING);
 	if (is_released(t, litmus_clock()))
@@ -197,17 +197,21 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 		if (exists)
 			next = prev;
 
-	if (next)
+	if (next) {
+		TRACE_TASK(next, " == next\n");
 		set_rt_flags(next, RT_F_RUNNING);
+	} else {
+		TRACE("becoming idle.\n");
+	}
 
 	pedf->scheduled = next;
 	spin_unlock(&pedf->slock);
+
 	return next;
 }
 
 
 /*	Prepare a task for running in RT mode
- *	Enqueues the task into master queue data structure
  */
 static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 {
@@ -215,8 +219,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 	psnedf_domain_t* 	pedf = task_pedf(t);
 	unsigned long		flags;
 
-	TRACE("[%d] psn edf: prepare new %d on CPU %d\n",
-		smp_processor_id(), t->pid, get_partition(t));
+	TRACE_TASK(t, "new\n");
 
 	/* setup job parameters */
 	release_at(t, litmus_clock());
@@ -244,6 +247,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	rt_domain_t* 		edf  = task_edf(task);
 	lt_t			now;
 
+	TRACE_TASK(task, "wake up\n");
 	spin_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(in_list(&task->rt_list));
 	/* We need to take suspensions because of semaphores into
@@ -261,11 +265,13 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	}
 	requeue(task, edf);
 	spin_unlock_irqrestore(&pedf->slock, flags);
+	TRACE_TASK(task, "wake up done\n");
 }
 
 static void psnedf_task_block(struct task_struct *t)
 {
 	/* only running tasks can block, thus t is in no queue */
+	TRACE_TASK(t, "block, state=%d\n", t->state);
 	BUG_ON(!is_realtime(t));
 	BUG_ON(in_list(&t->rt_list));
 }
@@ -316,7 +322,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 				if (is_released(t, litmus_clock()))
 					__add_ready(edf, t);
 				else
-					__add_release(edf, t);
+					add_release(edf, t);
 			}
 		}
 

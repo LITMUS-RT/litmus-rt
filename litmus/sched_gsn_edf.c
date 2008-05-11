@@ -179,8 +179,8 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 			 * the caller to get things right.
 			 */
 			if (entry != sched) {
-				TRACE_TASK(linked, 
-					   "already scheduled on %d, updating link.\n", 
+				TRACE_TASK(linked,
+					   "already scheduled on %d, updating link.\n",
 					   sched->cpu);
 				tmp = sched->linked;
 				linked->rt_param.linked_on = sched->cpu;
@@ -396,7 +396,7 @@ static void gsnedf_tick(struct task_struct* t)
 static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 {
 	cpu_entry_t* entry = &__get_cpu_var(gsnedf_cpu_entries);
-	int out_of_time, sleep, preempt, np, exists, blocks;	
+	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
 	/* Will be released in finish_switch. */
@@ -419,15 +419,15 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	TRACE_TASK(prev, "invoked gsnedf_schedule.\n");
 
 	if (exists)
-		TRACE_TASK(prev, 
+		TRACE_TASK(prev,
 			   "blocks:%d out_of_time:%d np:%d sleep:%d preempt:%d "
 			   "state:%d sig:%d\n",
-			   blocks, out_of_time, np, sleep, preempt, 
+			   blocks, out_of_time, np, sleep, preempt,
 			   prev->state, signal_pending(prev));
 	if (entry->linked && preempt)
-		TRACE_TASK(prev, "will be preempted by %s/%d\n", 
+		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);
-	     
+
 
 	/* If a task blocks we have no choice but to reschedule.
 	 */
@@ -481,12 +481,15 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 
 	spin_unlock(&gsnedf_lock);
 
+	TRACE("gsnedf_lock released, next=0x%p\n", next);
+
+
 	if (next)
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
 	else if (exists && !next)
 		TRACE("becomes idle at %llu.\n", litmus_clock());
 
-	
+
 	return next;
 }
 
@@ -498,6 +501,7 @@ static void gsnedf_finish_switch(struct task_struct *prev)
 	cpu_entry_t* 	entry = &__get_cpu_var(gsnedf_cpu_entries);
 
 	entry->scheduled = is_realtime(current) ? current : NULL;
+	TRACE_TASK(prev, "switched away from\n");
 }
 
 

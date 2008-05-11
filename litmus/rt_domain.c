@@ -141,6 +141,7 @@ struct task_struct* __peek_ready(rt_domain_t* rt)
  */
 void __add_release(rt_domain_t* rt, struct task_struct *task)
 {
+	TRACE_TASK(task, "add_release(), rel=%llu\n", get_release(task));
 	list_add(&task->rt_list, &rt->release_queue);
 	task->rt_param.domain = rt;
 	do_without_rqlock(&rt->arm_timers);
