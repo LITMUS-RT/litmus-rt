@@ -10,6 +10,7 @@
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
 
+#include <litmus/jobs.h>
 
 /*************************************************************
  *                   Dummy plugin functions                  *
@@ -128,6 +129,9 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(return_priority);
 	CHECK(pi_block);
 	CHECK(admit_task);
+
+	if (!plugin->release_at)
+		plugin->release_at = release_at;
 
 	spin_lock(&sched_plugins_lock);
 	list_add(&plugin->list, &sched_plugins);
