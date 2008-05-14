@@ -112,15 +112,17 @@ void litmus_exit_task(struct task_struct *tsk);
 #define rt_transition_pending(t) \
 	((t)->rt_param.transition_pending)
 
+#define tsk_rt(t)		(&(t)->rt_param)
+
 /*	Realtime utility macros */
-#define get_rt_flags(t)		((t)->rt_param.flags)
-#define set_rt_flags(t,f) 	(t)->rt_param.flags=(f)
-#define get_exec_cost(t)  	((t)->rt_param.task_params.exec_cost)
-#define get_exec_time(t)	((t)->rt_param.job_params.exec_time)
-#define get_rt_period(t)	((t)->rt_param.task_params.period)
-#define get_partition(t) 	(t)->rt_param.task_params.cpu
-#define get_deadline(t)		((t)->rt_param.job_params.deadline)
-#define get_class(t)		((t)->rt_param.task_params.cls)
+#define get_rt_flags(t)		(tsk_rt(t)->flags)
+#define set_rt_flags(t,f) 	(tsk_rt(t)->flags=(f))
+#define get_exec_cost(t)  	(tsk_rt(t)->task_params.exec_cost)
+#define get_exec_time(t)	(tsk_rt(t)->job_params.exec_time)
+#define get_rt_period(t)	(tsk_rt(t)->task_params.period)
+#define get_partition(t) 	(tsk_rt(t)->task_params.cpu)
+#define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
+#define get_class(t)		(tsk_rt(t)->task_params.cls)
 
 inline static int budget_exhausted(struct task_struct* t)
 {
@@ -129,13 +131,13 @@ inline static int budget_exhausted(struct task_struct* t)
 
 
 #define is_hrt(t)     		\
-	((t)->rt_param.task_params.class == RT_CLASS_HARD)
+	(tsk_rt(t)->task_params.class == RT_CLASS_HARD)
 #define is_srt(t)     		\
-	((t)->rt_param.task_params.class == RT_CLASS_SOFT)
+	(tsk_rt(t)->task_params.class == RT_CLASS_SOFT)
 #define is_be(t)      		\
-	((t)->rt_param.task_params.class == RT_CLASS_BEST_EFFORT)
+	(tsk_rt(t)->task_params.class == RT_CLASS_BEST_EFFORT)
 
-#define get_release(t) ((t)->rt_param.job_params.release)
+#define get_release(t) (tsk_rt(t)->job_params.release)
 
 /* Our notion of time within LITMUS: kernel monotonic time. */
 static inline lt_t litmus_clock(void)
@@ -147,10 +149,10 @@ static inline lt_t litmus_clock(void)
 #define ns_to_ktime(t)		ktime_add_ns(ktime_set(0, 0), t)
 
 /* The high-resolution release timer for a task. */
-#define release_timer(t) ((t)->rt_param.release_timer)
+#define release_timer(t) (tsk_rt(t)->release_timer)
 
 /* The high-resolution release timer for a task. */
-#define get_domain(t) ((t)->rt_param.domain)
+#define get_domain(t) (tsk_rt(t)->domain)
 
 /* Honor the flag in the preempt_count variable that is set
  * when scheduling is in progress.
@@ -164,7 +166,7 @@ static inline lt_t litmus_clock(void)
 #define is_released(t, now)	\
 	(lt_before_eq(get_release(t), now))
 #define is_tardy(t, now)    \
-	(lt_before_eq((t)->rt_param.job_params.deadline, now))
+	(lt_before_eq(tsk_rt(t)->job_params.deadline, now))
 
 /* real-time comparison macros */
 #define earlier_deadline(a, b) (lt_before(\
