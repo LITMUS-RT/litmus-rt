@@ -11,6 +11,7 @@
 #include <linux/completion.h>
 
 #include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
 #include <litmus/jobs.h>
 
 static DECLARE_COMPLETION(ts_release);
@@ -47,7 +48,7 @@ static long do_release_ts(lt_t start)
 						     struct __wait_queue,
 						     task_list)->private;
 		task_count++;
-		release_at(t, start + t->rt_param.task_params.phase);
+		litmus->release_at(t, start + t->rt_param.task_params.phase);
 	}
 
 	spin_unlock_irqrestore(&ts_release.wait.lock, flags);

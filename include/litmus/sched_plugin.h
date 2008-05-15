@@ -81,6 +81,8 @@ typedef long (*complete_job_t) (void);
 
 typedef long (*admit_task_t)(struct task_struct* tsk);
 
+typedef void (*release_at_t)(struct task_struct *t, lt_t start);
+
 struct sched_plugin {
 	struct list_head	list;
 	/* 	basic info 		*/
@@ -95,6 +97,7 @@ struct sched_plugin {
 
 	/*	syscall backend 	*/
 	complete_job_t 		complete_job;
+	release_at_t		release_at;
 
 	/*	task state changes 	*/
 	admit_task_t		admit_task;
