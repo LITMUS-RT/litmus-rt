@@ -43,7 +43,7 @@
  *                                will link NULL to that CPU. If it is
  *                                currently queued in the cedf queue for
  *                                a partition, it will be removed from
- *                                the T->rt_list. It is safe to call
+ *                                the rt_domain. It is safe to call
  *                                unlink(T) if T is not linked. T may not
  *                                be NULL.
  *
@@ -250,7 +250,7 @@ static noinline void unlink(struct task_struct* t)
 		entry = &per_cpu(cedf_cpu_entries, t->rt_param.linked_on);
 		t->rt_param.linked_on = NO_CPU;
 		link_task_to_cpu(NULL, entry);
-	} else if (in_list(&t->rt_list)) {
+	} else if (is_queued(t)) {
 		/* This is an interesting situation: t is scheduled,
 		 * but was just recently unlinked.  It cannot be
 		 * linked anywhere else (because then it would have
@@ -258,7 +258,7 @@ static noinline void unlink(struct task_struct* t)
 		 * queue. We must remove it from the list in this
 		 * case.
 		 */
-		list_del(&t->rt_list);
+		remove(task_edf(t), t);
 	}
 }
 
@@ -298,7 +298,7 @@ static noinline void requeue(struct task_struct* task)
 
 	BUG_ON(!task);
 	/* sanity check rt_list before insertion */
-	BUG_ON(in_list(&task->rt_list));
+	BUG_ON(is_queued(task));
 
 	/* Get correct real-time domain. */
 	cedf = task_cedf(task);
@@ -625,8 +625,6 @@ static void cedf_task_block(struct task_struct *t)
 	spin_unlock_irqrestore(&task_cedf(t)->slock, flags);
 
 	BUG_ON(!is_realtime(t));
-	BUG_ON(t->rt_list.next != LIST_POISON1);
-	BUG_ON(t->rt_list.prev != LIST_POISON2);
 }
 
 static void cedf_task_exit(struct task_struct * t)
@@ -642,8 +640,6 @@ static void cedf_task_exit(struct task_struct * t)
 
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");
-	BUG_ON(t->rt_list.next != LIST_POISON1);
-	BUG_ON(t->rt_list.prev != LIST_POISON2);
 }
 
 static long cedf_admit_task(struct task_struct* tsk)

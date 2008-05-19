@@ -22,7 +22,7 @@ static int dummy_resched(rt_domain_t *rt)
 	return 0;
 }
 
-static int dummy_order(struct list_head* a, struct list_head* b)
+static int dummy_order(struct heap_node* a, struct heap_node* b)
 {
 	return 0;
 }
@@ -75,7 +75,7 @@ static void arm_release_timers(unsigned long _rt)
 	spin_unlock_irqrestore(&rt->release_lock, flags);
 	
 	list_for_each_safe(pos, safe, &alt) {
-		t = list_entry(pos, struct task_struct, rt_list);
+		t = list_entry(pos, struct task_struct, rt_param.list);
 		list_del(pos);
 		setup_job_release_timer(t);
 	}
@@ -83,7 +83,7 @@ static void arm_release_timers(unsigned long _rt)
 
 
 void rt_domain_init(rt_domain_t *rt,
-		    list_cmp_t order,
+		    heap_prio_t order,
 		    check_resched_needed_t check,
 		    release_job_t release
 		   )
@@ -95,7 +95,7 @@ void rt_domain_init(rt_domain_t *rt,
 		release = default_release_job;
 	if (!order)
 		order = dummy_order;
-	INIT_LIST_HEAD(&rt->ready_queue);
+	heap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->release_queue);
 	spin_lock_init(&rt->ready_lock);
 	spin_lock_init(&rt->release_lock);
@@ -114,26 +114,10 @@ void __add_ready(rt_domain_t* rt, struct task_struct *new)
 	      new->comm, new->pid, get_exec_cost(new), get_rt_period(new),
 	      get_release(new), litmus_clock());
 
-	if (!list_insert(&new->rt_list, &rt->ready_queue, rt->order))
-		rt->check_resched(rt);
-}
+	BUG_ON(heap_node_in_heap(tsk_rt(new)->heap_node));
 
-struct task_struct* __take_ready(rt_domain_t* rt)
-{
-	struct task_struct *t = __peek_ready(rt);
-
-	/* kick it out of the ready list */
-	if (t)
-		list_del(&t->rt_list);
-	return t;
-}
-
-struct task_struct* __peek_ready(rt_domain_t* rt)
-{
-	if (!list_empty(&rt->ready_queue))
-		return next_ready(rt);
-	else
-		return NULL;
+	heap_insert(rt->order, &rt->ready_queue, tsk_rt(new)->heap_node);
+	rt->check_resched(rt);
 }
 
 /* add_release - add a real-time task to the rt release queue.
@@ -142,7 +126,7 @@ struct task_struct* __peek_ready(rt_domain_t* rt)
 void __add_release(rt_domain_t* rt, struct task_struct *task)
 {
 	TRACE_TASK(task, "add_release(), rel=%llu\n", get_release(task));
-	list_add(&task->rt_list, &rt->release_queue);
+	list_add(&tsk_rt(task)->list, &rt->release_queue);
 	task->rt_param.domain = rt;
 	do_without_rqlock(&rt->arm_timers);
 }

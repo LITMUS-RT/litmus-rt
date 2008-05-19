@@ -249,7 +249,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 
 	TRACE_TASK(task, "wake up\n");
 	spin_lock_irqsave(&pedf->slock, flags);
-	BUG_ON(in_list(&task->rt_list));
+	BUG_ON(is_queued(task));
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
 	 * a semaphore, it should never be treated as a new job release.
@@ -273,19 +273,21 @@ static void psnedf_task_block(struct task_struct *t)
 	/* only running tasks can block, thus t is in no queue */
 	TRACE_TASK(t, "block, state=%d\n", t->state);
 	BUG_ON(!is_realtime(t));
-	BUG_ON(in_list(&t->rt_list));
+	BUG_ON(is_queued(t));
 }
 
 static void psnedf_task_exit(struct task_struct * t)
 {
 	unsigned long flags;
 	psnedf_domain_t* 	pedf = task_pedf(t);
+	rt_domain_t*		edf;
 
 	spin_lock_irqsave(&pedf->slock, flags);
-
-	if (in_list(&t->rt_list))
+	if (is_queued(t)) {
 		/* dequeue */
-		list_del(&t->rt_list);
+		edf  = task_edf(t);
+		remove(edf, t);
+	}
 	preempt(pedf);
 	spin_unlock_irqrestore(&pedf->slock, flags);
 }
@@ -315,10 +317,11 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 			/* let holder inherit */
 			sem->holder->rt_param.inh_task = new_waiter;
 			t = sem->holder;
-			if (in_list(&t->rt_list)) {
+			if (is_queued(t)) {
 				/* queued in domain*/
-				list_del(&t->rt_list);
+				remove(edf, t);
 				/* readd to make priority change take place */
+				/* FIXME: this looks outdated */
 				if (is_released(t, litmus_clock()))
 					__add_ready(edf, t);
 				else

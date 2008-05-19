@@ -39,6 +39,7 @@ struct rt_task {
 #ifdef __KERNEL__
 
 struct _rt_domain;
+struct heap_node;
 
 struct rt_job {
 	/* Time instant the the job was or will be released.  */
@@ -139,6 +140,22 @@ struct rt_param {
 
 	/* ready queue for this task */
 	struct _rt_domain* domain;
+
+	/* heap element for this task
+	 *
+	 * Warning: Don't statically allocate this node. The heap
+	 *          implementation swaps these between tasks, thus after
+	 *          dequeuing from a heap you may end up with a different node
+	 *          then the one you had when enqueuing the task.  For the same
+	 *          reason, don't obtain and store references to this node
+	 *          other than this pointer (which is updated by the heap
+	 *          implementation).
+	 */
+	struct heap_node*	heap_node;
+
+	/* Used by rt_domain to queue task in release list.
+	 */
+	struct list_head list;
 };
 
 /*	Possible RT flags	*/

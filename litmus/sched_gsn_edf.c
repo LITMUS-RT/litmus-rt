@@ -44,7 +44,7 @@
  *                                structures. If it is linked to some CPU it
  *                                will link NULL to that CPU. If it is
  *                                currently queued in the gsnedf queue it will
- *                                be removed from the T->rt_list. It is safe to
+ *                                be removed from the rt_domain. It is safe to
  *                                call unlink(T) if T is not linked. T may not
  *                                be NULL.
  *
@@ -217,7 +217,7 @@ static noinline void unlink(struct task_struct* t)
 		entry = &per_cpu(gsnedf_cpu_entries, t->rt_param.linked_on);
 		t->rt_param.linked_on = NO_CPU;
 		link_task_to_cpu(NULL, entry);
-	} else if (in_list(&t->rt_list)) {
+	} else if (is_queued(t)) {
 		/* This is an interesting situation: t is scheduled,
 		 * but was just recently unlinked.  It cannot be
 		 * linked anywhere else (because then it would have
@@ -225,7 +225,7 @@ static noinline void unlink(struct task_struct* t)
 		 * queue. We must remove it from the list in this
 		 * case.
 		 */
-		list_del(&t->rt_list);
+		remove(&gsnedf, t);
 	}
 }
 
@@ -261,8 +261,8 @@ static noinline void preempt(cpu_entry_t *entry)
 static noinline void requeue(struct task_struct* task)
 {
 	BUG_ON(!task);
-	/* sanity check rt_list before insertion */
-	BUG_ON(in_list(&task->rt_list));
+	/* sanity check before insertion */
+	BUG_ON(is_queued(task));
 
 	if (get_rt_flags(task) == RT_F_SLEEP) {
 		/* this task has expired
@@ -573,8 +573,6 @@ static void gsnedf_task_block(struct task_struct *t)
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
 
 	BUG_ON(!is_realtime(t));
-	BUG_ON(t->rt_list.next != LIST_POISON1);
-	BUG_ON(t->rt_list.prev != LIST_POISON2);
 }
 
 
@@ -589,8 +587,6 @@ static void gsnedf_task_exit(struct task_struct * t)
 
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");
-	BUG_ON(t->rt_list.next != LIST_POISON1);
-	BUG_ON(t->rt_list.prev != LIST_POISON2);
 }
 
 static long gsnedf_pi_block(struct pi_semaphore *sem,

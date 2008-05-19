@@ -1187,11 +1187,6 @@ struct task_struct {
 	/* litmus parameters and state */
 	struct rt_param rt_param;
 
-	/* allow scheduler plugins to queue in release lists, etc.
-	 * Cleanup: Move this into the rt_param struct.
-	 */
-	struct list_head rt_list;
-
 	/* references to PI semaphores, etc. */
 	struct od_table_entry* od_table;
 };

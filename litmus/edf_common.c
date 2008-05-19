@@ -60,11 +60,9 @@ int edf_higher_prio(struct task_struct* first,
 		 !second->rt_param.inh_task)));
 }
 
-int edf_ready_order(struct list_head* a, struct list_head* b)
+int edf_ready_order(struct heap_node* a, struct heap_node* b)
 {
-	return edf_higher_prio(
-		list_entry(a, struct task_struct, rt_list),
-		list_entry(b, struct task_struct, rt_list));
+	return edf_higher_prio(heap2task(a), heap2task(b));
 }
 
 void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
@@ -81,7 +79,7 @@ int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t)
 {
 	/* we need the read lock for edf_ready_queue */
 	/* no need to preempt if there is nothing pending */
-	if (!ready_jobs_pending(rt))
+	if (!__jobs_pending(rt))
 		return 0;
 	/* we need to reschedule if t doesn't exist */
 	if (!t)
@@ -92,5 +90,5 @@ int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t)
 	 */
 
 	/* make sure to get non-rt stuff out of the way */
-	return !is_realtime(t) || edf_higher_prio(next_ready(rt), t);
+	return !is_realtime(t) || edf_higher_prio(__next_ready(rt), t);
 }

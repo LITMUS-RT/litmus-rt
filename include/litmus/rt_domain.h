@@ -6,6 +6,7 @@
 #define __UNC_RT_DOMAIN_H__
 
 #include <litmus/norqlock.h>
+#include <litmus/heap.h>
 
 struct _rt_domain;
 
@@ -17,7 +18,7 @@ typedef struct _rt_domain {
 
 	/* runnable rt tasks are in here */
 	spinlock_t 			ready_lock;
-	struct list_head 		ready_queue;
+	struct heap	 		ready_queue;
 
 	/* real-time tasks waiting for release are in here */
 	spinlock_t 			release_lock;
@@ -30,24 +31,52 @@ typedef struct _rt_domain {
 	release_job_t			release_job;
 
 	/* how are tasks ordered in the ready queue? */
-	list_cmp_t			order;
+	heap_prio_t			order;
 } rt_domain_t;
 
-#define next_ready(rt) \
-	(list_entry((rt)->ready_queue.next, struct task_struct, rt_list))
+static inline struct task_struct* __next_ready(rt_domain_t* rt)
+{
+	struct heap_node *hn = heap_peek(rt->order, &rt->ready_queue);
+	if (hn)
+		return heap2task(hn);
+	else
+		return NULL;
+}
 
-#define ready_jobs_pending(rt) \
-	(!list_empty(&(rt)->ready_queue))
-
-void rt_domain_init(rt_domain_t *rt, list_cmp_t order, 
+void rt_domain_init(rt_domain_t *rt, heap_prio_t order,
 		    check_resched_needed_t check,
 		    release_job_t relase);
 
 void __add_ready(rt_domain_t* rt, struct task_struct *new);
 void __add_release(rt_domain_t* rt, struct task_struct *task);
 
-struct task_struct* __take_ready(rt_domain_t* rt);
-struct task_struct* __peek_ready(rt_domain_t* rt);
+static inline struct task_struct* __take_ready(rt_domain_t* rt)
+{
+	struct heap_node* hn = heap_take(rt->order, &rt->ready_queue);
+	if (hn)
+		return heap2task(hn);
+	else
+		return NULL;
+}
+
+static inline struct task_struct* __peek_ready(rt_domain_t* rt)
+{
+	struct heap_node* hn = heap_peek(rt->order, &rt->ready_queue);
+	if (hn)
+		return heap2task(hn);
+	else
+		return NULL;
+}
+
+static inline int  is_queued(struct task_struct *t)
+{
+	return heap_node_in_heap(tsk_rt(t)->heap_node);
+}
+
+static inline void remove(rt_domain_t* rt, struct task_struct *t)
+{
+	heap_delete(rt->order, &rt->ready_queue, tsk_rt(t)->heap_node);
+}
 
 static inline void add_ready(rt_domain_t* rt, struct task_struct *new)
 {
@@ -81,7 +110,7 @@ static inline void add_release(rt_domain_t* rt, struct task_struct *task)
 
 static inline int __jobs_pending(rt_domain_t* rt)
 {
-	return !list_empty(&rt->ready_queue);
+	return !heap_empty(&rt->ready_queue);
 }
 
 static inline int jobs_pending(rt_domain_t* rt)
@@ -90,7 +119,7 @@ static inline int jobs_pending(rt_domain_t* rt)
 	int ret;
 	/* first we need the write lock for rt_ready_queue */
 	spin_lock_irqsave(&rt->ready_lock, flags);
-	ret = __jobs_pending(rt);
+	ret = !heap_empty(&rt->ready_queue);
 	spin_unlock_irqrestore(&rt->ready_lock, flags);
 	return ret;
 }

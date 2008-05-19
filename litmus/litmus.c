@@ -7,11 +7,13 @@
 
 #include <linux/module.h>
 #include <linux/proc_fs.h>
-
+#include <linux/slab.h>
 
 #include <litmus/litmus.h>
 #include <linux/sched.h>
 #include <litmus/sched_plugin.h>
+
+#include <litmus/heap.h>
 
 #include <litmus/trace.h>
 
@@ -27,6 +29,8 @@ atomic_t __log_seq_no = ATOMIC_INIT(0);
  */
 static LIST_HEAD(sched_sig_list);
 static DEFINE_SPINLOCK(sched_sig_list_lock);
+
+static struct kmem_cache * heap_node_cache;
 
 /*
  * sys_set_task_rt_param
@@ -503,14 +507,22 @@ long litmus_admit_task(struct task_struct* tsk)
 		return -EINVAL;
 	}
 
-	INIT_LIST_HEAD(&tsk->rt_list);
+	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
 
 	/* avoid scheduler plugin changing underneath us */
 	spin_lock_irqsave(&task_transition_lock, flags);
 	retval = litmus->admit_task(tsk);
 
+	/* allocate heap node for this task */
+	tsk_rt(tsk)->heap_node = kmem_cache_alloc(heap_node_cache, GFP_ATOMIC);
+	if (!tsk_rt(tsk)->heap_node)
+		retval = -ENOMEM;
+	else
+		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
+
 	if (!retval)
 		atomic_inc(&rt_task_count);
+
 	spin_unlock_irqrestore(&task_transition_lock, flags);
 
 	return retval;
@@ -521,6 +533,8 @@ void litmus_exit_task(struct task_struct* tsk)
 {
 	if (is_realtime(tsk)) {
 		litmus->task_exit(tsk);
+		BUG_ON(heap_node_in_heap(tsk_rt(tsk)->heap_node));
+		kmem_cache_free(heap_node_cache, tsk_rt(tsk)->heap_node);
 		atomic_dec(&rt_task_count);
 		reinit_litmus_state(tsk, 1);
 	}
@@ -771,6 +785,10 @@ static int __init _init_litmus(void)
 
 	register_sched_plugin(&linux_sched_plugin);
 
+	heap_node_cache = KMEM_CACHE(heap_node, 0);
+	if (!heap_node_cache)
+		return -ENOMEM;
+
 #ifdef CONFIG_MAGIC_SYSRQ
 	/* offer some debugging help */
 	if (!register_sysrq_key('q', &sysrq_kill_rt_tasks_op))
@@ -787,6 +805,7 @@ static int __init _init_litmus(void)
 static void _exit_litmus(void)
 {
 	exit_litmus_proc();
+	kmem_cache_destroy(heap_node_cache);
 }
 
 module_init(_init_litmus);

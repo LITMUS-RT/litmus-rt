@@ -181,4 +181,6 @@ static inline lt_t litmus_clock(void)
 
 void srp_ceiling_block(void);
 
+#define heap2task(hn) ((struct task_struct*) hn->value)
+
 #endif

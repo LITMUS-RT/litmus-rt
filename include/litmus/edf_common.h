@@ -18,8 +18,6 @@ void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
 int edf_higher_prio(struct task_struct* first,
 		    struct task_struct* second);
 
-int edf_ready_order(struct list_head* a, struct list_head* b);
-
 int  edf_preemption_needed(rt_domain_t* rt, struct task_struct *t);
 
 int edf_set_hp_task(struct pi_semaphore *sem);
