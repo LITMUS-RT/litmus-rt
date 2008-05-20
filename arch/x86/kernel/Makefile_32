@@ -49,6 +49,9 @@ obj-y				+= pcspeaker.o
 
 obj-$(CONFIG_SCx200)		+= scx200_32.o
 
+obj-$(CONFIG_FEATHER_TRACE)	+= ft_event.o
+
+
 # vsyscall_32.o contains the vsyscall DSO images as __initdata.
 # We must build both images before we can assemble it.
 # Note: kbuild does not track this dependency due to usage of .incbin
