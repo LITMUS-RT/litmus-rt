@@ -9,28 +9,42 @@
 
 /*********************** TIMESTAMPS ************************/
 
+enum task_type_marker {
+	TSK_BE,
+	TSK_RT,
+	TSK_UNKNOWN
+};
+
 struct timestamp {
 	uint64_t		timestamp;
 	uint32_t		seq_no;
-	uint16_t		cpu;
-	uint16_t		event;
+	uint8_t			cpu;
+	uint8_t			event;
+	uint8_t			task_type;
 };
 
 
 /* buffer holding time stamps - will be provided by driver */
 extern struct ft_buffer* trace_ts_buf;
 
-/* save_timestamp:  stores current time as struct timestamp
- * in trace_ts_buf
- */
-asmlinkage void save_timestamp(unsigned long event);
+/* tracing callbacks */
+feather_callback void save_timestamp(unsigned long event);
+feather_callback void save_timestamp_def(unsigned long event, unsigned long type);
+feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr);
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
+#define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, def)
+
+#define TTIMESTAMP(id, task) ft_event1(id, save_timestamp_task, task)
 
 #else /* !CONFIG_FEATHER_TRACE */
 
-#define TIMESTAMP(id) /* no tracing */
+#define TIMESTAMP(id)        /* no tracing */
+
+#define DTIMESTAMP(id, def)  /* no tracing */
+
+#define TTIMESTAMP(id, task) /* no tracing */
 
 #endif
 
@@ -43,26 +57,26 @@ asmlinkage void save_timestamp(unsigned long event);
  * always the next number after the start time event id.
  */
 
-#define TS_SCHED_START 			TIMESTAMP(100)
-#define TS_SCHED_END			TIMESTAMP(101)
-#define TS_SCHED2_START 		TIMESTAMP(102)
-#define TS_SCHED2_END			TIMESTAMP(103)
+#define TS_SCHED_START(t)		TTIMESTAMP(100, t)
+#define TS_SCHED_END(t)			TTIMESTAMP(101, t)
+#define TS_SCHED2_START(t) 		TTIMESTAMP(102, t)
+#define TS_SCHED2_END(t)       		TTIMESTAMP(103, t)
 
-#define TS_CXS_START			TIMESTAMP(104)
-#define TS_CXS_END			TIMESTAMP(105)
+#define TS_CXS_START(t)			TTIMESTAMP(104, t)
+#define TS_CXS_END(t)			TTIMESTAMP(105, t)
 
-#define TS_RELEASE_START		TIMESTAMP(106)
-#define TS_RELEASE_END			TIMESTAMP(107)
+#define TS_RELEASE_START		DTIMESTAMP(106, TSK_RT)
+#define TS_RELEASE_END			DTIMESTAMP(107, TSK_RT)
 
-#define TS_TICK_START  			TIMESTAMP(110)
-#define TS_TICK_END    			TIMESTAMP(111)
+#define TS_TICK_START(t)		TTIMESTAMP(110, t)
+#define TS_TICK_END(t) 			TTIMESTAMP(111, t)
 
 
-#define TS_PLUGIN_SCHED_START		TIMESTAMP(120)
-#define TS_PLUGIN_SCHED_END		TIMESTAMP(121)
+#define TS_PLUGIN_SCHED_START		/* TIMESTAMP(120) */  /* currently unused */
+#define TS_PLUGIN_SCHED_END		/* TIMESTAMP(121) */
 
-#define TS_PLUGIN_TICK_START		TIMESTAMP(130)
-#define TS_PLUGIN_TICK_END		TIMESTAMP(131)
+#define TS_PLUGIN_TICK_START		/* TIMESTAMP(130) */
+#define TS_PLUGIN_TICK_END		/* TIMESTAMP(131) */
 
 #define TS_ENTER_NP_START		TIMESTAMP(140)
 #define TS_ENTER_NP_END			TIMESTAMP(141)

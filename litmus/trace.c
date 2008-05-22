@@ -5,6 +5,7 @@
 #include <asm/uaccess.h>
 #include <linux/module.h>
 
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
 
 /******************************************************************************/
@@ -15,17 +16,35 @@ struct ft_buffer* trace_ts_buf = NULL;
 
 static unsigned int ts_seq_no = 0;
 
-feather_callback void save_timestamp(unsigned long event)
+static inline void __save_timestamp(unsigned long event, uint8_t type)
 {
-	unsigned int seq_no = fetch_and_inc((int *) &ts_seq_no);
+	unsigned int seq_no;
 	struct timestamp *ts;
+	seq_no = fetch_and_inc((int *) &ts_seq_no);
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		ts->event     = event;
 		ts->timestamp = ft_timestamp();
 		ts->seq_no    = seq_no;
 		ts->cpu       = raw_smp_processor_id();
+		ts->task_type = type;
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
+}
+
+feather_callback void save_timestamp(unsigned long event)
+{
+	__save_timestamp(event, TSK_UNKNOWN);
+}
+
+feather_callback void save_timestamp_def(unsigned long event, unsigned long type)
+{
+	__save_timestamp(event, (uint8_t) type);
+}
+
+feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr)
+{
+	int rt = is_realtime((struct task_struct *) t_ptr);
+	__save_timestamp(event, rt ? TSK_RT : TSK_BE);
 }
 
 static struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size)

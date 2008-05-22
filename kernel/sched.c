@@ -3493,7 +3493,7 @@ void scheduler_tick(void)
 	struct task_struct *curr = rq->curr;
 	u64 next_tick = rq->tick_timestamp + TICK_NSEC;
 
-	TS_TICK_START;
+	TS_TICK_START(current);
 	spin_lock(&rq->lock);
 	__update_rq_clock(rq);
 	/*
@@ -3515,7 +3515,7 @@ void scheduler_tick(void)
 	if (!is_realtime(current))
 		trigger_load_balance(rq, cpu);
 #endif
-	TS_TICK_END;
+	TS_TICK_END(current);
 }
 
 #if defined(CONFIG_PREEMPT) && defined(CONFIG_DEBUG_PREEMPT)
@@ -3654,7 +3654,7 @@ need_resched:
 
 	release_kernel_lock(prev);
 need_resched_nonpreemptible:
-	TS_SCHED_START;
+	TS_SCHED_START(prev);
 
 	schedule_debug(prev);
 
@@ -3692,30 +3692,30 @@ need_resched_nonpreemptible:
 		rq->curr = next;
 		++*switch_count;
 
-		TS_SCHED_END;
-		TS_CXS_START;
+		TS_SCHED_END(next);
+		TS_CXS_START(prev);
 		context_switch(rq, prev, next); /* unlocks the rq */
-		TS_CXS_END;
+		TS_CXS_END(current);
 	} else {
-		TS_SCHED_END;
+		TS_SCHED_END(prev);
 		spin_unlock_irq(&rq->lock);
 	}
-	TS_SCHED2_START;
+	TS_SCHED2_START(current);
 
 	tick_no_rqlock();
 
 	if (unlikely(reacquire_kernel_lock(current) < 0)) {
 		cpu = smp_processor_id();
 		rq = cpu_rq(cpu);
-		TS_SCHED2_END;
+		TS_SCHED2_END(current);
 		goto need_resched_nonpreemptible;
 	}
 	preempt_enable_no_resched();
 	if (unlikely(test_thread_flag(TIF_NEED_RESCHED))) {
-		TS_SCHED2_END;
+		TS_SCHED2_END(current);
 		goto need_resched;
 	}
-	TS_SCHED2_END;
+	TS_SCHED2_END(current);
 	if (srp_active())
 		srp_ceiling_block();
 }
