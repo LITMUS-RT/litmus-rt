@@ -24,7 +24,7 @@ extern int ft_events[MAX_EVENTS];
 	if (ft_events[id]) callback(id);
 
 #define ft_event1(id, callback, param) \
-	if (ft_events[id]) callback(id), param;
+	if (ft_events[id]) callback(id, param);
 
 #define ft_event2(id, callback, param, param2) \
 	if (ft_events[id]) callback(id, param, param2);

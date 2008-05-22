@@ -36,7 +36,7 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
 
 #define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, def)
 
-#define TTIMESTAMP(id, task) ft_event1(id, save_timestamp_task, task)
+#define TTIMESTAMP(id, task) ft_event1(id, save_timestamp_task, (unsigned long) task)
 
 #else /* !CONFIG_FEATHER_TRACE */
 
