@@ -16,6 +16,7 @@
 
 #include <litmus/rt_domain.h>
 
+#include <litmus/trace.h>
 
 static int dummy_resched(rt_domain_t *rt)
 {
@@ -36,11 +37,15 @@ static void default_release_job(struct task_struct* t, rt_domain_t* rt)
 static enum hrtimer_restart release_job_timer(struct hrtimer *timer)
 {
 	struct task_struct *t;
-	
+
+	TS_RELEASE_START;
+
 	t = container_of(timer, struct task_struct, 
 			 rt_param.release_timer);
 
 	get_domain(t)->release_job(t, get_domain(t));
+
+	TS_RELEASE_END;
 
 	return HRTIMER_NORESTART;
 }

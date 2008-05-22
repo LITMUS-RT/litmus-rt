@@ -67,6 +67,8 @@
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
 
+#include <litmus/trace.h>
+
 #include <litmus/norqlock.h>
 
 /*
@@ -3491,6 +3493,7 @@ void scheduler_tick(void)
 	struct task_struct *curr = rq->curr;
 	u64 next_tick = rq->tick_timestamp + TICK_NSEC;
 
+	TS_TICK_START;
 	spin_lock(&rq->lock);
 	__update_rq_clock(rq);
 	/*
@@ -3502,13 +3505,17 @@ void scheduler_tick(void)
 	update_cpu_load(rq);
 	if (curr != rq->idle) /* FIXME: needed? */
 		curr->sched_class->task_tick(rq, curr);
+	TS_PLUGIN_TICK_START;
 	litmus_tick(rq, curr);
+	TS_PLUGIN_TICK_END;
 	spin_unlock(&rq->lock);
 
 #ifdef CONFIG_SMP
 	rq->idle_at_tick = idle_cpu(cpu);
-	trigger_load_balance(rq, cpu);
+	if (!is_realtime(current))
+		trigger_load_balance(rq, cpu);
 #endif
+	TS_TICK_END;
 }
 
 #if defined(CONFIG_PREEMPT) && defined(CONFIG_DEBUG_PREEMPT)
@@ -3647,6 +3654,7 @@ need_resched:
 
 	release_kernel_lock(prev);
 need_resched_nonpreemptible:
+	TS_SCHED_START;
 
 	schedule_debug(prev);
 
@@ -3657,7 +3665,9 @@ need_resched_nonpreemptible:
 	__update_rq_clock(rq);
 	spin_lock(&rq->lock);
 	clear_tsk_need_resched(prev);
+	TS_PLUGIN_SCHED_START;
 	litmus_schedule(rq, prev);
+	TS_PLUGIN_SCHED_END;
 
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
 		if (unlikely((prev->state & TASK_INTERRUPTIBLE) &&
@@ -3682,21 +3692,30 @@ need_resched_nonpreemptible:
 		rq->curr = next;
 		++*switch_count;
 
-		TRACE_TASK(next, "switched to\n");
+		TS_SCHED_END;
+		TS_CXS_START;
 		context_switch(rq, prev, next); /* unlocks the rq */
-	} else
+		TS_CXS_END;
+	} else {
+		TS_SCHED_END;
 		spin_unlock_irq(&rq->lock);
+	}
+	TS_SCHED2_START;
 
 	tick_no_rqlock();
 
 	if (unlikely(reacquire_kernel_lock(current) < 0)) {
 		cpu = smp_processor_id();
 		rq = cpu_rq(cpu);
+		TS_SCHED2_END;
 		goto need_resched_nonpreemptible;
 	}
 	preempt_enable_no_resched();
-	if (unlikely(test_thread_flag(TIF_NEED_RESCHED)))
+	if (unlikely(test_thread_flag(TIF_NEED_RESCHED))) {
+		TS_SCHED2_END;
 		goto need_resched;
+	}
+	TS_SCHED2_END;
 	if (srp_active())
 		srp_ceiling_block();
 }
