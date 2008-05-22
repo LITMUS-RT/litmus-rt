@@ -10,10 +10,10 @@
 /*********************** TIMESTAMPS ************************/
 
 struct timestamp {
-	unsigned long		event;
-	unsigned long long	timestamp;
-	unsigned int		seq_no;
-	int			cpu;
+	uint64_t		timestamp;
+	uint32_t		seq_no;
+	uint16_t		cpu;
+	uint16_t		event;
 };
 
 

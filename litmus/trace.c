@@ -173,22 +173,24 @@ out:
 #define ENABLE_CMD 	0
 #define DISABLE_CMD 	1
 
+typedef uint32_t cmd_t;
+
 static ssize_t trace_write(struct file *filp, const char __user *from,
 			   size_t len, loff_t *f_pos)
 {
 	ssize_t error = -EINVAL;
-	unsigned long cmd;
-	unsigned long id;
+	cmd_t cmd;
+	cmd_t id;
 
-	if (len % sizeof(long) || len < 2 * sizeof(long))
+	if (len % sizeof(cmd_t) || len < 2 * sizeof(cmd_t))
 		goto out;
 
-	if (copy_from_user(&cmd, from, sizeof(long))) {
+	if (copy_from_user(&cmd, from, sizeof(cmd_t))) {
 		error = -EFAULT;
 	        goto out;
 	}
-	len  -= sizeof(long);
-	from += sizeof(long);
+	len  -= sizeof(cmd_t);
+	from += sizeof(cmd_t);
 
 	if (cmd != ENABLE_CMD && cmd != DISABLE_CMD)
 		goto out;
@@ -198,26 +200,26 @@ static ssize_t trace_write(struct file *filp, const char __user *from,
 		goto out;
 	}
 
-	error = sizeof(long);
+	error = sizeof(cmd_t);
 	while (len) {
-		if (copy_from_user(&id, from, sizeof(long))) {
+		if (copy_from_user(&id, from, sizeof(cmd_t))) {
 			error = -EFAULT;
 			goto out;
 		}
-		len  -= sizeof(long);
-		from += sizeof(long);
+		len  -= sizeof(cmd_t);
+		from += sizeof(cmd_t);
 		if (cmd) {
 			printk(KERN_INFO
-			       "Disabling feather-trace event %lu.\n", id);
+			       "Disabling feather-trace event %d.\n", (int) id);
 			ft_disable_event(id);
 			enabled_events--;
 		} else {
 			printk(KERN_INFO
-			       "Enabling feather-trace event %lu.\n", id);
+			       "Enabling feather-trace event %d.\n", (int) id);
 			ft_enable_event(id);
 			enabled_events++;
 		}
-		error += sizeof(long);
+		error += sizeof(cmd_t);
 	}
 
 	up(&feather_lock);
