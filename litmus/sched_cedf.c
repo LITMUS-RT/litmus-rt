@@ -636,6 +636,11 @@ static void cedf_task_exit(struct task_struct * t)
 	/* unlink if necessary */
 	spin_lock_irqsave(&task_cedf(t)->slock, flags);
 	unlink(t);
+	if (tsk_rt(t)->scheduled_on != NO_CPU) {
+		cedf_cpu_entries_array[tsk_rt(t)->scheduled_on]->
+			scheduled = NULL;
+		tsk_rt(t)->scheduled_on = NO_CPU;
+	}
 	spin_unlock_irqrestore(&task_cedf(t)->slock, flags);
 
 	BUG_ON(!is_realtime(t));
