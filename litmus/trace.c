@@ -102,7 +102,8 @@ static void free_ft_buffer(struct ft_buffer* buf)
 /*                        DEVICE FILE DRIVER                                  */
 /******************************************************************************/
 
-#define NO_TIMESTAMPS 262144
+#define NO_TIMESTAMPS (2 << 19) /* that should be 8 megs of ram, we may not get
+				 * as much */
 
 static DECLARE_MUTEX(feather_lock);
 static int use_count = 0;
