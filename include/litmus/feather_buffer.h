@@ -3,20 +3,6 @@
 
 /* requires UINT_MAX and memcpy */
 
-static inline int  fetch_and_inc(int *val)
-{
-	int ret = 1;
-	__asm__ __volatile__("lock; xaddl %0, %1" : "+r" (ret), "+m" (*val) : : "memory" );
-	return ret;
-}
-
-static inline int  fetch_and_dec(int *val)
-{
-	int ret = -1;
-	__asm__ __volatile__("lock; xaddl %0, %1" : "+r" (ret), "+m" (*val) : : "memory" );
-	return ret;
-}
-
 #define SLOT_FREE	0
 #define	SLOT_BUSY 	1
 #define	SLOT_READY	2

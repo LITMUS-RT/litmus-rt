@@ -21,7 +21,7 @@ feather_callback void save_timestamp(unsigned long event)
 	struct timestamp *ts;
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		ts->event     = event;
-		ts->timestamp = ft_read_tsc();
+		ts->timestamp = ft_timestamp();
 		ts->seq_no    = seq_no;
 		ts->cpu       = raw_smp_processor_id();
 		ft_buffer_finish_write(trace_ts_buf, ts);
