@@ -288,6 +288,8 @@ static void psnedf_task_exit(struct task_struct * t)
 		edf  = task_edf(t);
 		remove(edf, t);
 	}
+	if (pedf->scheduled == t)
+		pedf->scheduled = NULL;
 	preempt(pedf);
 	spin_unlock_irqrestore(&pedf->slock, flags);
 }

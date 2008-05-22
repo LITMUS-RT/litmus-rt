@@ -583,6 +583,10 @@ static void gsnedf_task_exit(struct task_struct * t)
 	/* unlink if necessary */
 	spin_lock_irqsave(&gsnedf_lock, flags);
 	unlink(t);
+	if (tsk_rt(t)->scheduled_on != NO_CPU) {
+		gsnedf_cpus[tsk_rt(t)->scheduled_on]->scheduled = NULL;
+		tsk_rt(t)->scheduled_on = NO_CPU;
+	}
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
 
 	BUG_ON(!is_realtime(t));
