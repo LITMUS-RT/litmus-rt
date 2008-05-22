@@ -3654,7 +3654,7 @@ need_resched:
 
 	release_kernel_lock(prev);
 need_resched_nonpreemptible:
-	TS_SCHED_START(prev);
+	TS_SCHED_START;
 
 	schedule_debug(prev);
 
@@ -3693,7 +3693,7 @@ need_resched_nonpreemptible:
 		++*switch_count;
 
 		TS_SCHED_END(next);
-		TS_CXS_START(prev);
+		TS_CXS_START(next);
 		context_switch(rq, prev, next); /* unlocks the rq */
 		TS_CXS_END(current);
 	} else {

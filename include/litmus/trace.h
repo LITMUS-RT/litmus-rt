@@ -57,7 +57,10 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
  * always the next number after the start time event id.
  */
 
-#define TS_SCHED_START(t)		TTIMESTAMP(100, t)
+#define TS_SCHED_START			DTIMESTAMP(100, TSK_UNKNOWN) /* we only
+								      * care
+								      * about
+								      * next */
 #define TS_SCHED_END(t)			TTIMESTAMP(101, t)
 #define TS_SCHED2_START(t) 		TTIMESTAMP(102, t)
 #define TS_SCHED2_END(t)       		TTIMESTAMP(103, t)
