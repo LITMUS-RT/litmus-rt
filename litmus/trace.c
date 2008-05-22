@@ -88,6 +88,9 @@ static void free_ft_buffer(struct ft_buffer* buf)
 static DECLARE_MUTEX(feather_lock);
 static int use_count = 0;
 
+/* used for draining the FT buffers */
+static int enabled_events = 0;
+
 static int trace_release(struct inode *in, struct file *filp)
 {
 	int err 		= -EINVAL;
@@ -104,6 +107,7 @@ static int trace_release(struct inode *in, struct file *filp)
 	if (use_count == 1) {
 		/* disable events */
 		ft_disable_all_events();
+		enabled_events = 0;
 
 		/* wait for any pending events to complete */
 		set_current_state(TASK_UNINTERRUPTIBLE);
@@ -125,7 +129,6 @@ out:
 	return err;
 }
 
-
 static ssize_t trace_read(struct file *filp, char __user *to, size_t len,
 		      loff_t *f_pos)
 {
@@ -141,6 +144,7 @@ static ssize_t trace_read(struct file *filp, char __user *to, size_t len,
 
 	while (len >= sizeof(struct timestamp)) {
 		if (ft_buffer_read(trace_ts_buf, &ts)) {
+			/* FIXME: avoid double copy */
 			if (copy_to_user(to, &ts, sizeof(struct timestamp))) {
 				error = -EFAULT;
 				break;
@@ -149,14 +153,17 @@ static ssize_t trace_read(struct file *filp, char __user *to, size_t len,
 				to     += sizeof(struct timestamp);
 				error  += sizeof(struct timestamp);
 			}
-	        } else {
+	        } else if (enabled_events) {
+			/* only wait if there are any events enabled */
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(50);
 			if (signal_pending(current)) {
 				error = -ERESTARTSYS;
 				break;
 			}
-		}
+		} else
+			/* nothing left to get, return to user space */
+			break;
 	}
 	up(&feather_lock);
 out:
@@ -203,10 +210,12 @@ static ssize_t trace_write(struct file *filp, const char __user *from,
 			printk(KERN_INFO
 			       "Disabling feather-trace event %lu.\n", id);
 			ft_disable_event(id);
+			enabled_events--;
 		} else {
 			printk(KERN_INFO
 			       "Enabling feather-trace event %lu.\n", id);
 			ft_enable_event(id);
+			enabled_events++;
 		}
 		error += sizeof(long);
 	}
