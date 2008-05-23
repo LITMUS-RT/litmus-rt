@@ -64,6 +64,8 @@ struct rt_job {
 };
 
 
+struct pfair_param;
+
 /*	RT task parameters for scheduling extensions
  *	These parameters are inherited during clone and therefore must
  *	be explicitly set up before the task set is launched.
@@ -108,15 +110,12 @@ struct rt_param {
 	 * is currently scheduled. It is the responsibility of the
 	 * plugin to avoid race conditions.
 	 *
-	 * Used by GSN-EDF.
+	 * This used by GSN-EDF and PFAIR.
 	 */
 	volatile int		scheduled_on;
 
-	/* Is the stack of the task currently in use? Currently, this
-	 * is the responsibility of the plugin to update this field.
-	 * Maybe become part of the LITMUS core some day.
-	 * 
-	 * Used by GSN-EDF.
+	/* Is the stack of the task currently in use? This is updated by
+	 * the LITMUS core.
 	 *
 	 * Be careful to avoid deadlocks!
 	 */
@@ -129,6 +128,9 @@ struct rt_param {
 	 * Used by GSN-EDF.
 	 */
 	volatile int		linked_on;
+
+	/* PFAIR/PD^2 state. Allocated on demand. */
+	struct pfair_param*	pfair;
 
 	/* Fields saved before BE->RT transition.
 	 */
