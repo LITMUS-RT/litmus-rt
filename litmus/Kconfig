@@ -1,5 +1,31 @@
 menu "LITMUS^RT"
 
+config NP_SECTION
+	bool "Non-preemptive section support"
+	depends on !SPARC64
+	default y
+	help
+	  Include support for flag-based non-preemptive section signaling
+	  from userspace.
+
+	  (currently broken on SPARC64)
+
+	  Say Yes if in doubt.
+
+
+config FMLP
+	bool "FMLP support"
+	depends on NP_SECTION
+	default y
+	help
+	  Include support for deterministic multiprocessor real-time
+	  synchronization support.
+
+	  Say Yes if in doubt.
+
+
+menu "Tracing"
+
 config SCHED_TASK_TRACE
 	bool "Trace real-time tasks"
 	default y
@@ -35,5 +61,7 @@ config FEATHER_TRACE
 
 	  Say Yes for overhead tracing.
 
+
+endmenu
 
 endmenu
