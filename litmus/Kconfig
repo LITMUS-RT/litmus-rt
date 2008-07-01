@@ -1,28 +1,39 @@
 menu "LITMUS^RT"
 
+menu "Real-Time Synchronization"
+
 config NP_SECTION
 	bool "Non-preemptive section support"
 	depends on !SPARC64
-	default y
+	default n
 	help
 	  Include support for flag-based non-preemptive section signaling
 	  from userspace.
 
 	  (currently broken on SPARC64)
 
-	  Say Yes if in doubt.
+	  Say Yes if you want FMLP short critical section  synchronization support.
 
+
+config SRP
+	bool "Stack Resource Policy (SRP)"
+	default n
+	help
+	  Include support for Baker's Stack Resource Policy. 
+
+	  Say Yes if you want FMLP local long  critical section synchronization support.
 
 config FMLP
 	bool "FMLP support"
 	depends on NP_SECTION
-	default y
+	default n
 	help
 	  Include support for deterministic multiprocessor real-time
 	  synchronization support.
 
-	  Say Yes if in doubt.
+	  Say Yes if you want FMLP long critical section synchronization support.
 
+endmenu
 
 menu "Tracing"
 

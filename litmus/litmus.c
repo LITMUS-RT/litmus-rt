@@ -132,9 +132,6 @@ asmlinkage long sys_get_rt_task_param(pid_t pid, struct rt_task __user * param)
 
 }
 
-/* implemented in kernel/litmus_sem.c */
-void srp_ceiling_block(void);
-
 /*
  *	This is the crucial function for periodic task implementation,
  *	It checks if a task is periodic, checks if such kind of sleep

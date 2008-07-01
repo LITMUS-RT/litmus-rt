@@ -172,7 +172,11 @@ static inline lt_t litmus_clock(void)
 #define make_np(t) do {t->rt_param.kernel_np++;} while(0);
 #define take_np(t) do {t->rt_param.kernel_np--;} while(0);
 
+#ifdef CONFIG_SRP
 void srp_ceiling_block(void);
+#else
+#define srp_ceiling_block() /* nothing */
+#endif
 
 #define heap2task(hn) ((struct task_struct*) hn->value)
 

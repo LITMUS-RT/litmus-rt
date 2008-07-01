@@ -87,7 +87,9 @@ struct sched_plugin {
 	struct list_head	list;
 	/* 	basic info 		*/
 	char 			*plugin_name;
+#ifdef CONFIG_SRP
 	unsigned int		srp_active;
+#endif
 
 	/* 	scheduler invocation 	*/
 	scheduler_tick_t        tick;
@@ -124,7 +126,11 @@ int print_sched_plugins(char* buf, int max);
 
 static inline int srp_active(void)
 {
+#ifdef CONFIG_SRP
 	return litmus->srp_active;
+#else
+	return 0;
+#endif
 }
 static inline int fmlp_active(void)
 {

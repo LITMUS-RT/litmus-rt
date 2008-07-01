@@ -12,6 +12,8 @@
 #include <litmus/trace.h>
 
 
+#ifdef CONFIG_SRP
+
 struct srp_priority {
 	struct list_head	list;
         unsigned int 		period;
@@ -164,7 +166,7 @@ struct fdso_ops srp_sem_ops = {
 };
 
 
-void do_srp_down(struct srp_semaphore* sem)
+static void do_srp_down(struct srp_semaphore* sem)
 {
 	/* Update ceiling. */
 	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
@@ -173,7 +175,7 @@ void do_srp_down(struct srp_semaphore* sem)
 	TRACE_CUR("acquired srp 0x%p\n", sem);
 }
 
-void do_srp_up(struct srp_semaphore* sem)
+static void do_srp_up(struct srp_semaphore* sem)
 {	
 	/* Determine new system priority ceiling for this CPU. */
 	WARN_ON(!in_list(&sem->ceiling.list));
@@ -298,3 +300,19 @@ void srp_ceiling_block(void)
 	preempt_enable();
 }
 
+
+#else
+
+asmlinkage long sys_srp_down(int sem_od)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_srp_up(int sem_od)
+{
+	return -ENOSYS;
+}
+
+struct fdso_ops srp_sem_ops = {};
+
+#endif
