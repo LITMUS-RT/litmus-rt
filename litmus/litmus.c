@@ -316,6 +316,8 @@ void send_scheduler_signals(void)
 
 }
 
+#ifdef CONFIG_NP_SECTION
+
 static inline void np_mem_error(struct task_struct* t, const char* reason)
 {
 	if (t->state != TASK_DEAD && !(t->flags & PF_EXITING)) {
@@ -454,6 +456,21 @@ asmlinkage long sys_exit_np(void)
 	TS_EXIT_NP_END;
 	return retval;
 }
+
+#else /* !CONFIG_NP_SECTION */
+
+asmlinkage long sys_register_np_flag(short __user *flag)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_exit_np(void)
+{
+	return -ENOSYS;
+}
+
+#endif /* CONFIG_NP_SECTION */
+
 
 /* p is a real-time task. Re-init its state as a best-effort task. */
 static void reinit_litmus_state(struct task_struct* p, int restore)

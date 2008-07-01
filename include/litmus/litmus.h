@@ -86,13 +86,6 @@ void list_qsort(struct list_head* list, list_cmp_t less_than);
 #define RT_NON_PREEMPTIVE 	0x4e50 /* =  P */
 #define RT_EXIT_NP_REQUESTED	0x5251 /* = RQ */
 
-/* returns 1 if task t has registered np flag and set it to RT_NON_PREEMPTIVE
- */
-int is_np(struct task_struct *t);
-
-/* request that the task should call sys_exit_np()
- */
-void request_exit_np(struct task_struct *t);
 
 /* kill naughty tasks
  */
@@ -182,5 +175,27 @@ static inline lt_t litmus_clock(void)
 void srp_ceiling_block(void);
 
 #define heap2task(hn) ((struct task_struct*) hn->value)
+
+
+#ifdef CONFIG_NP_SECTION
+/* returns 1 if task t has registered np flag and set it to RT_NON_PREEMPTIVE
+ */
+int is_np(struct task_struct *t);
+
+/* request that the task should call sys_exit_np()
+ */
+void request_exit_np(struct task_struct *t);
+
+#else
+
+static inline int is_np(struct task_struct *t)
+{
+	return tsk_rt(t)->kernel_np;
+}
+
+#define  request_exit_np(t)
+
+#endif
+
 
 #endif
