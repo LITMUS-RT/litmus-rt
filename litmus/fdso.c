@@ -28,7 +28,10 @@ static const struct fdso_ops* fdso_ops[] = {
 
 static void* fdso_create(obj_type_t type)
 {
-	return fdso_ops[type]->create();
+	if (fdso_ops[type]->create)
+		return fdso_ops[type]->create();
+	else
+		return NULL;
 }
 
 static void fdso_destroy(obj_type_t type, void* obj)

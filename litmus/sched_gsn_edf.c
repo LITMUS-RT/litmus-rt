@@ -593,6 +593,7 @@ static void gsnedf_task_exit(struct task_struct * t)
         TRACE_TASK(t, "RIP\n");
 }
 
+#ifdef CONFIG_FMLP
 static long gsnedf_pi_block(struct pi_semaphore *sem,
 			    struct task_struct *new_waiter)
 {
@@ -677,6 +678,8 @@ static long gsnedf_return_priority(struct pi_semaphore *sem)
 	return ret;
 }
 
+#endif
+
 static long gsnedf_admit_task(struct task_struct* tsk)
 {
 	return 0;
@@ -686,7 +689,6 @@ static long gsnedf_admit_task(struct task_struct* tsk)
 /*	Plugin object	*/
 static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "GSN-EDF",
-	.fmlp_active		= 1,
 	.finish_switch		= gsnedf_finish_switch,
 	.tick			= gsnedf_tick,
 	.task_new		= gsnedf_task_new,
@@ -695,9 +697,12 @@ static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.schedule		= gsnedf_schedule,
 	.task_wake_up		= gsnedf_task_wake_up,
 	.task_block		= gsnedf_task_block,
+#ifdef CONFIG_FMLP
+	.fmlp_active		= 1,
 	.pi_block		= gsnedf_pi_block,
 	.inherit_priority	= gsnedf_inherit_priority,
 	.return_priority	= gsnedf_return_priority,
+#endif
 	.admit_task		= gsnedf_admit_task
 };
 

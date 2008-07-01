@@ -57,6 +57,8 @@ static long litmus_dummy_complete_job(void)
 	return -ENOSYS;
 }
 
+#ifdef CONFIG_FMLP
+
 static long litmus_dummy_inherit_priority(struct pi_semaphore *sem,
 					  struct task_struct *new_owner)
 {
@@ -74,6 +76,7 @@ static long litmus_dummy_pi_block(struct pi_semaphore *sem,
 	return -ENOSYS;
 }
 
+#endif
 
 
 /* The default scheduler plugin. It doesn't do anything and lets Linux do its
@@ -89,9 +92,11 @@ struct sched_plugin linux_sched_plugin = {
 	.complete_job = litmus_dummy_complete_job,
 	.schedule = litmus_dummy_schedule,
 	.finish_switch = litmus_dummy_finish_switch,
+#ifdef CONFIG_FMLP
 	.inherit_priority = litmus_dummy_inherit_priority,
 	.return_priority = litmus_dummy_return_priority,
 	.pi_block = litmus_dummy_pi_block,
+#endif
 	.admit_task = litmus_dummy_admit_task
 };
 
@@ -125,9 +130,11 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(task_block);
 	CHECK(task_new);
 	CHECK(complete_job);
+#ifdef CONFIG_FMLP
 	CHECK(inherit_priority);
 	CHECK(return_priority);
 	CHECK(pi_block);
+#endif
 	CHECK(admit_task);
 
 	if (!plugin->release_at)

@@ -16,9 +16,7 @@
 
 #include <litmus/trace.h>
 
-/* ************************************************************************** */
-/*                          PRIORITY INHERITANCE                              */
-/* ************************************************************************** */
+#ifdef CONFIG_FMLP
 
 static  void* create_fmlp_semaphore(void)
 {
@@ -128,7 +126,7 @@ int edf_set_hp_cpu_task(struct pi_semaphore *sem, int cpu)
 	return ret;
 }
 
-int do_fmlp_down(struct pi_semaphore* sem)
+static int do_fmlp_down(struct pi_semaphore* sem)
 {
 	unsigned long flags;
 	struct task_struct *tsk = current;
@@ -187,7 +185,7 @@ int do_fmlp_down(struct pi_semaphore* sem)
 	return suspended;
 }
 
-void do_fmlp_up(struct pi_semaphore* sem)
+static void do_fmlp_up(struct pi_semaphore* sem)
 {
 	unsigned long flags;
 
@@ -246,3 +244,19 @@ asmlinkage long sys_fmlp_up(int sem_od)
 
 	return ret;
 }
+
+#else
+
+struct fdso_ops fmlp_sem_ops = {};
+
+asmlinkage long sys_fmlp_down(int sem_od)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_fmlp_up(int sem_od)
+{
+	return -ENOSYS;
+}
+
+#endif

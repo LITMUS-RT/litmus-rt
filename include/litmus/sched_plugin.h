@@ -88,7 +88,6 @@ struct sched_plugin {
 	/* 	basic info 		*/
 	char 			*plugin_name;
 	unsigned int		srp_active;
-	unsigned int		fmlp_active;
 
 	/* 	scheduler invocation 	*/
 	scheduler_tick_t        tick;
@@ -107,10 +106,13 @@ struct sched_plugin {
 	task_block_t		task_block;
 	task_exit_t 		task_exit;
 
+#ifdef CONFIG_FMLP
 	/*     priority inheritance 	*/
+	unsigned int		fmlp_active;
 	inherit_priority_t	inherit_priority;
 	return_priority_t	return_priority;
 	pi_block_t		pi_block;
+#endif
 } __attribute__ ((__aligned__(SMP_CACHE_BYTES)));
 
 
@@ -124,10 +126,13 @@ static inline int srp_active(void)
 {
 	return litmus->srp_active;
 }
-
 static inline int fmlp_active(void)
 {
+#ifdef CONFIG_FMLP
 	return litmus->fmlp_active;
+#else
+	return 0;
+#endif
 }
 
 #endif

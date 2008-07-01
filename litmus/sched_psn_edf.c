@@ -294,6 +294,7 @@ static void psnedf_task_exit(struct task_struct * t)
 	spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
+#ifdef CONFIG_FMLP
 static long psnedf_pi_block(struct pi_semaphore *sem,
 			    struct task_struct *new_waiter)
 {
@@ -405,6 +406,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 	return ret;
 }
 
+#endif
 
 static long psnedf_admit_task(struct task_struct* tsk)
 {
@@ -414,7 +416,6 @@ static long psnedf_admit_task(struct task_struct* tsk)
 /*	Plugin object	*/
 static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PSN-EDF",
-	.fmlp_active		= 1,
 	.srp_active		= 1,
 	.tick			= psnedf_tick,
 	.task_new		= psnedf_task_new,
@@ -423,9 +424,12 @@ static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.schedule		= psnedf_schedule,
 	.task_wake_up		= psnedf_task_wake_up,
 	.task_block		= psnedf_task_block,
+#ifdef CONFIG_FMLP
+	.fmlp_active		= 1,
 	.pi_block		= psnedf_pi_block,
 	.inherit_priority	= psnedf_inherit_priority,
 	.return_priority	= psnedf_return_priority,
+#endif
 	.admit_task		= psnedf_admit_task
 };
 
