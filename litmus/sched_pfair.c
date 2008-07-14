@@ -48,6 +48,7 @@ struct pfair_param   {
 	int		last_cpu;     /* where scheduled last */
 
 	unsigned int	present;    /* Can the task be scheduled? */
+	unsigned int	sporadic_release; /* On wakeup, new sporadic release? */
 
 	struct subtask subtasks[0];   /* allocate together with pfair_param */
 };
@@ -269,6 +270,32 @@ static void check_preempt(struct task_struct* t)
 	}
 }
 
+/* caller must hold pfair_lock */
+static void drop_all_references(struct task_struct *t)
+{
+        int cpu;
+        struct pfair_state* s;
+        struct heap* q;
+        if (heap_node_in_heap(tsk_rt(t)->heap_node)) {
+                /* figure out what queue the node is in */
+                if (time_before_eq(cur_release(t), merge_time))
+                        q = &pfair.ready_queue;
+                else
+                        q = relq(cur_release(t));
+                heap_delete(pfair_ready_order, q,
+                            tsk_rt(t)->heap_node);
+        }
+        for (cpu = 0; cpu < NR_CPUS; cpu++) {
+                s = &per_cpu(pfair_state, cpu);
+                if (s->linked == t)
+                        s->linked = NULL;
+                if (s->local  == t)
+                        s->local  = NULL;
+                if (s->scheduled  == t)
+                        s->scheduled = NULL;
+        }
+}
+
 /* returns 1 if the task needs to go the release queue */
 static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 {
@@ -279,10 +306,17 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		   cpu,
 		   p->cur);
 	if (!p->cur) {
-		/* we start a new job */
-		get_rt_flags(t) = RT_F_RUNNING;
 		prepare_for_next_period(t);
-		p->release += p->period;
+		if (tsk_pfair(t)->present) {
+			/* we start a new job */
+			get_rt_flags(t) = RT_F_RUNNING;
+			p->release += p->period;
+		} else {
+			/* remove task from system until it wakes */
+			drop_all_references(t);
+			tsk_pfair(t)->sporadic_release = 1;
+			return 0;
+		}
 	}
 	return time_after(cur_release(t), time);
 }
@@ -524,6 +558,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 
 	prepare_release(t, pfair_time + 1);
 	tsk_pfair(t)->present = running;
+	tsk_pfair(t)->sporadic_release = 0;
 	pfair_add_release(t);
 	check_preempt(t);
 
@@ -542,13 +577,17 @@ static void pfair_task_wake_up(struct task_struct *t)
 	tsk_pfair(t)->present = 1;
 
 	/* It is a little unclear how to deal with Pfair
-	 * tasks that block for a while and then wake.
-	 * For now, we assume that such suspensions are included
-	 * in the stated execution time of the task, and thus
-	 * count as execution time for our purposes. Thus, if the
-	 * task is currently linked somewhere, it may resume, otherwise
-	 * it has to wait for its next quantum allocation.
+	 * tasks that block for a while and then wake. For now,
+	 * if a task blocks and wakes before its next job release,
+	 * then it may resume if it is currently linked somewhere
+	 * (as if it never blocked at all). Otherwise, we have a
+	 * new sporadic job release.
 	 */
+	if (tsk_pfair(t)->sporadic_release) {
+		prepare_release(t, pfair_time + 1);
+		pfair_add_release(t);
+		tsk_pfair(t)->sporadic_release = 0;
+	}
 
 	check_preempt(t);
 
@@ -560,32 +599,6 @@ static void pfair_task_block(struct task_struct *t)
 	BUG_ON(!is_realtime(t));
 	TRACE_TASK(t, "blocks at %lld, state:%d\n",
 		   (lt_t) jiffies, t->state);
-}
-
-/* caller must hold pfair_lock */
-static void drop_all_references(struct task_struct *t)
-{
-	int cpu;
-	struct pfair_state* s;
-	struct heap* q;
-	if (heap_node_in_heap(tsk_rt(t)->heap_node)) {
-		/* figure out what queue the node is in */
-		if (time_before_eq(cur_release(t), merge_time))
-			q = &pfair.ready_queue;
-		else
-			q = relq(cur_release(t));
-		heap_delete(pfair_ready_order, q,
-			    tsk_rt(t)->heap_node);
-	}
-	for (cpu = 0; cpu < NR_CPUS; cpu++) {
-		s = &per_cpu(pfair_state, cpu);
-		if (s->linked == t)
-			s->linked = NULL;
-		if (s->local  == t)
-			s->local  = NULL;
-		if (s->scheduled  == t)
-			s->scheduled = NULL;
-	}
 }
 
 static void pfair_task_exit(struct task_struct * t)
@@ -634,6 +647,12 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 	drop_all_references(task);
 	prepare_release(task, release);
 	pfair_add_release(task);
+
+	/* Clear sporadic release flag, since this release subsumes any
+	 * sporadic release on wake.
+	 */
+	tsk_pfair(task)->sporadic_release = 0;
+
 	spin_unlock_irqrestore(&pfair_lock, flags);
 }
 
