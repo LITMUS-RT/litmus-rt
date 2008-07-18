@@ -31,7 +31,7 @@ typedef int (*heap_prio_t)(struct heap_node* a, struct heap_node* b);
 static inline void heap_init(struct heap* heap)
 {
 	heap->head = NULL;
-	heap->head = NULL;
+	heap->min  = NULL;
 }
 
 static inline void heap_node_init(struct heap_node** _h, void* value)
