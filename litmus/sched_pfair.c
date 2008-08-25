@@ -684,7 +684,8 @@ static void init_subtask(struct subtask* sub, unsigned long i,
 	if (2 * quanta >= period) {
 		/* heavy */
 		tmp = (sub->deadline - (i + 1)) * period;
-		if (do_div(tmp, (period - quanta))) /* ceil */
+		if (period > quanta &&
+		    do_div(tmp, (period - quanta))) /* ceil */
 			tmp++;
 		sub->group_deadline = (quanta_t) tmp;
 	} else
@@ -732,6 +733,15 @@ static long pfair_admit_task(struct task_struct* t)
 		       "PFAIR: Rejecting task %s/%d; its period is too long.\n",
 		       t->comm, t->pid);
 		return -EINVAL;
+	}
+
+	if (quanta == period) {
+		/* special case: task has weight 1.0 */
+		printk(KERN_INFO
+		       "Admitting weight 1.0 task. (%s/%d, %llu, %llu).\n",
+		       t->comm, t->pid, quanta, period);
+		quanta = 1;
+		period = 1;
 	}
 
 	param = kmalloc(sizeof(struct pfair_param) +
