@@ -6,10 +6,11 @@
 #endif
 
 typedef struct {
-	volatile unsigned char lock;
+	int tail;
+	int head;
 } raw_spinlock_t;
 
-#define __RAW_SPIN_LOCK_UNLOCKED	{ 0 }
+#define __RAW_SPIN_LOCK_UNLOCKED	{ 0, 0 }
 
 typedef struct {
 	volatile unsigned int lock;
