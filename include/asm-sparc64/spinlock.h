@@ -31,13 +31,18 @@ static inline void __raw_spin_lock(raw_spinlock_t *lock)
 "	add		%0, 1, %1 \n"
 "	cas		[%2], %0, %1 \n"
 "	cmp		%0, %1 \n"
-"	bne,a,pn	%%icc, 1b \n"
+"	be,a,pt		%%icc, 2f \n"
+"	 nop \n"
+"	membar		#LoadLoad | #StoreLoad | #LoadStore\n"
+"	ba		1b\n"
 "	 nop \n"
 "2:	lduw		[%3], %1 \n"
 "	cmp		%0, %1 \n"
-"	bne,a,pn	%%icc, 2b \n"
+"	be,a,pt		%%icc, 3f \n"
 "	 nop \n"
-"	membar		#StoreStore | #StoreLoad"
+"	membar		#LoadLoad | #StoreLoad | #LoadStore\n"
+"	ba		2b\n"
+"3:	membar		#StoreStore | #StoreLoad"
 	: "=&r" (ticket), "=&r" (tmp)
 	: "r" (&lock->tail), "r" (&lock->head)
 	: "memory");
@@ -80,7 +85,7 @@ static inline void __raw_spin_unlock(raw_spinlock_t *lock)
 /* We don't handle this yet, but it looks like not re-enabling the interrupts
  * works fine, too. For example, lockdep also does it like this.
  */
-#define __raw_spin_lock_flages(l, f) __raw_spin_lock(l)
+#define __raw_spin_lock_flags(l, f) __raw_spin_lock(l)
 
 
 
