@@ -18,8 +18,7 @@
 /* edf_higher_prio -  returns true if first has a higher EDF priority
  *                    than second. Deadline ties are broken by PID.
  *
- * first first must not be NULL and a real-time task.
- * second may be NULL or a non-rt task.
+ * both first and second may be NULL
  */
 int edf_higher_prio(struct task_struct* first,
 		    struct task_struct* second)
@@ -36,6 +35,8 @@ int edf_higher_prio(struct task_struct* first,
 		second_task = second->rt_param.inh_task;
 
 	return
+		/* it has to exist in order to have higher priority */
+		first_task && (
 		/* does the second task exist and is it a real-time task?  If
 		 * not, the first task (which is a RT task) has higher
 		 * priority.
@@ -57,7 +58,7 @@ int edf_higher_prio(struct task_struct* first,
 		 * priority wins.
 		 */
 		(first_task->pid == second_task->pid &&
-		 !second->rt_param.inh_task)));
+		 !second->rt_param.inh_task))));
 }
 
 int edf_ready_order(struct heap_node* a, struct heap_node* b)
