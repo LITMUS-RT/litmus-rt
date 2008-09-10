@@ -11,13 +11,14 @@
 #include <linux/spinlock.h>
 #include <linux/percpu.h>
 #include <linux/sched.h>
-#include <linux/list.h>
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
+
+#include <litmus/heap.h>
 
 #include <linux/module.h>
 
@@ -94,8 +95,8 @@ typedef struct  {
 	int 			cpu;
 	struct task_struct*	linked;		/* only RT tasks */
 	struct task_struct*	scheduled;	/* only RT tasks */
-	struct list_head	list;
 	atomic_t		will_schedule;	/* prevent unneeded IPIs */
+	struct heap_node*	hn;
 } cpu_entry_t;
 DEFINE_PER_CPU(cpu_entry_t, gsnedf_cpu_entries);
 
@@ -112,38 +113,42 @@ cpu_entry_t* gsnedf_cpus[NR_CPUS];
 #define NO_CPU 0xffffffff
 
 /* the cpus queue themselves according to priority in here */
-static LIST_HEAD(gsnedf_cpu_queue);
+static struct heap_node gsnedf_heap_node[NR_CPUS];
+static struct heap      gsnedf_cpu_heap;
 
 static rt_domain_t gsnedf;
 #define gsnedf_lock (gsnedf.ready_lock)
 
+
+static int cpu_lower_prio(struct heap_node *_a, struct heap_node *_b)
+{
+	cpu_entry_t *a, *b;
+	a = _a->value;
+	b = _b->value;
+	/* Note that a and b are inverted: we want the lowest-priority CPU at
+	 * the top of the heap.
+	 */
+	return edf_higher_prio(b->linked, a->linked);
+}
+
 /* update_cpu_position - Move the cpu entry to the correct place to maintain
  *                       order in the cpu queue. Caller must hold gsnedf lock.
- *
- *						This really should be a heap.
  */
 static void update_cpu_position(cpu_entry_t *entry)
 {
-	cpu_entry_t *other;
-	struct list_head *pos;
-
-	if (likely(in_list(&entry->list)))
-		list_del(&entry->list);
-	/* if we do not execute real-time jobs we just move
-	 * to the end of the queue
-	 */
-	if (entry->linked) {
-		list_for_each(pos, &gsnedf_cpu_queue) {
-			other = list_entry(pos, cpu_entry_t, list);
-			if (edf_higher_prio(entry->linked, other->linked)) {
-				__list_add(&entry->list, pos->prev, pos);
-				return;
-			}
-		}
-	}
-	/* if we get this far we have the lowest priority job */
-	list_add_tail(&entry->list, &gsnedf_cpu_queue);
+	if (likely(heap_node_in_heap(entry->hn)))
+		heap_delete(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
+	heap_insert(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
 }
+
+/* caller must hold gsnedf lock */
+static cpu_entry_t* lowest_prio_cpu(void)
+{
+	struct heap_node* hn;
+	hn = heap_peek(cpu_lower_prio, &gsnedf_cpu_heap);
+	return hn->value;
+}
+
 
 /* link_task_to_cpu - Update the link of a CPU.
  *                    Handles the case where the to-be-linked task is already
@@ -292,9 +297,9 @@ static void check_for_preemptions(void)
 	struct task_struct *task;
 	cpu_entry_t* last;
 
-	for(last = list_entry(gsnedf_cpu_queue.prev, cpu_entry_t, list);
+	for(last = lowest_prio_cpu();
 	    edf_preemption_needed(&gsnedf, last->linked);
-	    last = list_entry(gsnedf_cpu_queue.prev, cpu_entry_t, list)) {
+	    last = lowest_prio_cpu()) {
 		/* preemption necessary */
 		task = __take_ready(&gsnedf);
 		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
@@ -309,7 +314,6 @@ static void check_for_preemptions(void)
 /* gsnedf_job_arrival: task is either resumed or released */
 static noinline void gsnedf_job_arrival(struct task_struct* task)
 {
-	BUG_ON(list_empty(&gsnedf_cpu_queue));
 	BUG_ON(!task);
 
 	requeue(task);
@@ -716,6 +720,7 @@ static int __init init_gsn_edf(void)
 	int cpu;
 	cpu_entry_t *entry;
 
+	heap_init(&gsnedf_cpu_heap);
 	/* initialize CPU state */
 	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
@@ -724,9 +729,10 @@ static int __init init_gsn_edf(void)
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
 		entry->cpu 	 = cpu;
-		INIT_LIST_HEAD(&entry->list);
+		entry->hn        = &gsnedf_heap_node[cpu];
+		heap_node_init(&entry->hn, entry);
+		/*heap_insert(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);*/
 	}
-
 	edf_domain_init(&gsnedf, NULL, gsnedf_release_jobs);
 	return register_sched_plugin(&gsn_edf_plugin);
 }
