@@ -15,93 +15,80 @@
  * and rebuild your kernel.
  */
 
-/* All of these locking primitives are expected to work properly
- * even in an RMO memory model, which currently is what the kernel
- * runs in.
- *
- * There is another issue.  Because we play games to save cycles
- * in the non-contention case, we need to be extra careful about
- * branch targets into the "spinning" code.  They live in their
- * own section, but the newer V9 branches have a shorter range
- * than the traditional 32-bit sparc branch variants.  The rule
- * is that the branches that go into and out of the spinner sections
- * must be pre-V9 branches.
- */
-
-#define __raw_spin_is_locked(lp)	((lp)->lock != 0)
+#define __raw_spin_is_locked(lp)	((lp)->tail != (lp)->head)
 
 #define __raw_spin_unlock_wait(lp)	\
 	do {	rmb();			\
-	} while((lp)->lock)
+	} while((lp)->tail != (lp)->head)
+
+
 
 static inline void __raw_spin_lock(raw_spinlock_t *lock)
 {
-	unsigned long tmp;
-
+	int ticket, tmp;
 	__asm__ __volatile__(
-"1:	ldstub		[%1], %0\n"
-"	membar		#StoreLoad | #StoreStore\n"
-"	brnz,pn		%0, 2f\n"
-"	 nop\n"
-"	.subsection	2\n"
-"2:	ldub		[%1], %0\n"
-"	membar		#LoadLoad\n"
-"	brnz,pt		%0, 2b\n"
-"	 nop\n"
-"	ba,a,pt		%%xcc, 1b\n"
-"	.previous"
-	: "=&r" (tmp)
-	: "r" (lock)
+"1:	lduw		[%2], %0 \n" /* read ticket */
+"	add		%0, 1, %1 \n"
+"	cas		[%2], %0, %1 \n"
+"	cmp		%0, %1 \n"
+"	be,a,pt		%%icc, 2f \n"
+"	 nop \n"
+"	membar		#LoadLoad | #StoreLoad | #LoadStore\n"
+"	ba		1b\n"
+"	 nop \n"
+"2:	lduw		[%3], %1 \n"
+"	cmp		%0, %1 \n"
+"	be,a,pt		%%icc, 3f \n"
+"	 nop \n"
+"	membar		#LoadLoad | #StoreLoad | #LoadStore\n"
+"	ba		2b\n"
+"3:	membar		#StoreStore | #StoreLoad"
+	: "=&r" (ticket), "=&r" (tmp)
+	: "r" (&lock->tail), "r" (&lock->head)
 	: "memory");
 }
 
 static inline int __raw_spin_trylock(raw_spinlock_t *lock)
 {
-	unsigned long result;
-
+	int tail, head;
 	__asm__ __volatile__(
-"	ldstub		[%1], %0\n"
-"	membar		#StoreLoad | #StoreStore"
-	: "=r" (result)
-	: "r" (lock)
+"	lduw		[%2], %0 \n" /* read tail */
+"	lduw		[%3], %1 \n" /* read head */
+"	cmp		%0, %1 \n"
+"	bne,a,pn	%%icc, 1f \n"
+"	 nop \n"
+"	inc		%1 \n"
+"	cas		[%2], %0, %1 \n" /* try to inc ticket */
+"	membar		#StoreStore | #StoreLoad \n"
+"1:	"
+	: "=&r" (tail), "=&r" (head)
+	: "r" (&lock->tail), "r" (&lock->head)
 	: "memory");
 
-	return (result == 0UL);
+	return tail == head;
 }
 
 static inline void __raw_spin_unlock(raw_spinlock_t *lock)
 {
+	int tmp;
 	__asm__ __volatile__(
-"	membar		#StoreStore | #LoadStore\n"
-"	stb		%%g0, [%0]"
-	: /* No outputs */
-	: "r" (lock)
+"	membar		#StoreStore | #LoadStore \n"
+"	lduw		[%1], %0 \n"
+"	inc		%0 \n"
+"	st		%0, [%1] \n"
+"	membar		#StoreStore | #StoreLoad"
+	: "=&r" (tmp)
+	: "r" (&lock->head)
 	: "memory");
 }
 
-static inline void __raw_spin_lock_flags(raw_spinlock_t *lock, unsigned long flags)
-{
-	unsigned long tmp1, tmp2;
+/* We don't handle this yet, but it looks like not re-enabling the interrupts
+ * works fine, too. For example, lockdep also does it like this.
+ */
+#define __raw_spin_lock_flags(l, f) __raw_spin_lock(l)
 
-	__asm__ __volatile__(
-"1:	ldstub		[%2], %0\n"
-"	membar		#StoreLoad | #StoreStore\n"
-"	brnz,pn		%0, 2f\n"
-"	 nop\n"
-"	.subsection	2\n"
-"2:	rdpr		%%pil, %1\n"
-"	wrpr		%3, %%pil\n"
-"3:	ldub		[%2], %0\n"
-"	membar		#LoadLoad\n"
-"	brnz,pt		%0, 3b\n"
-"	 nop\n"
-"	ba,pt		%%xcc, 1b\n"
-"	 wrpr		%1, %%pil\n"
-"	.previous"
-	: "=&r" (tmp1), "=&r" (tmp2)
-	: "r"(lock), "r"(flags)
-	: "memory");
-}
+
+
 
 /* Multi-reader locks, these are much saner than the 32-bit Sparc ones... */
 

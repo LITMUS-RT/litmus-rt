@@ -298,4 +298,38 @@ static inline void heap_delete(heap_prio_t higher_prio, struct heap* heap,
 	node->degree = NOT_IN_HEAP;
 }
 
+/* un-inline, make it a kmemcache_t */
+static inline struct heap_node* alloc_heap_node(int gfp_flags)
+{
+	return kmalloc(sizeof(struct heap_node), gfp_flags);
+}
+
+static inline void free_heap_node(struct heap_node* hn)
+{
+	kfree(hn);
+}
+
+/* allocate a heap node for value and insert into the heap */
+static inline int heap_add(heap_prio_t higher_prio, struct heap* heap,
+			    void* value, int gfp_flags)
+{
+	struct heap_node* hn = alloc_heap_node(gfp_flags);
+	if (likely(hn)) {
+		heap_node_init(&hn, value);
+		heap_insert(higher_prio, heap, hn);
+	}
+	return hn != NULL;
+}
+
+static inline void* heap_take_del(heap_prio_t higher_prio,
+				  struct heap* heap)
+{
+	struct heap_node* hn = heap_take(higher_prio, heap);
+	void* ret = NULL;
+	if (hn) {
+		ret = hn->value;
+		free_heap_node(hn);
+	}
+	return ret;
+}
 #endif

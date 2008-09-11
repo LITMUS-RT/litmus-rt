@@ -47,7 +47,7 @@ DEFINE_PER_CPU(psnedf_domain_t, psnedf_domains);
 
 static void psnedf_domain_init(psnedf_domain_t* pedf,
 			       check_resched_needed_t check,
-			       release_job_t release,
+			       release_jobs_t release,
 			       int cpu)
 {
 	edf_domain_init(&pedf->domain, check, release);

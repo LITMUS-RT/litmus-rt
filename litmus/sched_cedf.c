@@ -325,56 +325,57 @@ static noinline void requeue(struct task_struct* task)
 		__add_ready(edf, task);
 }
 
+static void check_for_preemptions(cedf_domain_t* cedf)
+{
+	cpu_entry_t *last;
+	struct task_struct *task;
+	struct list_head *cedf_cpu_queue;
+	cedf_cpu_queue = &cedf->cedf_cpu_queue;
+
+	for(last = list_entry(cedf_cpu_queue->prev, cpu_entry_t, list);
+	    edf_preemption_needed(&cedf->domain, last->linked);
+	    last = list_entry(cedf_cpu_queue->prev, cpu_entry_t, list)) {
+		/* preemption necessary */
+		task = __take_ready(&cedf->domain);
+		TRACE("check_for_preemptions: task %d linked to %d, state:%d\n",
+		      task->pid, last->cpu, task->state);
+		if (last->linked)
+			requeue(last->linked);
+		link_task_to_cpu(task, last);
+		preempt(last);
+	}
+
+}
+
 /* cedf_job_arrival: task is either resumed or released */
 static noinline void cedf_job_arrival(struct task_struct* task)
 {
-	cpu_entry_t* last;
 	cedf_domain_t* cedf;
 	rt_domain_t* edf;
-	struct list_head *cedf_cpu_queue;
 
 	BUG_ON(!task);
 
 	/* Get correct real-time domain. */
 	cedf = task_cedf(task);
 	edf = &cedf->domain;
-	cedf_cpu_queue = &cedf->cedf_cpu_queue;
-
-	BUG_ON(!cedf);
-	BUG_ON(!edf);
-	BUG_ON(!cedf_cpu_queue);
-	BUG_ON(list_empty(cedf_cpu_queue));
 
 	/* first queue arriving job */
 	requeue(task);
 
 	/* then check for any necessary preemptions */
-	last = list_entry(cedf_cpu_queue->prev, cpu_entry_t, list);
-	if (edf_preemption_needed(edf, last->linked)) {
-		/* preemption necessary */
-		task = __take_ready(edf);
-		TRACE("job_arrival: task %d linked to %d, state:%d\n",
-		      task->pid, last->cpu, task->state);
-		if (last->linked)
-			requeue(last->linked);
-
-		link_task_to_cpu(task, last);
-		preempt(last);
-	}
+	check_for_preemptions(cedf);
 }
 
 /* check for current job releases */
-static void cedf_job_release(struct task_struct* t, rt_domain_t* _)
+static void cedf_release_jobs(rt_domain_t* rt, struct heap* tasks)
 {
-        cedf_domain_t*          cedf = task_cedf(t);
+        cedf_domain_t*          cedf = container_of(rt, cedf_domain_t, domain);
 	unsigned long 		flags;
 
-	BUG_ON(!t);
-	BUG_ON(!cedf);
-
 	spin_lock_irqsave(&cedf->slock, flags);
-	sched_trace_job_release(queued);
-	cedf_job_arrival(t);
+
+	__merge_ready(&cedf->domain, tasks);
+	check_for_preemptions(cedf);
 	spin_unlock_irqrestore(&cedf->slock, flags);
 }
 
@@ -678,7 +679,7 @@ static void cedf_domain_init(int first_cpu, int last_cpu)
 
 	/* Initialize cluster domain. */
 	edf_domain_init(&new_cedf_domain->domain, NULL,
-			cedf_job_release);
+			cedf_release_jobs);
 	new_cedf_domain->first_cpu	= first_cpu;
 	new_cedf_domain->last_cpu	= last_cpu;
 	INIT_LIST_HEAD(&new_cedf_domain->cedf_cpu_queue);
