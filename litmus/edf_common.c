@@ -66,7 +66,7 @@ int edf_ready_order(struct heap_node* a, struct heap_node* b)
 }
 
 void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
-		      release_job_t release)
+		      release_jobs_t release)
 {
 	rt_domain_init(rt,  edf_ready_order, resched, release);
 }

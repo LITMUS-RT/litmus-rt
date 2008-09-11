@@ -21,14 +21,6 @@
 
 #include <litmus/heap.h>
 
-/* Tick period is used to convert ns-specified execution
- * costs and periods into tick-based equivalents.
- */
-extern ktime_t tick_period;
-
-/* make the unit explicit */
-typedef unsigned long quanta_t;
-
 struct subtask {
 	/* measured in quanta relative to job release */
 	quanta_t release;
@@ -160,20 +152,6 @@ static quanta_t cur_group_deadline(struct task_struct* t)
 		return gdl;
 }
 
-enum round {
-	FLOOR,
-	CEIL
-};
-
-static quanta_t time2quanta(lt_t time, enum round round)
-{
-	s64  quantum_length = ktime_to_ns(tick_period);
-
-	if (do_div(time, quantum_length) && round == CEIL)
-		time++;
-	return (quanta_t) time;
-}
-
 static int pfair_higher_prio(struct task_struct* first,
 			     struct task_struct* second)
 {
@@ -244,7 +222,7 @@ static void pfair_add_release(struct task_struct* t)
 /* pull released tasks from the release queue */
 static void poll_releases(quanta_t time)
 {
-	heap_union(pfair_ready_order, &pfair.ready_queue, relq(time));
+	__merge_ready(&pfair, relq(time));
 	merge_time = time;
 }
 

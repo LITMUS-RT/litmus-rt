@@ -137,9 +137,6 @@ struct rt_param {
 	int old_policy;
 	int old_prio;
 
-	/* The high-resolution timer used to control its release. */
-	struct hrtimer release_timer;
-
 	/* ready queue for this task */
 	struct _rt_domain* domain;
 

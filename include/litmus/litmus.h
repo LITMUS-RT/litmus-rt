@@ -141,10 +141,6 @@ static inline lt_t litmus_clock(void)
 /* A macro to convert from nanoseconds to ktime_t. */
 #define ns_to_ktime(t)		ktime_add_ns(ktime_set(0, 0), t)
 
-/* The high-resolution release timer for a task. */
-#define release_timer(t) (tsk_rt(t)->release_timer)
-
-/* The high-resolution release timer for a task. */
 #define get_domain(t) (tsk_rt(t)->domain)
 
 /* Honor the flag in the preempt_count variable that is set
@@ -201,5 +197,27 @@ static inline int is_np(struct task_struct *t)
 
 #endif
 
+/* make the unit explicit */
+typedef unsigned long quanta_t;
+
+enum round {
+	FLOOR,
+	CEIL
+};
+
+
+/* Tick period is used to convert ns-specified execution
+ * costs and periods into tick-based equivalents.
+ */
+extern ktime_t tick_period;
+
+static inline quanta_t time2quanta(lt_t time, enum round round)
+{
+	s64  quantum_length = ktime_to_ns(tick_period);
+
+	if (do_div(time, quantum_length) && round == CEIL)
+		time++;
+	return (quanta_t) time;
+}
 
 #endif

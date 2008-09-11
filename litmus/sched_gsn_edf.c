@@ -285,41 +285,45 @@ static noinline void requeue(struct task_struct* task)
 		__add_ready(&gsnedf, task);
 }
 
-/* gsnedf_job_arrival: task is either resumed or released */
-static noinline void gsnedf_job_arrival(struct task_struct* task)
+
+/* check for any necessary preemptions */
+static void check_for_preemptions(void)
 {
+	struct task_struct *task;
 	cpu_entry_t* last;
 
-	BUG_ON(list_empty(&gsnedf_cpu_queue));
-	BUG_ON(!task);
-
-	/* first queue arriving job */
-	requeue(task);
-
-	/* then check for any necessary preemptions */
-	last = list_entry(gsnedf_cpu_queue.prev, cpu_entry_t, list);
-	if (edf_preemption_needed(&gsnedf, last->linked)) {
+	for(last = list_entry(gsnedf_cpu_queue.prev, cpu_entry_t, list);
+	    edf_preemption_needed(&gsnedf, last->linked);
+	    last = list_entry(gsnedf_cpu_queue.prev, cpu_entry_t, list)) {
 		/* preemption necessary */
 		task = __take_ready(&gsnedf);
-		TRACE("job_arrival: attempting to link task %d to %d\n",
+		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
 		if (last->linked)
 			requeue(last->linked);
-
 		link_task_to_cpu(task, last);
 		preempt(last);
 	}
 }
 
-/* check for current job releases */
-static void gsnedf_job_release(struct task_struct* t, rt_domain_t* _)
+/* gsnedf_job_arrival: task is either resumed or released */
+static noinline void gsnedf_job_arrival(struct task_struct* task)
+{
+	BUG_ON(list_empty(&gsnedf_cpu_queue));
+	BUG_ON(!task);
+
+	requeue(task);
+	check_for_preemptions();
+}
+
+static void gsnedf_release_jobs(rt_domain_t* rt, struct heap* tasks)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&gsnedf_lock, flags);
 
-	sched_trace_job_release(queued);
-	gsnedf_job_arrival(t);
+	__merge_ready(rt, tasks);
+	check_for_preemptions();
 
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
@@ -723,7 +727,7 @@ static int __init init_gsn_edf(void)
 		INIT_LIST_HEAD(&entry->list);
 	}
 
-	edf_domain_init(&gsnedf, NULL, gsnedf_job_release);
+	edf_domain_init(&gsnedf, NULL, gsnedf_release_jobs);
 	return register_sched_plugin(&gsn_edf_plugin);
 }
 
