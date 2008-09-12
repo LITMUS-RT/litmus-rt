@@ -24,9 +24,10 @@ struct release_heap {
 };
 
 struct release_queue {
-	/* each slot maintains a list of release heaps sorted by release time */
+	/* each slot maintains a list of release heaps sorted
+	 * by release time */
 	struct list_head		slot[RELEASE_QUEUE_SLOTS];
-	/* the heap of heaps orderd by release time */
+	/* the heap of heaps ordered by release time */
 	struct heap			rel_heap;
 	/* the actual timer used to trigger releases */
 	struct hrtimer			timer;

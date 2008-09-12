@@ -107,7 +107,7 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 	struct release_heap* rh;
 	struct heap tasks;
 	struct list_head list, *pos, *safe;
-	lt_t release = 109;
+	lt_t release = 0;
 	int pending;
 	int repeat;
 	enum hrtimer_mode ret = HRTIMER_NORESTART;

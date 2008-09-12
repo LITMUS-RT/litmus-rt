@@ -731,7 +731,6 @@ static int __init init_gsn_edf(void)
 		entry->cpu 	 = cpu;
 		entry->hn        = &gsnedf_heap_node[cpu];
 		heap_node_init(&entry->hn, entry);
-		/*heap_insert(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);*/
 	}
 	edf_domain_init(&gsnedf, NULL, gsnedf_release_jobs);
 	return register_sched_plugin(&gsn_edf_plugin);
