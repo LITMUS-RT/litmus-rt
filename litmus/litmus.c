@@ -32,6 +32,16 @@ static DEFINE_SPINLOCK(sched_sig_list_lock);
 
 static struct kmem_cache * heap_node_cache;
 
+struct heap_node* heap_node_alloc(int gfp_flags)
+{
+	return kmem_cache_alloc(heap_node_cache, gfp_flags);
+}
+
+void heap_node_free(struct heap_node* hn)
+{
+	kmem_cache_free(heap_node_cache, hn);
+}
+
 /*
  * sys_set_task_rt_param
  * @pid: Pid of the task which scheduling parameters must be changed
