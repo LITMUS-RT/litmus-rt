@@ -2,7 +2,7 @@
 # Makefile for LITMUS^RT
 #
 
-obj-y     = sched_plugin.o litmus.o sched_trace.o \
+obj-y     = sched_plugin.o litmus.o \
 	    edf_common.o jobs.o \
 	    rt_domain.o fdso.o sync.o \
 	    fmlp.o srp.o norqlock.o \
@@ -12,3 +12,4 @@ obj-y     = sched_plugin.o litmus.o sched_trace.o \
             sched_pfair.o
 
 obj-$(CONFIG_FEATHER_TRACE) += trace.o ft_event.o
+obj-$(CONFIG_SCHED_DEBUG_TRACE) +=  sched_trace.o

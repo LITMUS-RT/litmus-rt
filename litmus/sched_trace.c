@@ -13,7 +13,6 @@
 #include <litmus/sched_trace.h>
 #include <litmus/litmus.h>
 
-
 typedef struct {
         /*	guard read and write pointers			*/
 	spinlock_t 	lock;
@@ -246,51 +245,18 @@ typedef struct {
 #define EMPTY_TRACE_BUFFER \
 	{ .buf = EMPTY_RING_BUFFER, .reader_cnt = ATOMIC_INIT(0)}
 
-static DEFINE_PER_CPU(trace_buffer_t, trace_buffer);
-
-#ifdef CONFIG_SCHED_DEBUG_TRACE
 static spinlock_t		log_buffer_lock = SPIN_LOCK_UNLOCKED;
-#endif
 static trace_buffer_t 		log_buffer = EMPTY_TRACE_BUFFER;
 
-static void init_buffers(void)
+static void init_log_buffer(void)
 {
-	int i;
-
-	for (i = 0; i < NR_CPUS; i++) {
-		rb_init(&per_cpu(trace_buffer, i).buf);
-		init_MUTEX(&per_cpu(trace_buffer, i).reader_mutex);
-		atomic_set(&per_cpu(trace_buffer, i).reader_cnt, 0);
-	}
 	/* only initialize the mutex, the rest was initialized as part
 	 * of the static initialization macro
 	 */
 	init_MUTEX(&log_buffer.reader_mutex);
 }
 
-static int trace_release(struct inode *in, struct file *filp)
-{
-	int error 		= -EINVAL;
-	trace_buffer_t* buf 	= filp->private_data;
-
-	BUG_ON(!filp->private_data);
-
-	if (down_interruptible(&buf->reader_mutex)) {
-		error = -ERESTARTSYS;
-		goto out;
-	}
-
-	/*	last release must deallocate buffers 	*/
-	if (atomic_dec_return(&buf->reader_cnt) == 0) {
-		error = rb_free_buf(&buf->buf);
-	}
-
-	up(&buf->reader_mutex);
- out:
-	return error;
-}
-
-static ssize_t trace_read(struct file *filp, char __user *to, size_t len,
+static ssize_t log_read(struct file *filp, char __user *to, size_t len,
 		      loff_t *f_pos)
 {
 	/* 	we ignore f_pos, this is strictly sequential */
@@ -333,46 +299,6 @@ static ssize_t trace_read(struct file *filp, char __user *to, size_t len,
 }
 
 
-/* trace_open - Open one of the per-CPU sched_trace buffers.
- */
-static int trace_open(struct inode *in, struct file *filp)
-{
-	int error 		= -EINVAL;
-	int cpu   		= MINOR(in->i_rdev);
-	trace_buffer_t* buf;
-
-	if (!cpu_online(cpu)) {
-		printk(KERN_WARNING "sched trace: "
-			"CPU #%d is not online. (open failed)\n", cpu);
-		error = -ENODEV;
-		goto out;
-	}
-
-	buf = &per_cpu(trace_buffer, cpu);
-
-	if (down_interruptible(&buf->reader_mutex)) {
-		error = -ERESTARTSYS;
-		goto out;
-	}
-
-	/*	first open must allocate buffers 	*/
-	if (atomic_inc_return(&buf->reader_cnt) == 1) {
-		if ((error = rb_alloc_buf(&buf->buf, BUFFER_ORDER)))
-		{
-			atomic_dec(&buf->reader_cnt);
-			goto out_unlock;
-		}
-	}
-
-	error = 0;
-	filp->private_data = buf;
-
- out_unlock:
-	up(&buf->reader_mutex);
- out:
-	return error;
-}
-
 
 extern int trace_override;
 
@@ -401,7 +327,7 @@ static int log_open(struct inode *in, struct file *filp)
 
 	error = 0;
 	filp->private_data = buf;
-	printk(KERN_DEBUG "sched_trace buf: from 0x%p to 0x%p  length: %lx\n",
+	printk(KERN_DEBUG "sched_trace buf: from 0x%p to 0x%p  length: %x\n",
 	       buf->buf.buf, buf->buf.end, buf->buf.end - buf->buf.buf);
 	trace_override++;
  out_unlock:
@@ -441,18 +367,7 @@ static int log_release(struct inode *in, struct file *filp)
  *
  * This should be converted to dynamic allocation at some point...
  */
-#define TRACE_MAJOR	250
 #define LOG_MAJOR	251
-
-/* trace_fops - The file operations for accessing the per-CPU scheduling event
- *              trace buffers.
- */
-struct file_operations trace_fops = {
-	.owner   = THIS_MODULE,
-	.open    = trace_open,
-	.release = trace_release,
-	.read    = trace_read,
-};
 
 /* log_fops  - The file operations for accessing the global LITMUS log message
  *             buffer.
@@ -463,7 +378,7 @@ struct file_operations log_fops = {
 	.owner   = THIS_MODULE,
 	.open    = log_open,
 	.release = log_release,
-	.read    = trace_read,
+	.read    = log_read,
 };
 
 static int __init register_buffer_dev(const char* name,
@@ -502,33 +417,14 @@ static int __init register_buffer_dev(const char* name,
 
 static int __init init_sched_trace(void)
 {
-	int error1 = 0, error2 = 0;
+	printk("Initializing TRACE() device\n");
+	init_log_buffer();
 
-	printk("Initializing scheduler trace device\n");
-	init_buffers();
-
-	error1 = register_buffer_dev("schedtrace", &trace_fops,
-				    TRACE_MAJOR, NR_CPUS);
-
-	error2 = register_buffer_dev("litmus_log", &log_fops,
-				     LOG_MAJOR, 1);
-	if (error1 || error2)
-		return min(error1, error2);
-	else
-		return 0;
+	return register_buffer_dev("litmus_log", &log_fops,
+				   LOG_MAJOR, 1);
 }
 
 module_init(init_sched_trace);
-
-/******************************************************************************/
-/*                                KERNEL API                                  */
-/******************************************************************************/
-
-/* The per-CPU LITMUS log buffer. Don't put it on the stack, it is too big for
- * that and the kernel gets very picky with nested interrupts and small stacks.
- */
-
-#ifdef CONFIG_SCHED_DEBUG_TRACE
 
 #define MSG_SIZE 255
 static DEFINE_PER_CPU(char[MSG_SIZE], fmt_buffer);
@@ -564,6 +460,3 @@ void sched_trace_log_message(const char* fmt, ...)
 	local_irq_restore(flags);
 	va_end(args);
 }
-
-#endif
-
