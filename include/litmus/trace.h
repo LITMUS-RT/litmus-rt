@@ -23,10 +23,6 @@ struct timestamp {
 	uint8_t			task_type;
 };
 
-
-/* buffer holding time stamps - will be provided by driver */
-extern struct ft_buffer* trace_ts_buf;
-
 /* tracing callbacks */
 feather_callback void save_timestamp(unsigned long event);
 feather_callback void save_timestamp_def(unsigned long event, unsigned long type);
