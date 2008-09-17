@@ -58,6 +58,41 @@ void free_ft_buffer(struct ft_buffer* buf)
 	}
 }
 
+struct ftdev_event {
+	int id;
+	struct ftdev_event* next;
+};
+
+static int activate(struct ftdev_event** chain, int id)
+{
+	struct ftdev_event* ev = kmalloc(sizeof(struct ftdev_event), GFP_KERNEL);
+	if (ev) {
+		printk(KERN_INFO
+		       "Enabling feather-trace event %d.\n", (int) id);
+		ft_enable_event(id);
+		ev->id = id;
+		ev->next = *chain;
+		*chain    = ev;
+	}
+	return ev ? 0 : -ENOMEM;
+}
+
+static void deactivate(struct ftdev_event** chain, int id)
+{
+	struct ftdev_event **last = chain;
+	struct ftdev_event *pos   = *chain;
+	while (pos) {
+		if (pos->id == id) {
+			*last = pos->next;
+			kfree(pos);
+			printk(KERN_INFO
+			       "Disabling feather-trace event %d.\n", (int) id);
+			ft_disable_event(id);
+			break;
+		}
+	}
+}
+
 static int ftdev_open(struct inode *in, struct file *filp)
 {
 	struct ftdev* ftdev;
@@ -110,8 +145,8 @@ static int ftdev_release(struct inode *in, struct file *filp)
 	}
 
 	if (ftdm->readers == 1) {
-		/*FIXME: disable events */
-		ftdm->active_events = 0;
+		while (ftdm->events)
+			deactivate(&ftdm->events, ftdm->events->id);
 
 		/* wait for any pending events to complete */
 		set_current_state(TASK_UNINTERRUPTIBLE);
@@ -130,7 +165,7 @@ out:
 	return err;
 }
 
-/* based on ft_buffer_read 
+/* based on ft_buffer_read
  * @returns < 0 : page fault
  *          = 0 : no data available
  *          = 1 : one slot copied
@@ -162,7 +197,7 @@ static ssize_t ftdev_read(struct file *filp,
 			  char __user *to, size_t len, loff_t *f_pos)
 {
 	/* 	we ignore f_pos, this is strictly sequential */
-	
+
 	ssize_t err = 0;
 	size_t chunk;
 	int copied;
@@ -181,7 +216,7 @@ static ssize_t ftdev_read(struct file *filp,
 			len    -= chunk;
 			to     += chunk;
 			err    += chunk;
-	        } else if (copied == 0 && ftdm->active_events) {
+	        } else if (copied == 0 && ftdm->events) {
 			/* only wait if there are any events enabled */
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(50);
@@ -195,7 +230,7 @@ static ssize_t ftdev_read(struct file *filp,
 			/* page fault */
 			err = copied;
 			break;
-		} else 
+		} else
 			/* nothing left to get, return to user space */
 			break;
 	}
@@ -239,19 +274,13 @@ static ssize_t ftdev_write(struct file *filp, const char __user *from,
 			goto out_unlock;
 		}
 		/* FIXME: check id against list of acceptable events */
-		/* FIXME: track which events must be disable at release time */
 		len  -= sizeof(cmd_t);
 		from += sizeof(cmd_t);
-		if (cmd == FTDEV_ENABLE_CMD) {
-			printk(KERN_INFO
-			       "Disabling feather-trace event %d.\n", (int) id);
-			ft_disable_event(id);
-			ftdm->active_events--;
-		} else {
-			printk(KERN_INFO
-			       "Enabling feather-trace event %d.\n", (int) id);
-			ft_enable_event(id);
-			ftdm->active_events++;
+		if (cmd == FTDEV_DISABLE_CMD)
+			deactivate(&ftdm->events, id);
+		else if (activate(&ftdm->events, id) != 0) {
+			err = -ENOMEM;
+			goto out_unlock;
 		}
 		err += sizeof(cmd_t);
 	}
@@ -271,17 +300,18 @@ struct file_operations ftdev_fops = {
 };
 
 
-void ftdev_init(struct ftdev* ftdev)
+void ftdev_init(struct ftdev* ftdev, struct module* owner)
 {
 	int i;
-	ftdev->cdev.owner = THIS_MODULE;
+	cdev_init(&ftdev->cdev, &ftdev_fops);
+	ftdev->cdev.owner = owner;
 	ftdev->cdev.ops = &ftdev_fops;
 	ftdev->minor_cnt  = 0;
 	for (i = 0; i < MAX_FTDEV_MINORS; i++) {
 		mutex_init(&ftdev->minor[i].lock);
 		ftdev->minor[i].readers = 0;
-		ftdev->minor[i].buf = NULL;
-		ftdev->minor[i].active_events = 0;
+		ftdev->minor[i].buf     = NULL;
+		ftdev->minor[i].events  = NULL;
 	}
 	ftdev->alloc = NULL;
 	ftdev->free  = NULL;

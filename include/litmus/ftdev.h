@@ -16,11 +16,14 @@ struct ftdev;
 typedef int  (*ftdev_alloc_t)(struct ftdev* dev, unsigned int buf_no);
 typedef void (*ftdev_free_t)(struct ftdev* dev, unsigned int buf_no);
 
+struct ftdev_event;
+
 struct ftdev_minor {
 	struct ft_buffer*	buf;
 	unsigned int		readers;
 	struct mutex		lock;
-	unsigned		active_events;
+	/* FIXME: filter for authorized events */
+	struct ftdev_event*	events;
 };
 
 struct ftdev {
@@ -28,7 +31,6 @@ struct ftdev {
 	/* FIXME: don't waste memory, allocate dynamically */
 	struct ftdev_minor	minor[MAX_FTDEV_MINORS];
 	unsigned int		minor_cnt;
-	/* FIXME: track enabled/disabled events */
 	ftdev_alloc_t		alloc;
 	ftdev_free_t		free;
 };
@@ -36,7 +38,7 @@ struct ftdev {
 struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size);
 void free_ft_buffer(struct ft_buffer* buf);
 
-void ftdev_init(struct ftdev* ftdev);
+void ftdev_init(struct ftdev* ftdev, struct module* owner);
 int register_ftdev(struct ftdev* ftdev, const char* name, int major);
 
 #endif

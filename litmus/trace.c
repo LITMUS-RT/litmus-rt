@@ -79,7 +79,7 @@ static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 static int __init init_ft_overhead_trace(void)
 {
 	printk("Initializing Feather-Trace overhead tracing device.\n");
-	ftdev_init(&overhead_dev);
+	ftdev_init(&overhead_dev, THIS_MODULE);
 	overhead_dev.minor_cnt = 1; /* only one buffer */
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
