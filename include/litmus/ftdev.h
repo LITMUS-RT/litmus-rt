@@ -13,8 +13,12 @@
 
 struct ftdev;
 
+/* return 0 if buffer can be opened, otherwise -$REASON */
+typedef int  (*ftdev_can_open_t)(struct ftdev* dev, unsigned int buf_no);
+/* return 0 on success, otherwise -$REASON */
 typedef int  (*ftdev_alloc_t)(struct ftdev* dev, unsigned int buf_no);
 typedef void (*ftdev_free_t)(struct ftdev* dev, unsigned int buf_no);
+
 
 struct ftdev_event;
 
@@ -33,6 +37,7 @@ struct ftdev {
 	unsigned int		minor_cnt;
 	ftdev_alloc_t		alloc;
 	ftdev_free_t		free;
+	ftdev_can_open_t	can_open;
 };
 
 struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size);

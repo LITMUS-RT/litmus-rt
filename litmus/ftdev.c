@@ -106,6 +106,9 @@ static int ftdev_open(struct inode *in, struct file *filp)
 		err = -ENODEV;
 		goto out;
 	}
+	if (ftdev->can_open && (err = ftdev->can_open(ftdev, buf_idx)))
+		goto out;
+		
 	ftdm = ftdev->minor + buf_idx;
 	filp->private_data = ftdm;
 
@@ -313,8 +316,9 @@ void ftdev_init(struct ftdev* ftdev, struct module* owner)
 		ftdev->minor[i].buf     = NULL;
 		ftdev->minor[i].events  = NULL;
 	}
-	ftdev->alloc = NULL;
-	ftdev->free  = NULL;
+	ftdev->alloc    = NULL;
+	ftdev->free     = NULL;
+	ftdev->can_open = NULL;
 }
 
 int register_ftdev(struct ftdev* ftdev, const char* name, int major)
