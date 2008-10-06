@@ -261,7 +261,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	    get_rt_flags(task) != RT_F_EXIT_SEM) {
 		/* new sporadic release */
 		release_at(task, now);
-		sched_trace_job_release(task);
+		sched_trace_task_release(task);
 	}
 	requeue(task, edf);
 	spin_unlock_irqrestore(&pedf->slock, flags);

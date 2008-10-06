@@ -12,8 +12,9 @@ struct st_trace_header {
 	u32	job;		/* The job sequence number.      */
 };
 
+#define ST_NAME_LEN 16
 struct st_name_data {
-	char	cmd[16];	/* The name of the executable of this process. */
+	char	cmd[ST_NAME_LEN];/* The name of the executable of this process. */
 };
 
 struct st_param_data {		/* regular params */
@@ -104,29 +105,43 @@ struct st_event_record {
 #ifdef __KERNEL__
 
 #include <linux/sched.h>
-
-/* dummies, need to be re-implemented */
-/* used in sched.c */
-#define sched_trace_task_arrival(t)
-#define sched_trace_task_departure(t)
-#define sched_trace_task_preemption(t, by)
-#define sched_trace_task_scheduled(t)
-
-/* used in scheduler plugins */
-#define sched_trace_job_release(t)
-#define sched_trace_job_completion(t)
-
-
+#include <litmus/feather_trace.h>
 
 #ifdef CONFIG_SCHED_TASK_TRACE
 
-
-
+#define SCHED_TRACE(id, callback, task) \
+	ft_event1(id, callback, task)
+#define SCHED_TRACE2(id, callback, task, xtra) \
+	ft_event2(id, callback, task, xtra)
 
 #else
 
+#define SCHED_TRACE(id, callback, task)        /* no tracing */
+#define SCHED_TRACE2(id, callback, task, xtra) /* no tracing */
 
 #endif
+
+
+#define SCHED_TRACE_BASE_ID 500
+
+
+#define sched_trace_task_name(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 1, do_sched_trace_task_name, t)
+#define sched_trace_task_param(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 2, do_sched_trace_task_param, t)
+#define sched_trace_task_release(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 3, do_sched_trace_task_release, t)
+#define sched_trace_task_switch_to(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 4, do_sched_trace_task_switch_to, t)
+#define sched_trace_task_switch_away(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 5, do_sched_trace_task_switch_away, t)
+#define sched_trace_task_completion(t, forced) \
+	SCHED_TRACE2(SCHED_TRACE_BASE_ID + 6, do_sched_trace_task_completion, t, \
+		     forced)
+#define sched_trace_task_block(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 7, do_sched_trace_task_block, t)
+#define sched_trace_task_resume(t) \
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 8, do_sched_trace_task_resume, t)
 
 
 #ifdef CONFIG_SCHED_DEBUG_TRACE

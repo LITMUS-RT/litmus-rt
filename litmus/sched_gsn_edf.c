@@ -333,11 +333,11 @@ static void gsnedf_release_jobs(rt_domain_t* rt, struct heap* tasks)
 }
 
 /* caller holds gsnedf_lock */
-static noinline void job_completion(struct task_struct *t)
+static noinline void job_completion(struct task_struct *t, int forced)
 {
 	BUG_ON(!t);
 
-	sched_trace_job_completion(t);
+	sched_trace_task_completion(t, forced);
 
 	TRACE_TASK(t, "job_completion().\n");
 
@@ -458,7 +458,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	 * for blocked jobs). Preemption go first for the same reason.
 	 */
 	if (!np && (out_of_time || sleep) && !blocks && !preempt)
-		job_completion(entry->scheduled);
+		job_completion(entry->scheduled, !sleep);
 
 	/* Link pending task if we became unlinked.
 	 */
@@ -558,7 +558,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 		if (is_tardy(task, now)) {
 			/* new sporadic release */
 			release_at(task, now);
-			sched_trace_job_release(task);
+			sched_trace_task_release(task);
 		}
 		else if (task->time_slice)
 			/* came back in time before deadline

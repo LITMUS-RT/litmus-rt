@@ -1,12 +1,6 @@
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/cdev.h>
-#include <asm/semaphore.h>
-#include <asm/uaccess.h>
 #include <linux/module.h>
 
 #include <litmus/ftdev.h>
-
 #include <litmus/litmus.h>
 #include <litmus/trace.h>
 

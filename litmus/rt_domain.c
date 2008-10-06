@@ -185,6 +185,7 @@ static void arm_release_timer(unsigned long _rt)
 
 	list_for_each_safe(pos, safe, &list) {
 		t = list_entry(pos, struct task_struct, rt_param.list);
+		sched_trace_task_release(t);
 		list_del(pos);
 		rh = get_release_heap(rt, get_release(t));
 		heap_add(rt->order, &rh->heap, t, GFP_ATOMIC);

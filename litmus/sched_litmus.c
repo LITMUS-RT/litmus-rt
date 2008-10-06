@@ -41,7 +41,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		other_rq = task_rq(rq->litmus_next);
 		TRACE_TASK(rq->litmus_next, "migrate from %d\n", other_rq->cpu);
 
-		/* while we drop the lock, the prev task could change its 
+		/* while we drop the lock, the prev task could change its
 		 * state
 		 */
 		prev_state = prev->state;
@@ -52,7 +52,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * This could deadlock in the case of cross or circular migrations.
 		 * It's the job of the plugin to make sure that doesn't happen.
 		 */
-		TRACE_TASK(rq->litmus_next, "stack_in_use=%d\n", 
+		TRACE_TASK(rq->litmus_next, "stack_in_use=%d\n",
 			   rq->litmus_next->rt_param.stack_in_use);
 		if (rq->litmus_next->rt_param.stack_in_use != NO_CPU) {
 			TRACE_TASK(rq->litmus_next, "waiting to deschedule\n");
@@ -67,14 +67,14 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 			if (lt_before(_maybe_deadlock + 10000000, litmus_clock())) {
 				/* We've been spinning for 10ms.
 				 * Something can't be right!
-				 * Let's abandon the task and bail out; at least 
+				 * Let's abandon the task and bail out; at least
 				 * we will have debug info instead of a hard
 				 * deadlock.
 				 */
-				TRACE_TASK(rq->litmus_next, 
+				TRACE_TASK(rq->litmus_next,
 					   "stack too long in use. Deadlock?\n");
 				rq->litmus_next = NULL;
-				
+
 				/* bail out */
 				spin_lock(&rq->lock);
 				return;
@@ -91,13 +91,13 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		double_rq_lock(rq, other_rq);
 		mb();
 		if (prev->state != prev_state && is_realtime(prev)) {
-			TRACE_TASK(prev, 
+			TRACE_TASK(prev,
 				   "state changed while we dropped"
 				   " the lock: now=%d, old=%d\n",
 				   prev->state, prev_state);
 			if (prev_state && !prev->state) {
 				/* prev task became unblocked
-				 * we need to simulate normal sequence of events 
+				 * we need to simulate normal sequence of events
 				 * to scheduler plugins.
 				 */
 				litmus->task_block(prev);
@@ -115,9 +115,9 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		if (!is_realtime(rq->litmus_next) ||
 		    !is_running(rq->litmus_next)) {
 			/* BAD BAD BAD */
-			TRACE_TASK(rq->litmus_next, 
+			TRACE_TASK(rq->litmus_next,
 				   "migration invariant FAILED: rt=%d running=%d\n",
-				   is_realtime(rq->litmus_next),			   
+				   is_realtime(rq->litmus_next),
 				   is_running(rq->litmus_next));
 			/* drop the task */
 			rq->litmus_next = NULL;
@@ -131,17 +131,19 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p, int wakeup)
 {
-	if (wakeup)
+	if (wakeup) {
+		sched_trace_task_resume(p);
 		litmus->task_wake_up(p);
-	else
+	} else
 		TRACE_TASK(p, "ignoring an enqueue, not a wake up.\n");
 }
 
 static void dequeue_task_litmus(struct rq *rq, struct task_struct *p, int sleep)
 {
-	if (sleep)
+	if (sleep) {
 		litmus->task_block(p);
-	else
+		sched_trace_task_block(p);
+	} else
 		TRACE_TASK(p, "ignoring a dequeue, not going to sleep.\n");
 }
 

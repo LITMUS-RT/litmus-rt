@@ -67,6 +67,7 @@
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
 
+#include <litmus/sched_trace.h>
 #include <litmus/trace.h>
 
 #include <litmus/norqlock.h>
@@ -3691,6 +3692,8 @@ need_resched_nonpreemptible:
 		rq->nr_switches++;
 		rq->curr = next;
 		++*switch_count;
+		sched_trace_task_switch_away(prev);
+		sched_trace_task_switch_to(next);
 
 		TS_SCHED_END(next);
 		TS_CXS_START(next);
