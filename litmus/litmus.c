@@ -511,7 +511,7 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 
 long litmus_admit_task(struct task_struct* tsk)
 {
-	long retval;
+	long retval = 0;
 	long flags;
 
 	BUG_ON(is_realtime(tsk));
@@ -535,17 +535,23 @@ long litmus_admit_task(struct task_struct* tsk)
 
 	/* avoid scheduler plugin changing underneath us */
 	spin_lock_irqsave(&task_transition_lock, flags);
-	retval = litmus->admit_task(tsk);
 
 	/* allocate heap node for this task */
 	tsk_rt(tsk)->heap_node = kmem_cache_alloc(heap_node_cache, GFP_ATOMIC);
-	if (!tsk_rt(tsk)->heap_node)
+	if (!tsk_rt(tsk)->heap_node) {
+		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
 		retval = -ENOMEM;
-	else
+	} else
 		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
 
 	if (!retval)
+		retval = litmus->admit_task(tsk);
+
+	if (!retval) {
+		sched_trace_task_name(tsk);
+		sched_trace_task_param(tsk);
 		atomic_inc(&rt_task_count);
+	}
 
 	spin_unlock_irqrestore(&task_transition_lock, flags);
 
