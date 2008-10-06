@@ -113,6 +113,7 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_exec_cost(t)  	(tsk_rt(t)->task_params.exec_cost)
 #define get_exec_time(t)	(tsk_rt(t)->job_params.exec_time)
 #define get_rt_period(t)	(tsk_rt(t)->task_params.period)
+#define get_rt_phase(t)		(tsk_rt(t)->task_params.phase)
 #define get_partition(t) 	(tsk_rt(t)->task_params.cpu)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
 #define get_class(t)		(tsk_rt(t)->task_params.cls)
