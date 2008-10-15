@@ -172,21 +172,21 @@ static int pfair_higher_prio(struct task_struct* first,
 		 * Then break by B-bit.
 		 */
 		(cur_deadline(first) == cur_deadline(second) &&
-		 cur_overlap(first) > cur_overlap(second)) ||
+		 (cur_overlap(first) > cur_overlap(second) ||
 
 		/* Do we have a B-bit tie?
 		 * Then break by group deadline.
 		 */
 		(cur_overlap(first) == cur_overlap(second) &&
-		 time_after(cur_group_deadline(first),
-			    cur_group_deadline(second))) ||
+		 (time_after(cur_group_deadline(first),
+			     cur_group_deadline(second)) ||
 
 		/* Do we have a group deadline tie?
 		 * Then break by PID, which are unique.
 		 */
 		(cur_group_deadline(first) ==
 		 cur_group_deadline(second) &&
-		 first->pid < second->pid));
+		 first->pid < second->pid))))));
 }
 
 int pfair_ready_order(struct heap_node* a, struct heap_node* b)
