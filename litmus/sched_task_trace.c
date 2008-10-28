@@ -16,6 +16,8 @@
 #define FT_TASK_TRACE_MAJOR	253
 #define NO_EVENTS		4096 /* this is a buffer of 12 4k pages per CPU */
 
+#define now() litmus_clock()
+
 struct local_buffer {
 	struct st_event_record record[NO_EVENTS];
 	char   flag[NO_EVENTS];
@@ -125,7 +127,7 @@ feather_callback void do_sched_trace_task_switch_to(unsigned long id, unsigned l
 	if (is_realtime(t)) {
 		rec = get_record(ST_SWITCH_TO, t);
 		if (rec) {
-			rec->data.switch_to.when      = sched_clock();
+			rec->data.switch_to.when      = now();
 			rec->data.switch_to.exec_time = get_exec_time(t);
 			put_record(rec);
 		}
@@ -139,7 +141,7 @@ feather_callback void do_sched_trace_task_switch_away(unsigned long id, unsigned
 	if (is_realtime(t)) {
 		rec = get_record(ST_SWITCH_AWAY, t);
 		if (rec) {
-			rec->data.switch_away.when      = sched_clock();
+			rec->data.switch_away.when      = now();
 			rec->data.switch_away.exec_time = get_exec_time(t);
 			put_record(rec);
 		}
@@ -152,7 +154,7 @@ feather_callback void do_sched_trace_task_completion(unsigned long id, unsigned 
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_COMPLETION, t);
 	if (rec) {
-		rec->data.completion.when   = sched_clock();
+		rec->data.completion.when   = now();
 		rec->data.completion.forced = forced;
 		put_record(rec);
 	}
@@ -163,7 +165,7 @@ feather_callback void do_sched_trace_task_block(unsigned long id, unsigned long 
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_BLOCK, t);
 	if (rec) {
-		rec->data.block.when      = sched_clock();
+		rec->data.block.when      = now();
 		put_record(rec);
 	}
 }
@@ -173,7 +175,7 @@ feather_callback void do_sched_trace_task_resume(unsigned long id, unsigned long
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_RESUME, t);
 	if (rec) {
-		rec->data.resume.when      = sched_clock();
+		rec->data.resume.when      = now();
 		put_record(rec);
 	}
 }
