@@ -269,27 +269,13 @@ static noinline void requeue(struct task_struct* task)
 	/* sanity check before insertion */
 	BUG_ON(is_queued(task));
 
-	if (get_rt_flags(task) == RT_F_SLEEP) {
-		/* this task has expired
-		 * _schedule has already taken care of updating
-		 * the release and
-		 * deadline. We just must check if it has been released.
-		 */
-		if (is_released(task, litmus_clock()))
-			__add_ready(&gsnedf, task);
-		else {
-			/* it has got to wait */
-			add_release(&gsnedf, task);
-		}
-
-	} else
-		/* this is a forced preemption
-		 * thus the task stays in the ready_queue
-		 * we only must make it available to others
-		 */
+	if (is_released(task, litmus_clock()))
 		__add_ready(&gsnedf, task);
+	else {
+		/* it has got to wait */
+		add_release(&gsnedf, task);
+	}
 }
-
 
 /* check for any necessary preemptions */
 static void check_for_preemptions(void)
