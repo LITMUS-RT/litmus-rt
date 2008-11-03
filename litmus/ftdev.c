@@ -90,6 +90,7 @@ static void deactivate(struct ftdev_event** chain, int id)
 			ft_disable_event(id);
 			break;
 		}
+		pos = pos->next;
 	}
 }
 
