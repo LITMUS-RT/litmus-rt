@@ -556,12 +556,12 @@ long litmus_admit_task(struct task_struct* tsk)
 	spin_unlock_irqrestore(&task_transition_lock, flags);
 
 	return retval;
-
 }
 
 void litmus_exit_task(struct task_struct* tsk)
 {
 	if (is_realtime(tsk)) {
+		sched_trace_task_completion(tsk, 1);
 		litmus->task_exit(tsk);
 		BUG_ON(heap_node_in_heap(tsk_rt(tsk)->heap_node));
 		kmem_cache_free(heap_node_cache, tsk_rt(tsk)->heap_node);

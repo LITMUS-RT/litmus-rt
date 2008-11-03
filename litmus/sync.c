@@ -14,6 +14,8 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/jobs.h>
 
+#include <litmus/sched_trace.h>
+
 static DECLARE_COMPLETION(ts_release);
 
 static long do_wait_for_ts_release(void)
@@ -43,12 +45,14 @@ static long do_release_ts(lt_t start)
 	spin_lock_irqsave(&ts_release.wait.lock, flags);
 	TRACE("<<<<<< synchronous task system release >>>>>>\n");
 	
+	sched_trace_sys_release(&start);
 	list_for_each(pos, &ts_release.wait.task_list) {
 		t = (struct task_struct*) list_entry(pos,
 						     struct __wait_queue,
 						     task_list)->private;
 		task_count++;
 		litmus->release_at(t, start + t->rt_param.task_params.phase);
+		sched_trace_task_release(t);
 	}
 
 	spin_unlock_irqrestore(&ts_release.wait.lock, flags);

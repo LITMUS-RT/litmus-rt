@@ -179,3 +179,14 @@ feather_callback void do_sched_trace_task_resume(unsigned long id, unsigned long
 		put_record(rec);
 	}
 }
+
+feather_callback void do_sched_trace_sys_release(unsigned long id, unsigned long _start)
+{
+	lt_t *start = (lt_t*) _start;
+	struct st_event_record* rec = get_record(ST_SYS_RELEASE, NULL);
+	if (rec) {
+		rec->data.sys_release.when    = now();
+		rec->data.sys_release.release = *start;
+		put_record(rec);
+	}
+}
