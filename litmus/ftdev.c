@@ -220,8 +220,12 @@ static ssize_t ftdev_read(struct file *filp,
 			len    -= chunk;
 			to     += chunk;
 			err    += chunk;
-	        } else if (copied == 0 && ftdm->events) {
-			/* only wait if there are any events enabled */
+	        } else if (err == 0 && copied == 0 && ftdm->events) {
+			/* Only wait if there are any events enabled and only
+			 * if we haven't copied some data yet. We cannot wait
+			 * here with copied data because that data would get
+			 * lost if the task is interrupted (e.g., killed).
+			 */
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(50);
 			if (signal_pending(current)) {
