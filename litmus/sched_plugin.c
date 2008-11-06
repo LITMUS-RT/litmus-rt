@@ -57,6 +57,16 @@ static long litmus_dummy_complete_job(void)
 	return -ENOSYS;
 }
 
+static long litmus_dummy_activate_plugin(void)
+{
+	return 0;
+}
+
+static long litmus_dummy_deactivate_plugin(void)
+{
+	return 0;
+}
+
 #ifdef CONFIG_FMLP
 
 static long litmus_dummy_inherit_priority(struct pi_semaphore *sem,
@@ -92,6 +102,8 @@ struct sched_plugin linux_sched_plugin = {
 	.complete_job = litmus_dummy_complete_job,
 	.schedule = litmus_dummy_schedule,
 	.finish_switch = litmus_dummy_finish_switch,
+	.activate_plugin = litmus_dummy_activate_plugin,
+	.deactivate_plugin = litmus_dummy_deactivate_plugin,
 #ifdef CONFIG_FMLP
 	.inherit_priority = litmus_dummy_inherit_priority,
 	.return_priority = litmus_dummy_return_priority,
@@ -130,6 +142,8 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(task_block);
 	CHECK(task_new);
 	CHECK(complete_job);
+	CHECK(activate_plugin);
+	CHECK(deactivate_plugin);
 #ifdef CONFIG_FMLP
 	CHECK(inherit_priority);
 	CHECK(return_priority);

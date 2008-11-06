@@ -21,6 +21,12 @@ struct pi_semaphore {
 	struct task_struct *holder;
 };
 
+/************************ setup/tear down ********************/
+
+typedef long (*activate_plugin_t) (void);
+typedef long (*deactivate_plugin_t) (void);
+
+
 
 /********************* scheduler invocation ******************/
 
@@ -75,6 +81,8 @@ typedef long (*return_priority_t) (struct pi_semaphore *sem);
 typedef long (*pi_block_t) (struct pi_semaphore *sem, struct task_struct *t);
 
 
+
+
 /********************* sys call backends  ********************/
 /* This function causes the caller to sleep until the next release */
 typedef long (*complete_job_t) (void);
@@ -87,6 +95,11 @@ struct sched_plugin {
 	struct list_head	list;
 	/* 	basic info 		*/
 	char 			*plugin_name;
+
+	/*	setup			*/
+	activate_plugin_t	activate_plugin;
+	deactivate_plugin_t	deactivate_plugin;
+
 #ifdef CONFIG_SRP
 	unsigned int		srp_active;
 #endif
@@ -140,5 +153,7 @@ static inline int fmlp_active(void)
 	return 0;
 #endif
 }
+
+extern struct sched_plugin linux_sched_plugin;
 
 #endif

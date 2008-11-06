@@ -590,11 +590,20 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
+		ret = litmus->deactivate_plugin();
+		if (0 != ret)
+			goto out;
+		ret = plugin->activate_plugin();
+		if (0 != ret) {
+			printk(KERN_INFO "Can't activate %s (%d).\n", 
+			       plugin->plugin_name, ret);
+			plugin = &linux_sched_plugin;
+		}
 		printk(KERN_INFO "Switching to LITMUS^RT plugin %s.\n", plugin->plugin_name);
 		litmus = plugin;
 	} else
 		ret = -EBUSY;
-
+out:
 	spin_unlock_irqrestore(&task_transition_lock, flags);
 	return ret;
 }
