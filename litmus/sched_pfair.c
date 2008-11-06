@@ -284,7 +284,9 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		   cpu,
 		   p->cur);
 	if (!p->cur) {
+		sched_trace_task_completion(t, 1);
 		prepare_for_next_period(t);
+		sched_trace_task_release(t);
 		if (tsk_pfair(t)->present) {
 			/* we start a new job */
 			get_rt_flags(t) = RT_F_RUNNING;
@@ -563,7 +565,9 @@ static void pfair_task_wake_up(struct task_struct *t)
 	 * new sporadic job release.
 	 */
 	if (tsk_pfair(t)->sporadic_release) {
+		release_at(t, litmus_clock());
 		prepare_release(t, pfair_time + 1);
+		sched_trace_task_release(t);
 		pfair_add_release(t);
 		tsk_pfair(t)->sporadic_release = 0;
 	}
@@ -608,12 +612,14 @@ static void pfair_task_exit(struct task_struct * t)
 static void pfair_release_at(struct task_struct* task, lt_t start)
 {
 	unsigned long flags;
-	lt_t now = litmus_clock();
+	lt_t now;
 	quanta_t release, delta;
 
 	BUG_ON(!is_realtime(task));
 
+	release_at(task, start);
 	spin_lock_irqsave(&pfair_lock, flags);
+	now = litmus_clock();
 	if (lt_before(now, start)) {
 		delta = time2quanta((long long) start - (long long) now, CEIL);
 		if (delta >= PFAIR_MAX_PERIOD)
