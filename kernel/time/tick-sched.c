@@ -583,6 +583,26 @@ static int __init tick_set_quanta_type(char *str)
 }
 __setup("quanta=", tick_set_quanta_type);
 
+u64 cpu_stagger_offset(int cpu)
+{
+	u64 offset = 0;
+	switch (quanta_type) {
+		case LITMUS_ALIGNED_TICKS:
+			offset = 0;
+			break;
+		case LITMUS_STAGGERED_TICKS:
+			offset = ktime_to_ns(tick_period);
+			do_div(offset, num_possible_cpus());
+			offset *= cpu;
+			break;
+		default:
+			offset = ktime_to_ns(tick_period) >> 1;
+			do_div(offset, num_possible_cpus());
+			offset *= cpu;
+	}
+	return offset;
+}
+
 /**
  * tick_setup_sched_timer - setup the tick emulation timer
  */
@@ -603,20 +623,7 @@ void tick_setup_sched_timer(void)
 	ts->sched_timer.expires = tick_init_jiffy_update();
 
 	/* Offset must be set correctly to achieve desired quanta type. */
-	switch (quanta_type) {
-		case LITMUS_ALIGNED_TICKS:
-			offset = 0;
-			break;
-		case LITMUS_STAGGERED_TICKS:
-			offset = ktime_to_ns(tick_period);
-			do_div(offset, num_possible_cpus());
-			offset *= smp_processor_id();
-			break;
-		default:
-			offset = ktime_to_ns(tick_period) >> 1;
-			do_div(offset, num_possible_cpus());
-			offset *= smp_processor_id();
-	}
+	offset = cpu_stagger_offset(smp_processor_id());
 
 	/* Add correct offset to expiration time. */
 	ts->sched_timer.expires = ktime_add_ns(ts->sched_timer.expires, offset);

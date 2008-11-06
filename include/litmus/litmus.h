@@ -221,4 +221,7 @@ static inline quanta_t time2quanta(lt_t time, enum round round)
 	return (quanta_t) time;
 }
 
+/* By how much is cpu staggered behind CPU 0? */
+u64 cpu_stagger_offset(int cpu);
+
 #endif
