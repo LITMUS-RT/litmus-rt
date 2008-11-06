@@ -473,8 +473,9 @@ static void pfair_tick(struct task_struct* t)
 	/* copy state info */
 	state->local_tick = state->cur_tick;
 	state->local      = state->linked;
-	if (state->local && tsk_pfair(state->local)->present &&
-	    state->local != current)
+	if ((state->local && tsk_pfair(state->local)->present &&
+	     state->local != current) ||
+	    (!state->local && is_realtime(current)))
 		set_tsk_need_resched(current);
 }
 
