@@ -104,8 +104,8 @@ static rt_domain_t pfair;
  */
 
 #ifdef PFAIR_DEBUG
-#define PTRACE_TASK(t, f, args...)  TRACE_TASK(t, f, # args)
-#define PTRACE(f, args...) TRACE(f, # args)
+#define PTRACE_TASK(t, f, args...)  TRACE_TASK(t, f, ## args)
+#define PTRACE(f, args...) TRACE(f, ## args)
 #else
 #define PTRACE_TASK(t, f, args...)
 #define PTRACE(f, args...)
