@@ -67,7 +67,7 @@ static inline struct st_event_record* get_record(u8 type, struct task_struct* t)
 		rec->hdr.type = type;
 		rec->hdr.cpu  = smp_processor_id();
 		rec->hdr.pid  = t ? t->pid : 0;
-		rec->hdr.job  = t ? t->rt_param.job_params.job_no : -1;
+		rec->hdr.job  = t ? t->rt_param.job_params.job_no : 0;
 	} else
 		put_cpu_var(st_event_buffer);
 	/* rec will be NULL if it failed */
