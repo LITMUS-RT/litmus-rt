@@ -612,22 +612,18 @@ static void pfair_task_exit(struct task_struct * t)
 static void pfair_release_at(struct task_struct* task, lt_t start)
 {
 	unsigned long flags;
-	lt_t now;
-	quanta_t release, delta;
+	quanta_t release;
 
 	BUG_ON(!is_realtime(task));
 
-	release_at(task, start);
 	spin_lock_irqsave(&pfair_lock, flags);
-	now = litmus_clock();
-	if (lt_before(now, start)) {
-		delta = time2quanta((long long) start - (long long) now, CEIL);
-		if (delta >= PFAIR_MAX_PERIOD)
-			delta = PFAIR_MAX_PERIOD - 1;
-	} else
-		delta = 10;  /* release in 10 ticks */
+	release_at(task, start);
+	release = time2quanta(start, CEIL);
 
-	release = pfair_time + delta;
+	if (release - pfair_time >= PFAIR_MAX_PERIOD)
+		release = pfair_time + PFAIR_MAX_PERIOD;
+
+	TRACE_TASK(task, "sys release at %lu\n", release);
 
 	drop_all_references(task);
 	prepare_release(task, release);
