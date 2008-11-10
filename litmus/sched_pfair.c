@@ -752,6 +752,27 @@ static long pfair_admit_task(struct task_struct* t)
 	return 0;
 }
 
+static long pfair_activate_plugin(void)
+{
+	int cpu;
+	struct pfair_state* state;
+
+	state = &__get_cpu_var(pfair_state);
+	pfair_time = current_quantum(state);
+
+	TRACE("Activating PFAIR at q=%lu\n", pfair_time);
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
+		state = &per_cpu(pfair_state, cpu);
+		state->cur_tick   = pfair_time;
+		state->local_tick = pfair_time;
+		state->missed_quanta = 0;
+		state->offset     = cpu_stagger_offset(cpu);
+	}
+
+	return 0;
+}
+
 /*	Plugin object	*/
 static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PFAIR",
@@ -763,7 +784,8 @@ static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.task_block		= pfair_task_block,
 	.admit_task		= pfair_admit_task,
 	.release_at		= pfair_release_at,
-	.complete_job		= complete_job
+	.complete_job		= complete_job,
+	.activate_plugin	= pfair_activate_plugin,
 };
 
 static int __init init_pfair(void)
