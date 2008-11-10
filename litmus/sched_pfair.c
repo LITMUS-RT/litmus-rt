@@ -280,27 +280,29 @@ static void drop_all_references(struct task_struct *t)
 static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 {
 	struct pfair_param* p = tsk_pfair(t);
-
+	int to_relq;
 	p->cur = (p->cur + 1) % p->quanta;
-	TRACE_TASK(t, "on %d advanced to subtask %lu\n",
-		   cpu,
-		   p->cur);
 	if (!p->cur) {
 		sched_trace_task_completion(t, 1);
-		prepare_for_next_period(t);
-		sched_trace_task_release(t);
 		if (tsk_pfair(t)->present) {
 			/* we start a new job */
+			prepare_for_next_period(t);
+			sched_trace_task_release(t);
 			get_rt_flags(t) = RT_F_RUNNING;
 			p->release += p->period;
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
 			tsk_pfair(t)->sporadic_release = 1;
+			TRACE_TASK(t, "on %d advanced to subtask %lu (not present)\n",
+				   cpu, p->cur);
 			return 0;
 		}
 	}
-	return time_after(cur_release(t), time);
+	to_relq = time_after(cur_release(t), time);
+	TRACE_TASK(t, "on %d advanced to subtask %lu -> to_relq=%d\n",
+		   cpu, p->cur, to_relq);
+	return to_relq;
 }
 
 static void advance_subtasks(quanta_t time)
