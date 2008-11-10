@@ -152,6 +152,8 @@ struct st_event_record {
 #define sched_trace_sys_release(when) \
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 9, do_sched_trace_sys_release, when)
 
+#define sched_trace_quantum_boundary() /* NOT IMPLEMENTED */
+
 #ifdef CONFIG_SCHED_DEBUG_TRACE
 void sched_trace_log_message(const char* fmt, ...);
 
