@@ -79,18 +79,19 @@ static int activate(struct ftdev_event** chain, int id)
 
 static void deactivate(struct ftdev_event** chain, int id)
 {
-	struct ftdev_event **last = chain;
-	struct ftdev_event *pos   = *chain;
-	while (pos) {
-		if (pos->id == id) {
-			*last = pos->next;
-			kfree(pos);
+	struct ftdev_event **cur = chain;
+	struct ftdev_event *nxt;
+	while (*cur) {
+		if ((*cur)->id == id) {
+			nxt   = (*cur)->next;
+			kfree(*cur);
+			*cur  = nxt;
 			printk(KERN_INFO
 			       "Disabling feather-trace event %d.\n", (int) id);
 			ft_disable_event(id);
 			break;
 		}
-		pos = pos->next;
+		cur = &(*cur)->next;
 	}
 }
 
