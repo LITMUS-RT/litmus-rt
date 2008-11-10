@@ -123,6 +123,12 @@ static quanta_t cur_deadline(struct task_struct* t)
 	return cur_subtask(t)->deadline +  tsk_pfair(t)->release;
 }
 
+
+static quanta_t cur_sub_release(struct task_struct* t)
+{
+	return cur_subtask(t)->release +  tsk_pfair(t)->release;
+}
+
 static quanta_t cur_release(struct task_struct* t)
 {
 #ifdef EARLY_RELEASE
@@ -130,13 +136,8 @@ static quanta_t cur_release(struct task_struct* t)
 	 * release */
 	return tsk_pfair(t)->release;
 #else
-	return cur_subtask(t)->release +  tsk_pfair(t)->release;
+	return cur_sub_release(t);
 #endif
-}
-
-static quanta_t cur_sub_release(struct task_struct* t)
-{
-	return cur_subtask(t)->release +  tsk_pfair(t)->release;
 }
 
 static quanta_t cur_overlap(struct task_struct* t)
