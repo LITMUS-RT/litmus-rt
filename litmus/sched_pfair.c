@@ -622,6 +622,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 static void pfair_task_wake_up(struct task_struct *t)
 {
 	unsigned long flags;
+	lt_t now;
 
 	TRACE_TASK(t, "wakes at %llu, release=%lu, pfair_time:%lu\n",
 		   litmus_clock(), cur_release(t), pfair_time);
@@ -638,9 +639,11 @@ static void pfair_task_wake_up(struct task_struct *t)
 	 * new sporadic job release.
 	 */
 	if (tsk_pfair(t)->sporadic_release) {
-		release_at(t, litmus_clock());
-		prepare_release(t, pfair_time + 1);
+		now = litmus_clock();
+		release_at(t, now);
+		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
+		/* FIXME: race with pfair_time advancing */
 		pfair_add_release(t);
 		tsk_pfair(t)->sporadic_release = 0;
 	}
@@ -654,8 +657,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 static void pfair_task_block(struct task_struct *t)
 {
 	BUG_ON(!is_realtime(t));
-	TRACE_TASK(t, "blocks at %lld, state:%d\n",
-		   (lt_t) jiffies, t->state);
+	TRACE_TASK(t, "blocks at %llu, state:%d\n",
+		   litmus_clock(), t->state);
 }
 
 static void pfair_task_exit(struct task_struct * t)
