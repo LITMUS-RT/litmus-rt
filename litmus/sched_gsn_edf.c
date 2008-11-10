@@ -331,6 +331,8 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	set_rt_flags(t, RT_F_SLEEP);
 	/* prepare for next period */
 	prepare_for_next_period(t);
+	if (is_released(t, litmus_clock()))
+		sched_trace_task_release(t);
 	/* unlink */
 	unlink(t);
 	/* requeue
