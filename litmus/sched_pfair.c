@@ -68,6 +68,7 @@ struct pfair_state {
 	struct task_struct* scheduled; /* what is actually scheduled        */
 
 	unsigned long missed_quanta;
+	lt_t offset;			/* stagger offset */
 };
 
 /* Currently, we limit the maximum period of any task to 1000 quanta.
@@ -784,6 +785,7 @@ static int __init init_pfair(void)
 		state->local      = NULL;
 		state->scheduled  = NULL;
 		state->missed_quanta = 0;
+		state->offset     = cpu_stagger_offset(cpu);
 		pstate[cpu] = state;
 	}
 
