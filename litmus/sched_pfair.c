@@ -154,6 +154,11 @@ static quanta_t cur_group_deadline(struct task_struct* t)
 		return gdl;
 }
 
+static int is_present(struct task_struct* t)
+{
+	return t && tsk_pfair(t)->present;
+}
+
 static int pfair_higher_prio(struct task_struct* first,
 			     struct task_struct* second)
 {
@@ -414,24 +419,83 @@ static void schedule_next_quantum(quanta_t time)
 {
 	int cpu;
 
+	/* called with interrupts disabled */
+	PTRACE("--- Q %lu at %llu PRE-SPIN\n",
+	       time, litmus_clock());
+	spin_lock(&pfair_lock);
 	PTRACE("<<< Q %lu at %llu\n",
 	       time, litmus_clock());
 
-	/* called with interrupts disabled */
-	spin_lock(&pfair_lock);
+	sched_trace_quantum_boundary();
 
 	advance_subtasks(time);
 	poll_releases(time);
 	schedule_subtasks(time);
 
-	spin_unlock(&pfair_lock);
+	for (cpu = 0; cpu < NR_CPUS; cpu++)
+		if (pstate[cpu]->linked)
+			PTRACE_TASK(pstate[cpu]->linked, 
+				    " linked on %d.\n", cpu);
+		else
+			PTRACE("(null) linked on %d.\n", cpu);
 
 	/* We are done. Advance time. */
 	mb();
-	for (cpu = 0; cpu < NR_CPUS; cpu++)
-		pstate[cpu]->cur_tick = pfair_time;
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		if (pstate[cpu]->local_tick != pstate[cpu]->cur_tick) {
+			TRACE("BAD Quantum not acked on %d "
+			      "(l:%lu c:%lu p:%lu)\n",
+			      cpu,
+			      pstate[cpu]->local_tick,
+			      pstate[cpu]->cur_tick,
+			      pfair_time);
+			pstate[cpu]->missed_quanta++;
+		}
+		pstate[cpu]->cur_tick = time;
+	}
 	PTRACE(">>> Q %lu at %llu\n",
 	       time, litmus_clock());
+	spin_unlock(&pfair_lock);
+}
+
+static noinline void wait_for_quantum(quanta_t q, struct pfair_state* state)
+{
+	quanta_t loc;
+
+	goto first; /* skip mb() on first iteration */
+	do {
+		cpu_relax();
+		mb();
+	first:	loc = state->cur_tick;
+		/* FIXME: what if loc > cur? */
+	} while (time_before(loc, q));
+	PTRACE("observed cur_tick:%lu >= q:%lu\n",
+	       loc, q);
+}
+
+static quanta_t current_quantum(struct pfair_state* state)
+{
+	lt_t t = litmus_clock() - state->offset;
+	return time2quanta(t, FLOOR);
+}
+
+static void catchup_quanta(quanta_t from, quanta_t target,
+			   struct pfair_state* state)
+{
+	quanta_t cur = from, time;
+	TRACE("+++< BAD catching up quanta from %lu to %lu\n",
+	      from, target);
+	while (time_before(cur, target)) {
+		wait_for_quantum(cur, state);
+		cur++;
+		time = cmpxchg(&pfair_time,
+			       cur - 1,   /* expected */
+			       cur        /* next     */
+			);
+		if (time == cur - 1)
+			schedule_next_quantum(cur);
+	}
+	TRACE("+++> catching up done\n");
 }
 
 /* pfair_tick - this function is called for every local timer
@@ -440,42 +504,54 @@ static void schedule_next_quantum(quanta_t time)
 static void pfair_tick(struct task_struct* t)
 {
 	struct pfair_state* state = &__get_cpu_var(pfair_state);
-	quanta_t time, loc, cur;
+	quanta_t time, cur;
+	int retry = 10;
 
-	/* Attempt to advance time. First CPU to get here 00
-	 * will prepare the next quantum.
-	 */
-	time = cmpxchg(&pfair_time,
-		       state->local_tick,     /* expected */
-		       state->local_tick + 1  /* next     */
-		);
-	if (time == state->local_tick)
-		/* exchange succeeded */
-		schedule_next_quantum(time + 1);
+	do {
+		cur  = current_quantum(state);
+		PTRACE("q %lu at %llu\n", cur, litmus_clock());
+
+		/* Attempt to advance time. First CPU to get here 
+		 * will prepare the next quantum.
+		 */
+		time = cmpxchg(&pfair_time,
+			       cur - 1,   /* expected */
+			       cur        /* next     */
+			);
+		if (time == cur - 1) {
+			/* exchange succeeded */
+			wait_for_quantum(cur - 1, state);
+			schedule_next_quantum(cur);
+			retry = 0;
+		} else if (time_before(time, cur - 1)) {
+			/* the whole system missed a tick !? */
+			catchup_quanta(time, cur, state);
+			retry--;
+		} else if (time_after(time, cur)) {
+			/* our timer lagging behind!? */
+			TRACE("BAD pfair_time:%lu > cur:%lu\n", time, cur);
+			retry--;
+		} else {
+			/* Some other CPU already started scheduling
+			 * this quantum. Let it do its job and then update.
+			 */
+			retry = 0;
+		}
+	} while (retry);
 
 	/* Spin locally until time advances. */
-	while (1) {
-		mb();
-		cur = state->cur_tick;
-		loc = state->local_tick;
-		if (time_before(loc, cur)) {
-			if (loc + 1 != cur) {
-				TRACE("MISSED quantum! loc:%lu -> cur:%lu\n",
-				      loc, cur);
-				state->missed_quanta++;
-			}
-			break;
-		}
-		cpu_relax();
-	}
+	wait_for_quantum(cur, state);
 
-	/* copy state info */
-	state->local_tick = state->cur_tick;
+	/* copy assignment */
+	/* FIXME: what if we race with a future update? Corrupted state? */
 	state->local      = state->linked;
-	if ((state->local && tsk_pfair(state->local)->present &&
-	     state->local != current) ||
-	    (!state->local && is_realtime(current)))
-		set_tsk_need_resched(current);
+	/* signal that we are done */
+	mb();
+	state->local_tick = state->cur_tick;
+
+	if (state->local != current
+	    && (is_realtime(current) || is_present(state->local)))
+	    set_tsk_need_resched(current);	    
 }
 
 static int safe_to_schedule(struct task_struct* t, int cpu)
