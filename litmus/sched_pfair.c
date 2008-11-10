@@ -71,12 +71,12 @@ struct pfair_state {
 	lt_t offset;			/* stagger offset */
 };
 
-/* Currently, we limit the maximum period of any task to 1000 quanta.
+/* Currently, we limit the maximum period of any task to 2000 quanta.
  * The reason is that it makes the implementation easier since we do not
  * need to reallocate the release wheel on task arrivals.
  * In the future
  */
-#define PFAIR_MAX_PERIOD 1000
+#define PFAIR_MAX_PERIOD 2000
 
 /* This is the release queue wheel. It is indexed by pfair_time %
  * PFAIR_MAX_PERIOD.  Each heap is ordered by PFAIR priority, so that it can be
