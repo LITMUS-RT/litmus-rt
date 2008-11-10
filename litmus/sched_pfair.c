@@ -329,7 +329,6 @@ static int target_cpu(quanta_t time, struct task_struct* t, int default_cpu)
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
 		/* always observe scheduled_on linkage */
 		default_cpu = tsk_rt(t)->scheduled_on;
-		PTRACE_TASK(t, "forced on %d (scheduled on)\n", default_cpu);
 	} else if (tsk_pfair(t)->last_quantum == time - 1) {
 		/* back2back quanta */
 		/* Only observe last_quantum if no scheduled_on is in the way.
@@ -340,11 +339,6 @@ static int target_cpu(quanta_t time, struct task_struct* t, int default_cpu)
 		if (!pstate[cpu]->linked ||
 		    tsk_rt(pstate[cpu]->linked)->scheduled_on != cpu) {
 			default_cpu = cpu;
-			PTRACE_TASK(t, "forced on %d (linked on)\n",
-				    default_cpu);
-		} else {
-			PTRACE_TASK(t, "DID NOT force on %d (linked on)\n",
-				    default_cpu);
 		}
 	}
 	return default_cpu;
@@ -358,7 +352,6 @@ static int pfair_link(quanta_t time, int cpu,
 	struct task_struct* prev  = pstate[cpu]->linked;
 	struct task_struct* other;
 
-	PTRACE_TASK(t, "linked to %d for quantum %lu\n", target, time);
 	if (target != cpu) {
 		other = pstate[target]->linked;
 		pstate[target]->linked = t;
@@ -518,10 +511,10 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	spin_unlock(&pfair_lock);
 
 	if (next)
-		TRACE_TASK(next, "scheduled rel=%lu at %lu\n",
-			   tsk_pfair(next)->release, pfair_time);
+		TRACE_TASK(next, "scheduled rel=%lu at %lu (%llu)\n",
+			   tsk_pfair(next)->release, pfair_time, litmus_clock());
 	else if (is_realtime(prev))
-		TRACE("Becomes idle at %lu\n", pfair_time);
+		TRACE("Becomes idle at %lu (%llu)\n", pfair_time, litmus_clock());
 
 	return next;
 }
@@ -551,8 +544,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 {
 	unsigned long flags;
 
-	TRACE_TASK(t, "wakes at %lld, release=%lu, pfair_time:%lu\n",
-		   cur_release(t), pfair_time);
+	TRACE_TASK(t, "wakes at %llu, release=%lu, pfair_time:%lu\n",
+		   litmus_clock(), cur_release(t), pfair_time);
 
 	spin_lock_irqsave(&pfair_lock, flags);
 
@@ -576,6 +569,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	check_preempt(t);
 
 	spin_unlock_irqrestore(&pfair_lock, flags);
+	TRACE_TASK(t, "wake up done at %llu\n", litmus_clock());
 }
 
 static void pfair_task_block(struct task_struct *t)
