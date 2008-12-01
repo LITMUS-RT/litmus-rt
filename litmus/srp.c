@@ -78,7 +78,7 @@ struct srp_semaphore {
 	int cpu; /* cpu associated with this "semaphore" and resource */
 };
 
-#define ceiling2sem(c) container_of(c, struct srp_semaphore, ceiling) 
+#define ceiling2sem(c) container_of(c, struct srp_semaphore, ceiling)
 
 static int srp_exceeds_ceiling(struct task_struct* first,
 			       struct srp* srp)
@@ -86,7 +86,7 @@ static int srp_exceeds_ceiling(struct task_struct* first,
 	return list_empty(&srp->ceiling) ||
 	       get_rt_period(first) < system_ceiling(srp)->period ||
 	       (get_rt_period(first) == system_ceiling(srp)->period &&
-		first->pid < system_ceiling(srp)->pid) || 
+		first->pid < system_ceiling(srp)->pid) ||
 		ceiling2sem(system_ceiling(srp))->owner == first;
 }
 
@@ -176,7 +176,7 @@ static void do_srp_down(struct srp_semaphore* sem)
 }
 
 static void do_srp_up(struct srp_semaphore* sem)
-{	
+{
 	/* Determine new system priority ceiling for this CPU. */
 	WARN_ON(!in_list(&sem->ceiling.list));
 	if (in_list(&sem->ceiling.list))
@@ -296,7 +296,7 @@ void srp_ceiling_block(void)
 			do_ceiling_block(tsk);
 		TRACE_CUR("finally exceeds system ceiling.\n");
 	} else
-		TRACE_CUR("is not priority ceiling blocked\n");	
+		TRACE_CUR("is not priority ceiling blocked\n");
 	preempt_enable();
 }
 

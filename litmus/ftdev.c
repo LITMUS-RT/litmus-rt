@@ -110,7 +110,7 @@ static int ftdev_open(struct inode *in, struct file *filp)
 	}
 	if (ftdev->can_open && (err = ftdev->can_open(ftdev, buf_idx)))
 		goto out;
-		
+
 	ftdm = ftdev->minor + buf_idx;
 	filp->private_data = ftdm;
 

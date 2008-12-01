@@ -148,7 +148,7 @@ feather_callback void do_sched_trace_task_switch_away(unsigned long id, unsigned
 	}
 }
 
-feather_callback void do_sched_trace_task_completion(unsigned long id, unsigned long _task, 
+feather_callback void do_sched_trace_task_completion(unsigned long id, unsigned long _task,
 						     unsigned long forced)
 {
 	struct task_struct *t = (struct task_struct*) _task;

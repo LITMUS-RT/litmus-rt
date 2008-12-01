@@ -595,7 +595,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 			goto out;
 		ret = plugin->activate_plugin();
 		if (0 != ret) {
-			printk(KERN_INFO "Can't activate %s (%d).\n", 
+			printk(KERN_INFO "Can't activate %s (%d).\n",
 			       plugin->plugin_name, ret);
 			plugin = &linux_sched_plugin;
 		}
