@@ -15,7 +15,7 @@ struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size)
 	char* mem;
 	int order = 0, pages = 1;
 
-	buf = kmalloc(sizeof(struct ft_buffer), GFP_KERNEL);
+	buf = kmalloc(sizeof(*buf), GFP_KERNEL);
 	if (!buf)
 		return NULL;
 
@@ -65,7 +65,7 @@ struct ftdev_event {
 
 static int activate(struct ftdev_event** chain, int id)
 {
-	struct ftdev_event* ev = kmalloc(sizeof(struct ftdev_event), GFP_KERNEL);
+	struct ftdev_event* ev = kmalloc(sizeof(*ev), GFP_KERNEL);
 	if (ev) {
 		printk(KERN_INFO
 		       "Enabling feather-trace event %d.\n", (int) id);
@@ -258,15 +258,15 @@ static ssize_t ftdev_write(struct file *filp, const char __user *from,
 	cmd_t cmd;
 	cmd_t id;
 
-	if (len % sizeof(cmd_t) || len < 2 * sizeof(cmd_t))
+	if (len % sizeof(cmd) || len < 2 * sizeof(cmd))
 		goto out;
 
-	if (copy_from_user(&cmd, from, sizeof(cmd_t))) {
+	if (copy_from_user(&cmd, from, sizeof(cmd))) {
 		err = -EFAULT;
 	        goto out;
 	}
-	len  -= sizeof(cmd_t);
-	from += sizeof(cmd_t);
+	len  -= sizeof(cmd);
+	from += sizeof(cmd);
 
 	if (cmd != FTDEV_ENABLE_CMD && cmd != FTDEV_DISABLE_CMD)
 		goto out;
@@ -276,22 +276,22 @@ static ssize_t ftdev_write(struct file *filp, const char __user *from,
 		goto out;
 	}
 
-	err = sizeof(cmd_t);
+	err = sizeof(cmd);
 	while (len) {
-		if (copy_from_user(&id, from, sizeof(cmd_t))) {
+		if (copy_from_user(&id, from, sizeof(cmd))) {
 			err = -EFAULT;
 			goto out_unlock;
 		}
 		/* FIXME: check id against list of acceptable events */
-		len  -= sizeof(cmd_t);
-		from += sizeof(cmd_t);
+		len  -= sizeof(cmd);
+		from += sizeof(cmd);
 		if (cmd == FTDEV_DISABLE_CMD)
 			deactivate(&ftdm->events, id);
 		else if (activate(&ftdm->events, id) != 0) {
 			err = -ENOMEM;
 			goto out_unlock;
 		}
-		err += sizeof(cmd_t);
+		err += sizeof(cmd);
 	}
 
 out_unlock:

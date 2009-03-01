@@ -247,7 +247,7 @@ static void __scheduler_signal(struct task_struct *t, unsigned int signo,
 {
 	struct sched_sig* sig;
 
-	sig = kmalloc(GFP_ATOMIC, sizeof(struct sched_sig));
+	sig = kmalloc(GFP_ATOMIC, sizeof(*sig));
 	if (!sig) {
 		TRACE_TASK(t, "dropping signal: %u\n", t);
 		return;
@@ -500,7 +500,7 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 //	__setscheduler(p, p->rt_param.old_policy, p->rt_param.old_prio);
 
 	/* Cleanup everything else. */
-	memset(&p->rt_param, 0, sizeof(struct rt_task));
+	memset(&p->rt_param, 0, sizeof(user_config));
 
 	/* Restore preserved fields. */
 	if (restore) {

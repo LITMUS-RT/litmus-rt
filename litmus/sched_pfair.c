@@ -802,7 +802,7 @@ static long pfair_admit_task(struct task_struct* t)
 		period = 1;
 	}
 
-	param = kmalloc(sizeof(struct pfair_param) +
+	param = kmalloc(sizeof(*param) +
 			quanta * sizeof(struct subtask), GFP_ATOMIC);
 
 	if (!param)

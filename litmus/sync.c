@@ -82,7 +82,7 @@ asmlinkage long sys_release_ts(lt_t __user *__delay)
 
 	/* FIXME: check capabilities... */
 
-	ret = copy_from_user(&delay, __delay, sizeof(lt_t));
+	ret = copy_from_user(&delay, __delay, sizeof(delay));
 	if (ret == 0)
 		ret = do_release_ts(litmus_clock() + delay);
 
