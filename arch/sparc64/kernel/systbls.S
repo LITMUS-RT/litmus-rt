@@ -165,7 +165,8 @@ sys_call_table:
 	.word sys_set_rt_task_param, sys_get_rt_task_param, sys_complete_job, sys_register_np_flag, sys_exit_np
 /*320*/
 	.word sys_od_open, sys_od_close, sys_fmlp_down, sys_fmlp_up, sys_srp_down
-/*325*/ .word sys_srp_up, sys_query_job_no, sys_wait_for_job_release, sys_wait_for_ts_release, sys_release_ts
+/*325*/ .word sys_srp_up, sys_query_job_no, sys_wait_for_job_release, sys_wait_for_ts_release
+/*330*/	.word sys_release_ts, sys_null_call
 	
 #if defined(CONFIG_SUNOS_EMUL) || defined(CONFIG_SOLARIS_EMUL) || \
     defined(CONFIG_SOLARIS_EMUL_MODULE)

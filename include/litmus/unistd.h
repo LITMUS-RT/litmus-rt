@@ -16,5 +16,6 @@
 #define __NR_wait_for_job_release __LSC(12)
 #define __NR_wait_for_ts_release __LSC(13)
 #define __NR_release_ts		__LSC(14)
+#define __NR_null_call		__LSC(15)
 
-#define NR_litmus_syscalls 15
+#define NR_litmus_syscalls 16

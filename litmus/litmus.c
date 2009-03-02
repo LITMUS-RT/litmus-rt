@@ -479,6 +479,23 @@ asmlinkage long sys_exit_np(void)
 #endif /* CONFIG_NP_SECTION */
 
 
+/* sys_null_call() is only used for determining raw system call
+ * overheads (kernel entry, kernel exit). It has no useful side effects.
+ * If ts is non-NULL, then the current Feather-Trace time is recorded. 
+ */
+asmlinkage long sys_null_call(cycles_t __user *ts)
+{
+	long ret = 0; 
+	cycles_t now;
+
+	if (ts) {
+		now = get_cycles();
+		ret = put_user(now, ts);
+	}
+
+	return ret;
+}
+
 /* p is a real-time task. Re-init its state as a best-effort task. */
 static void reinit_litmus_state(struct task_struct* p, int restore)
 {
