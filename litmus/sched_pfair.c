@@ -39,7 +39,6 @@ struct pfair_param   {
 	quanta_t	last_quantum; /* when scheduled last */
 	int		last_cpu;     /* where scheduled last */
 
-	unsigned int	present;    /* Can the task be scheduled? */
 	unsigned int	sporadic_release; /* On wakeup, new sporadic release? */
 
 	struct subtask subtasks[0];   /* allocate together with pfair_param */
@@ -154,10 +153,6 @@ static quanta_t cur_group_deadline(struct task_struct* t)
 		return gdl;
 }
 
-static int is_present(struct task_struct* t)
-{
-	return t && tsk_pfair(t)->present;
-}
 
 static int pfair_higher_prio(struct task_struct* first,
 			     struct task_struct* second)
@@ -237,7 +232,7 @@ static void check_preempt(struct task_struct* t)
 {
 	int cpu = NO_CPU;
 	if (tsk_rt(t)->linked_on != tsk_rt(t)->scheduled_on &&
-	    tsk_pfair(t)->present) {
+	    tsk_rt(t)->present) {
 		/* the task can be scheduled and
 		 * is not scheduled where it ought to be scheduled
 		 */
@@ -289,7 +284,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 	p->cur = (p->cur + 1) % p->quanta;
 	if (!p->cur) {
 		sched_trace_task_completion(t, 1);
-		if (tsk_pfair(t)->present) {
+		if (tsk_rt(t)->present) {
 			/* we start a new job */
 			prepare_for_next_period(t);
 			sched_trace_task_release(t);
@@ -562,7 +557,7 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 			   "scheduled already on %d.\n", cpu, where);
 		return 0;
 	} else
-		return tsk_pfair(t)->present && get_rt_flags(t) == RT_F_RUNNING;
+		return tsk_rt(t)->present && get_rt_flags(t) == RT_F_RUNNING;
 }
 
 static struct task_struct* pfair_schedule(struct task_struct * prev)
@@ -574,9 +569,6 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	spin_lock(&pfair_lock);
 
 	blocks  = is_realtime(prev) && !is_running(prev);
-
-	if (blocks)
-		tsk_pfair(prev)->present = 0;
 
 	if (state->local && safe_to_schedule(state->local, state->cpu))
 		next = state->local;
@@ -611,7 +603,6 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 		t->rt_param.scheduled_on = NO_CPU;
 
 	prepare_release(t, pfair_time + 1);
-	tsk_pfair(t)->present = running;
 	tsk_pfair(t)->sporadic_release = 0;
 	pfair_add_release(t);
 	check_preempt(t);
