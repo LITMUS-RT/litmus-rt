@@ -29,8 +29,11 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 	long prev_state;
 	lt_t _maybe_deadlock = 0;
 	/* WARNING: rq is _not_ locked! */
-	if (is_realtime(prev))
+	if (is_realtime(prev)) {
 		update_time_litmus(rq, prev);
+		if (!is_running(prev))
+			tsk_rt(prev)->present = 0;
+	}
 
 	/* let the plugin schedule */
 	rq->litmus_next = litmus->schedule(prev);
@@ -133,6 +136,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p, int wakeup
 {
 	if (wakeup) {
 		sched_trace_task_resume(p);
+		tsk_rt(p)->present = 1;
 		litmus->task_wake_up(p);
 	} else
 		TRACE_TASK(p, "ignoring an enqueue, not a wake up.\n");
@@ -142,6 +146,7 @@ static void dequeue_task_litmus(struct rq *rq, struct task_struct *p, int sleep)
 {
 	if (sleep) {
 		litmus->task_block(p);
+		tsk_rt(p)->present = 0;
 		sched_trace_task_block(p);
 	} else
 		TRACE_TASK(p, "ignoring a dequeue, not going to sleep.\n");

@@ -4419,6 +4419,7 @@ recheck:
 
 	if (policy == SCHED_LITMUS) {
 		p->rt_param.stack_in_use = running ? rq->cpu : NO_CPU;
+		p->rt_param.present = running;
 		litmus->task_new(p, on_rq, running);
 	}
 

@@ -629,8 +629,6 @@ static void pfair_task_wake_up(struct task_struct *t)
 
 	spin_lock_irqsave(&pfair_lock, flags);
 
-	tsk_pfair(t)->present = 1;
-
 	/* It is a little unclear how to deal with Pfair
 	 * tasks that block for a while and then wake. For now,
 	 * if a task blocks and wakes before its next job release,

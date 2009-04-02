@@ -198,6 +198,12 @@ static inline int is_np(struct task_struct *t)
 
 #endif
 
+static inline int is_present(struct task_struct* t)
+{
+	return t && tsk_rt(t)->present;
+}
+
+
 /* make the unit explicit */
 typedef unsigned long quanta_t;
 

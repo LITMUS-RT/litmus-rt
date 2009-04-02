@@ -77,6 +77,9 @@ struct rt_param {
 	/* do we need to check for srp blocking? */
 	unsigned int		srp_non_recurse:1;
 
+	/* is the task present? (true if it can be scheduled) */
+	unsigned int		present:1;
+
 	/* user controlled parameters */
 	struct rt_task 		task_params;
 
