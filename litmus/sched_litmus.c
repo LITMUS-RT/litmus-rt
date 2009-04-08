@@ -26,7 +26,7 @@ static void litmus_tick(struct rq *rq, struct task_struct *p)
 static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
 	struct rq* other_rq;
-	long prev_state;
+	long was_running;
 	lt_t _maybe_deadlock = 0;
 	/* WARNING: rq is _not_ locked! */
 	if (is_realtime(prev)) {
@@ -47,7 +47,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		/* while we drop the lock, the prev task could change its
 		 * state
 		 */
-		prev_state = prev->state;
+		was_running = is_running(prev);
 		mb();
 		spin_unlock(&rq->lock);
 
@@ -93,12 +93,12 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 #endif
 		double_rq_lock(rq, other_rq);
 		mb();
-		if (prev->state != prev_state && is_realtime(prev)) {
+		if (is_realtime(prev) && is_running(prev) != was_running) {
 			TRACE_TASK(prev,
 				   "state changed while we dropped"
-				   " the lock: now=%d, old=%d\n",
-				   prev->state, prev_state);
-			if (prev_state && !prev->state) {
+				   " the lock: is_running=%d, was_running=%d\n",
+				   is_running(prev), was_running);
+			if (is_running(prev) && !was_running) {
 				/* prev task became unblocked
 				 * we need to simulate normal sequence of events
 				 * to scheduler plugins.
