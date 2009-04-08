@@ -202,14 +202,21 @@ static void arm_release_timer(unsigned long _rt)
 	rt->release_queue.timer_armed = 1;
 	rt->release_queue.timer_time  = release;
 	spin_unlock(&rt->release_lock);
-	if (!armed || earlier) {
-		if (armed) {
-			/* need to cancel first */
-			hrtimer_cancel(&rt->release_queue.timer);
-		}
-		hrtimer_start(&rt->release_queue.timer,
-			      ns_to_ktime(release),
-			      HRTIMER_MODE_ABS);
+	if (!armed || earlier) {		
+		if (!armed ||
+		    /* Need to cancel first if already armed. */
+		    hrtimer_try_to_cancel(&rt->release_queue.timer) != -1) {
+			/* timer is known to be inactive => start it */
+			hrtimer_start(&rt->release_queue.timer,
+				      ns_to_ktime(release),
+				      HRTIMER_MODE_ABS);
+		} else
+			/* Couldn't cancel the timer => it must be busy.
+			 * This is ok; the timer callback will take care
+			 * of programming the next activation.
+			 */
+			TRACE("arm_release_timer(): timer callback is busy, "
+			      "can't reprogram.\n");
 	}
 	local_irq_restore(flags);
 }
