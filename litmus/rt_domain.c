@@ -41,11 +41,26 @@ static unsigned int time2slot(lt_t time)
 	return (unsigned int) time2quanta(time, FLOOR) % RELEASE_QUEUE_SLOTS;
 }
 
-int heap_earlier_release(struct heap_node *_a, struct heap_node *_b)
+static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 {
-	struct release_heap *a = _a->value;
-	struct release_heap *b = _b->value;
-	return lt_before(a->release_time, b->release_time);
+	long flags;
+	struct release_heap* rh;
+
+	TS_RELEASE_START;
+
+	rh = container_of(timer, struct release_heap, timer);
+
+	spin_lock_irqsave(&rh->dom->release_lock, flags);
+	/* remove from release queue */
+	list_del(&rh->list);
+	spin_unlock_irqrestore(&rh->dom->release_lock, flags);
+
+	/* call release callback */
+	rh->dom->release_jobs(rh->dom, &rh->heap);
+
+	TS_RELEASE_END;
+
+	return  HRTIMER_NORESTART;
 }
 
 /* Caller most hold release lock.
@@ -78,78 +93,26 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 		}
 	}
 	if (!heap) {
-		/* pre-allocated release heap */
+		/* use pre-allocated release heap */
 		rh = tsk_rt(t)->rel_heap;
+		
+		/* initialize */
 		rh->release_time = release_time;
+		rh->dom = rt;
 		heap_init(&rh->heap);
+		
+		/* initialize timer */
+		hrtimer_init(&rh->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		rh->timer.function = on_release_timer;
+#ifdef CONFIG_HIGH_RES_TIMERS
+		rh->timer.cb_mode = HRTIMER_CB_IRQSAFE;
+#endif
+
+		/* add to release queue */
 		list_add(&rh->list, pos->prev);
-		heap_insert(heap_earlier_release,
-			    &rt->release_queue.rel_heap, rh->hn);
 		heap = rh;
 	}
 	return heap;
-}
-
-static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
-{
-	long flags;
-	rt_domain_t *rt;
-	struct release_heap* rh;
-	struct heap tasks;
-	struct list_head list, *pos, *safe;
-	lt_t release = 0;
-	int pending;
-	int repeat;
-	enum hrtimer_mode ret = HRTIMER_NORESTART;
-
-	TS_RELEASE_START;
-
-	INIT_LIST_HEAD(&list);
-	heap_init(&tasks);
-
-	rt = container_of(timer, rt_domain_t,
-			 release_queue.timer);
-
-	do {
-		list_for_each_safe(pos, safe, &list) {
-			rh = list_entry(pos, struct release_heap, list);
-			heap_union(rt->order, &tasks, &rh->heap);
-			list_del(pos);
-		}
-
-		/* call release callback */
-		if (!heap_empty(&tasks))
-			rt->release_jobs(rt, &tasks);
-
-
-		spin_lock_irqsave(&rt->release_lock, flags);
-		while ((pending = next_release(rt, &release))) {
-			if (lt_before(release, litmus_clock())) {
-				/* pick for release */
-				rh = heap_take(heap_earlier_release,
-					       &rt->release_queue.rel_heap)->value;
-				list_move(&rh->list, &list);
-			} else
-				break;
-		}
-		repeat = !list_empty(&list);
-		if (!repeat) {
-			/* last iteration, setup timers, etc. */
-			if (!pending) {
-				rt->release_queue.timer_armed = 0;
-				ret = HRTIMER_NORESTART;
-			} else {
-				rt->release_queue.timer_time = release;
-				timer->expires = ns_to_ktime(release);
-				ret = HRTIMER_RESTART;
-			}
-		}
-		spin_unlock_irqrestore(&rt->release_lock, flags);
-	} while (repeat);
-
-	TS_RELEASE_END;
-
-	return ret;
 }
 
 static void arm_release_timer(unsigned long _rt)
@@ -160,10 +123,11 @@ static void arm_release_timer(unsigned long _rt)
 	struct list_head *pos, *safe;
 	struct task_struct* t;
 	struct release_heap* rh;
-	int earlier, armed;
+	int armed;
 	lt_t release = 0;
 
 	local_irq_save(flags);
+	TRACE("arm_release_timer() at %llu\n", litmus_clock());
 	spin_lock(&rt->tobe_lock);
 	list_replace_init(&rt->tobe_released, &list);
 	spin_unlock(&rt->tobe_lock);
@@ -171,43 +135,31 @@ static void arm_release_timer(unsigned long _rt)
 	/* We only have to defend against the ISR since norq callbacks
 	 * are serialized.
 	 */
-	spin_lock(&rt->release_lock);
-
 	list_for_each_safe(pos, safe, &list) {
+		/* pick task of work list */
 		t = list_entry(pos, struct task_struct, rt_param.list);
 		sched_trace_task_release(t);
 		list_del(pos);
+
+		/* put into release heap while holding release_lock */
+		spin_lock(&rt->release_lock);
 		rh = get_release_heap(rt, t);
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
-	}
+		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
+		armed   = hrtimer_active(&rh->timer);
+		release = rh->release_time;
+		spin_unlock(&rt->release_lock);
 
-	next_release(rt, &release);
-	armed   = rt->release_queue.timer_armed;
-	earlier = lt_before(release, rt->release_queue.timer_time);
-	/* We'll do the actual arming in a sec. The ISR doesn't care what these
-	 * flags say, and it'll be true before another instance of this
-	 * function can observe the flag due to the sequential nature of norq
-	 * work.
-	 */
-	rt->release_queue.timer_armed = 1;
-	rt->release_queue.timer_time  = release;
-	spin_unlock(&rt->release_lock);
-	if (!armed || earlier) {		
-		if (!armed ||
-		    /* Need to cancel first if already armed. */
-		    hrtimer_try_to_cancel(&rt->release_queue.timer) != -1) {
-			/* timer is known to be inactive => start it */
-			hrtimer_start(&rt->release_queue.timer,
+		/* activate timer if necessary */
+		if (!armed) {
+			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
+			hrtimer_start(&rh->timer,
 				      ns_to_ktime(release),
 				      HRTIMER_MODE_ABS);
 		} else
-			/* Couldn't cancel the timer => it must be busy.
-			 * This is ok; the timer callback will take care
-			 * of programming the next activation.
-			 */
-			TRACE("arm_release_timer(): timer callback is busy, "
-			      "can't reprogram.\n");
+			TRACE_TASK(t, "timer already armed.\n");
 	}
+
 	local_irq_restore(flags);
 }
 
@@ -229,15 +181,8 @@ void rt_domain_init(rt_domain_t *rt,
 
 	heap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->tobe_released);
-	rt->release_queue.timer_armed = 0;
 	for (i = 0; i < RELEASE_QUEUE_SLOTS; i++)
 		INIT_LIST_HEAD(&rt->release_queue.slot[i]);
-
-	hrtimer_init(&rt->release_queue.timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-        rt->release_queue.timer.function = on_release_timer;
-#ifdef CONFIG_HIGH_RES_TIMERS
-        rt->release_queue.timer.cb_mode = HRTIMER_CB_IRQSAFE;
-#endif
 
 	spin_lock_init(&rt->ready_lock);
 	spin_lock_init(&rt->release_lock);

@@ -15,30 +15,10 @@ struct _rt_domain;
 typedef int (*check_resched_needed_t)(struct _rt_domain *rt);
 typedef void (*release_jobs_t)(struct _rt_domain *rt, struct heap* tasks);
 
-int heap_earlier_release(struct heap_node *_a, struct heap_node *_b);
-
-struct release_heap {
-	struct list_head		list;
-	lt_t				release_time;
-	struct heap			heap;
-	/* the node used to enqueue this heap in a
-	 * release queue
-	 */
-	struct heap_node*		hn;
-};
-
 struct release_queue {
 	/* each slot maintains a list of release heaps sorted
 	 * by release time */
 	struct list_head		slot[RELEASE_QUEUE_SLOTS];
-	/* the heap of heaps ordered by release time */
-	struct heap			rel_heap;
-	/* the actual timer used to trigger releases */
-	struct hrtimer			timer;
-	/* used to determine when to start the timer */
-	int				timer_armed;
-	/* when will it go off? */
-	lt_t				timer_time;
 };
 
 typedef struct _rt_domain {
@@ -59,22 +39,25 @@ typedef struct _rt_domain {
 	/* how do we check if we need to kick another CPU? */
 	check_resched_needed_t		check_resched;
 
-	/* how do we release a job? */
+	/* how do we release jobs? */
 	release_jobs_t			release_jobs;
 
 	/* how are tasks ordered in the ready queue? */
 	heap_prio_t			order;
 } rt_domain_t;
 
-/* caller must hold release_lock */
-static inline int next_release(rt_domain_t *rt, lt_t *time)
-{
-	struct heap_node* top = heap_peek(heap_earlier_release,
-					  &rt->release_queue.rel_heap);
-	if (top)
-		*time = ((struct release_heap*) top->value)->release_time;
-	return top != NULL;
-}
+struct release_heap {
+	/* list_head for per-time-slot list */
+	struct list_head		list;
+	lt_t				release_time;
+	/* all tasks to be released at release_time */
+	struct heap			heap;
+	/* used to trigger the release */
+	struct hrtimer			timer;
+	/* required for the timer callback */
+	rt_domain_t*			dom;
+};
+
 
 static inline struct task_struct* __next_ready(rt_domain_t* rt)
 {
