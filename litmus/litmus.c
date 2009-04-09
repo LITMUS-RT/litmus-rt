@@ -554,7 +554,7 @@ long litmus_admit_task(struct task_struct* tsk)
 	spin_lock_irqsave(&task_transition_lock, flags);
 
 	/* allocate heap node for this task */
-	tsk_rt(tsk)->heap_node = kmem_cache_alloc(heap_node_cache, GFP_ATOMIC);
+	tsk_rt(tsk)->heap_node    = heap_node_alloc(GFP_ATOMIC);
 	if (!tsk_rt(tsk)->heap_node) {
 		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
 		retval = -ENOMEM;
@@ -581,7 +581,7 @@ void litmus_exit_task(struct task_struct* tsk)
 		sched_trace_task_completion(tsk, 1);
 		litmus->task_exit(tsk);
 		BUG_ON(heap_node_in_heap(tsk_rt(tsk)->heap_node));
-		kmem_cache_free(heap_node_cache, tsk_rt(tsk)->heap_node);
+	        heap_node_free(tsk_rt(tsk)->heap_node);
 		atomic_dec(&rt_task_count);
 		reinit_litmus_state(tsk, 1);
 	}
