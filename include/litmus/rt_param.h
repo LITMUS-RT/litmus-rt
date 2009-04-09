@@ -40,6 +40,7 @@ struct rt_task {
 
 struct _rt_domain;
 struct heap_node;
+struct release_heap;
 
 struct rt_job {
 	/* Time instant the the job was or will be released.  */
@@ -160,6 +161,7 @@ struct rt_param {
 	 *          implementation).
 	 */
 	struct heap_node*	heap_node;
+	struct release_heap*	rel_heap;
 
 	/* Used by rt_domain to queue task in release list.
 	 */

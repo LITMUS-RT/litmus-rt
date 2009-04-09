@@ -21,6 +21,10 @@ struct release_heap {
 	struct list_head		list;
 	lt_t				release_time;
 	struct heap			heap;
+	/* the node used to enqueue this heap in a
+	 * release queue
+	 */
+	struct heap_node*		hn;
 };
 
 struct release_queue {

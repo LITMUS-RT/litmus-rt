@@ -52,13 +52,13 @@ int heap_earlier_release(struct heap_node *_a, struct heap_node *_b)
  * Will return heap for given time. If no such heap exists prior to the invocation
  * it will be created.
  */
-static struct release_heap* get_release_heap(rt_domain_t *rt, lt_t release_time)
+static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct* t)
 {
 	struct list_head* pos;
 	struct release_heap* heap = NULL;
 	struct release_heap* rh;
+	lt_t release_time = get_release(t);
 	unsigned int slot = time2slot(release_time);
-	int inserted;
 
 	/* initialize pos for the case that the list is empty */
 	pos = rt->release_queue.slot[slot].next;
@@ -78,23 +78,13 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, lt_t release_time)
 		}
 	}
 	if (!heap) {
-		/* must create new node */
-		/* FIXME: use a kmemcache_t */
-		rh = kmalloc(sizeof(*rh), GFP_ATOMIC);
-		if (unlikely(!rh))
-			/* Should be handled somehow.
-			 * For now, let's just hope there is
-			 * sufficient memory.
-			 */
-			panic("rt_domain: no more memory?");
+		/* pre-allocated release heap */
+		rh = tsk_rt(t)->rel_heap;
 		rh->release_time = release_time;
 		heap_init(&rh->heap);
 		list_add(&rh->list, pos->prev);
-		inserted = heap_add(heap_earlier_release,
-				    &rt->release_queue.rel_heap, rh,
-				    GFP_ATOMIC);
-		if (unlikely(!inserted))
-			panic("rt_domain: no more heap memory?");
+		heap_insert(heap_earlier_release,
+			    &rt->release_queue.rel_heap, rh->hn);
 		heap = rh;
 	}
 	return heap;
@@ -125,19 +115,19 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 			rh = list_entry(pos, struct release_heap, list);
 			heap_union(rt->order, &tasks, &rh->heap);
 			list_del(pos);
-			kfree(rh);
 		}
 
 		/* call release callback */
-		rt->release_jobs(rt, &tasks);
+		if (!heap_empty(&tasks))
+			rt->release_jobs(rt, &tasks);
 
 
 		spin_lock_irqsave(&rt->release_lock, flags);
 		while ((pending = next_release(rt, &release))) {
 			if (lt_before(release, litmus_clock())) {
 				/* pick for release */
-				rh = heap_take_del(heap_earlier_release,
-						   &rt->release_queue.rel_heap);
+				rh = heap_take(heap_earlier_release,
+					       &rt->release_queue.rel_heap)->value;
 				list_move(&rh->list, &list);
 			} else
 				break;
@@ -187,8 +177,8 @@ static void arm_release_timer(unsigned long _rt)
 		t = list_entry(pos, struct task_struct, rt_param.list);
 		sched_trace_task_release(t);
 		list_del(pos);
-		rh = get_release_heap(rt, get_release(t));
-		heap_add(rt->order, &rh->heap, t, GFP_ATOMIC);
+		rh = get_release_heap(rt, t);
+		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 	}
 
 	next_release(rt, &release);
