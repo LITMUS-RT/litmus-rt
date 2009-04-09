@@ -26,6 +26,14 @@ int edf_higher_prio(struct task_struct* first,
 	struct task_struct *first_task = first;
 	struct task_struct *second_task = second;
 
+	/* There is no point in comparing a task to itself. */
+	if (first && first == second) {
+		TRACE_TASK(first,
+			   "WARNING: pointless edf priority comparison.");
+		return 0;
+	}
+
+
 	/* Check for inherited priorities. Change task
 	 * used for comparison in such a case.
 	 */
