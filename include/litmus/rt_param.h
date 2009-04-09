@@ -102,12 +102,18 @@ struct rt_param {
 	 */
 	short* 			np_flag;
 
-	/* For the FMLP under PSN-EDF, it is required to make the task
-	 * non-preemptive from kernel space. In order not to interfere with
-	 * user space, this counter indicates the kernel space np setting.
-	 * kernel_np > 0 => task is non-preemptive
-	 */
-	unsigned int 		kernel_np;
+	/* re-use unused counter in plugins that don't need it */
+	union {
+		/* For the FMLP under PSN-EDF, it is required to make the task
+		 * non-preemptive from kernel space. In order not to interfere with
+		 * user space, this counter indicates the kernel space np setting.
+		 * kernel_np > 0 => task is non-preemptive
+		 */
+		unsigned int	kernel_np;
+
+		/* Used by GQ-EDF */
+		unsigned int	last_cpu;
+	};
 
 	/* This field can be used by plugins to store where the task
 	 * is currently scheduled. It is the responsibility of the
