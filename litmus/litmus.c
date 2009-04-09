@@ -17,6 +17,8 @@
 
 #include <litmus/trace.h>
 
+#include <litmus/rt_domain.h>
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(task_transition_lock);
@@ -31,6 +33,7 @@ static LIST_HEAD(sched_sig_list);
 static DEFINE_SPINLOCK(sched_sig_list_lock);
 
 static struct kmem_cache * heap_node_cache;
+static struct kmem_cache * release_heap_cache;
 
 struct heap_node* heap_node_alloc(int gfp_flags)
 {
@@ -40,6 +43,16 @@ struct heap_node* heap_node_alloc(int gfp_flags)
 void heap_node_free(struct heap_node* hn)
 {
 	kmem_cache_free(heap_node_cache, hn);
+}
+
+struct release_heap* release_heap_alloc(int gfp_flags)
+{
+	return kmem_cache_alloc(release_heap_cache, gfp_flags);
+}
+
+void release_heap_free(struct release_heap* rh)
+{
+	kmem_cache_free(release_heap_cache, rh);
 }
 
 /*
@@ -841,9 +854,8 @@ static int __init _init_litmus(void)
 
 	register_sched_plugin(&linux_sched_plugin);
 
-	heap_node_cache = KMEM_CACHE(heap_node, 0);
-	if (!heap_node_cache)
-		return -ENOMEM;
+	heap_node_cache    = KMEM_CACHE(heap_node, SLAB_PANIC);
+	release_heap_cache = KMEM_CACHE(release_heap, SLAB_PANIC);
 
 #ifdef CONFIG_MAGIC_SYSRQ
 	/* offer some debugging help */
@@ -862,6 +874,7 @@ static void _exit_litmus(void)
 {
 	exit_litmus_proc();
 	kmem_cache_destroy(heap_node_cache);
+	kmem_cache_destroy(release_heap_cache);
 }
 
 module_init(_init_litmus);
