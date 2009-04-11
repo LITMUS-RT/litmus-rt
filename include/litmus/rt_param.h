@@ -59,9 +59,6 @@ struct rt_job {
 	 * Increase this sequence number when a job is released.
 	 */
 	unsigned int    job_no;
-
-	/* when did this job start executing? */
-	lt_t	exec_start;
 };
 
 

@@ -5,10 +5,16 @@
 
 static void update_time_litmus(struct rq *rq, struct task_struct *p)
 {
-	lt_t now = litmus_clock();
-	p->rt_param.job_params.exec_time +=
-		now - p->rt_param.job_params.exec_start;
-	p->rt_param.job_params.exec_start = now;
+	u64 delta = rq->clock - p->se.exec_start;
+	if (unlikely((s64)delta < 0))
+		delta = 0;
+	/* per job counter */
+	p->rt_param.job_params.exec_time += delta;
+	/* task counter */
+	p->se.sum_exec_runtime += delta;
+	/* sched_clock() */
+	p->se.exec_start = rq->clock;
+	cpuacct_charge(p, delta);
 }
 
 static void double_rq_lock(struct rq *rq1, struct rq *rq2);
@@ -174,7 +180,7 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq)
 	struct task_struct* picked = rq->litmus_next;
 	rq->litmus_next = NULL;
 	if (picked)
-		picked->rt_param.job_params.exec_start = litmus_clock();
+		picked->se.exec_start = rq->clock;
 	return picked;
 }
 
@@ -189,7 +195,7 @@ static void task_tick_litmus(struct rq *rq, struct task_struct *p)
  */
 static void set_curr_task_litmus(struct rq *rq)
 {
-	rq->curr->rt_param.job_params.exec_start = litmus_clock();
+	rq->curr->se.exec_start = rq->clock;
 }
 
 
