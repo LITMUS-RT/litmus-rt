@@ -2,6 +2,8 @@
  *
  */
 
+#define NO_TASK_TRACE_DECLS
+
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/percpu.h>
@@ -120,7 +122,8 @@ feather_callback void do_sched_trace_task_release(unsigned long id, unsigned lon
 
 /* skipped: st_assigned_data, we don't use it atm */
 
-feather_callback void do_sched_trace_task_switch_to(unsigned long id, unsigned long _task)
+feather_callback void do_sched_trace_task_switch_to(unsigned long id,
+						    unsigned long _task)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec;
@@ -134,7 +137,8 @@ feather_callback void do_sched_trace_task_switch_to(unsigned long id, unsigned l
 	}
 }
 
-feather_callback void do_sched_trace_task_switch_away(unsigned long id, unsigned long _task)
+feather_callback void do_sched_trace_task_switch_away(unsigned long id,
+						      unsigned long _task)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec;
@@ -148,7 +152,8 @@ feather_callback void do_sched_trace_task_switch_away(unsigned long id, unsigned
 	}
 }
 
-feather_callback void do_sched_trace_task_completion(unsigned long id, unsigned long _task,
+feather_callback void do_sched_trace_task_completion(unsigned long id,
+						     unsigned long _task,
 						     unsigned long forced)
 {
 	struct task_struct *t = (struct task_struct*) _task;
@@ -160,7 +165,8 @@ feather_callback void do_sched_trace_task_completion(unsigned long id, unsigned 
 	}
 }
 
-feather_callback void do_sched_trace_task_block(unsigned long id, unsigned long _task)
+feather_callback void do_sched_trace_task_block(unsigned long id,
+						unsigned long _task)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_BLOCK, t);
@@ -170,7 +176,8 @@ feather_callback void do_sched_trace_task_block(unsigned long id, unsigned long 
 	}
 }
 
-feather_callback void do_sched_trace_task_resume(unsigned long id, unsigned long _task)
+feather_callback void do_sched_trace_task_resume(unsigned long id,
+						 unsigned long _task)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_RESUME, t);
@@ -180,7 +187,8 @@ feather_callback void do_sched_trace_task_resume(unsigned long id, unsigned long
 	}
 }
 
-feather_callback void do_sched_trace_sys_release(unsigned long id, unsigned long _start)
+feather_callback void do_sched_trace_sys_release(unsigned long id,
+						 unsigned long _start)
 {
 	lt_t *start = (lt_t*) _start;
 	struct st_event_record* rec = get_record(ST_SYS_RELEASE, NULL);

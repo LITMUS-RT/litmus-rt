@@ -120,6 +120,29 @@ struct st_event_record {
 #define SCHED_TRACE2(id, callback, task, xtra) \
 	ft_event2(id, callback, task, xtra)
 
+/* provide prototypes; needed on sparc64 */
+#ifndef NO_TASK_TRACE_DECLS
+feather_callback void do_sched_trace_task_name(unsigned long id,
+					       struct task_struct* task);
+feather_callback void do_sched_trace_task_param(unsigned long id,
+						struct task_struct* task);
+feather_callback void do_sched_trace_task_release(unsigned long id,
+						  struct task_struct* task);
+feather_callback void do_sched_trace_task_switch_to(unsigned long id,
+						    struct task_struct* task);
+feather_callback void do_sched_trace_task_switch_away(unsigned long id,
+						      struct task_struct* task);
+feather_callback void do_sched_trace_task_completion(unsigned long id,
+						     struct task_struct* task,
+						     unsigned long forced);
+feather_callback void do_sched_trace_task_block(unsigned long id,
+						struct task_struct* task);
+feather_callback void do_sched_trace_task_resume(unsigned long id,
+						 struct task_struct* task);
+feather_callback void do_sched_trace_sys_release(unsigned long id,
+						 unsigned long _start);
+#endif
+
 #else
 
 #define SCHED_TRACE(id, callback, task)        /* no tracing */
