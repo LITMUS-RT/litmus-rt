@@ -248,18 +248,25 @@ static void gq_add_released_queue(struct task_struct *t)
 /* caller holds gq_lock, irqs are disabled */
 static void merge_released_queue(void)
 {
+	spin_lock(&gq_release_lock);
+
+#ifdef CONFIG_SCHED_DEBUG_TRACE
+	/* do it individually (= slooow) 
+	 * so that we can trace each merge
+	 */
 	struct heap_node* hn;
 	struct task_struct* t;
 
-	spin_lock(&gq_release_lock);
 
-//	__merge_ready(&gqedf, &gq_released_heap);
 	while ((hn = heap_take(edf_ready_order, &gq_released_heap))) {
 		t = (struct task_struct*) hn->value;
 		TRACE_TASK(t, "merged into ready queue (is_released:%d)\n",
 			   is_released(t, litmus_clock()));
 		__add_ready(&gqedf, t);
 	}
+#else
+	__merge_ready(&gqedf, &gq_released_heap);
+#endif
 
 	spin_unlock(&gq_release_lock);
 }
