@@ -10,7 +10,8 @@ obj-y     = sched_plugin.o litmus.o \
 	    sched_psn_edf.o \
             sched_cedf.o \
             sched_pfair.o \
-	    sched_gq_edf.o
+	    sched_gq_edf.o \
+	    sched_gedf.o
 
 obj-$(CONFIG_FEATHER_TRACE) += trace.o ft_event.o ftdev.o
 obj-$(CONFIG_SCHED_TASK_TRACE) += sched_task_trace.o
