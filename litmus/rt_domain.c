@@ -80,7 +80,7 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, lt_t release_time)
 	if (!heap) {
 		/* must create new node */
 		/* FIXME: use a kmemcache_t */
-		rh = kmalloc(sizeof(struct release_heap), GFP_ATOMIC);
+		rh = kmalloc(sizeof(*rh), GFP_ATOMIC);
 		if (unlikely(!rh))
 			/* Should be handled somehow.
 			 * For now, let's just hope there is

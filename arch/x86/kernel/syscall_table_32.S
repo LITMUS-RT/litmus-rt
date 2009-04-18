@@ -339,4 +339,5 @@ ENTRY(sys_call_table)
 	.long sys_query_job_no
 	.long sys_wait_for_job_release
 	.long sys_wait_for_ts_release
-	.long sys_release_ts		/* 339 */
+	.long sys_release_ts
+	.long sys_null_call		/* 340 */

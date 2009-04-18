@@ -67,7 +67,7 @@ static struct inode_obj_id* alloc_inode_obj(struct inode* inode,
 	if (!raw_obj)
 		return NULL;
 
-	obj = kmalloc(sizeof(struct inode_obj_id), GFP_KERNEL);
+	obj = kmalloc(sizeof(*obj), GFP_KERNEL);
 	if (!obj)
 		return NULL;
 	INIT_LIST_HEAD(&obj->list);
@@ -134,9 +134,8 @@ static struct od_table_entry*  get_od_entry(struct task_struct* t)
 
 	table = t->od_table;
 	if (!table) {
-		table = (struct od_table_entry*)
-			kzalloc(sizeof(struct  od_table_entry) *
-				MAX_OBJECT_DESCRIPTORS, GFP_KERNEL);
+		table = kzalloc(sizeof(*table) * MAX_OBJECT_DESCRIPTORS, 
+				GFP_KERNEL);
 		t->od_table = table;
 	}
 

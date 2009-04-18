@@ -247,7 +247,7 @@ static void __scheduler_signal(struct task_struct *t, unsigned int signo,
 {
 	struct sched_sig* sig;
 
-	sig = kmalloc(GFP_ATOMIC, sizeof(struct sched_sig));
+	sig = kmalloc(GFP_ATOMIC, sizeof(*sig));
 	if (!sig) {
 		TRACE_TASK(t, "dropping signal: %u\n", t);
 		return;
@@ -479,6 +479,23 @@ asmlinkage long sys_exit_np(void)
 #endif /* CONFIG_NP_SECTION */
 
 
+/* sys_null_call() is only used for determining raw system call
+ * overheads (kernel entry, kernel exit). It has no useful side effects.
+ * If ts is non-NULL, then the current Feather-Trace time is recorded. 
+ */
+asmlinkage long sys_null_call(cycles_t __user *ts)
+{
+	long ret = 0; 
+	cycles_t now;
+
+	if (ts) {
+		now = get_cycles();
+		ret = put_user(now, ts);
+	}
+
+	return ret;
+}
+
 /* p is a real-time task. Re-init its state as a best-effort task. */
 static void reinit_litmus_state(struct task_struct* p, int restore)
 {
@@ -500,7 +517,7 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 //	__setscheduler(p, p->rt_param.old_policy, p->rt_param.old_prio);
 
 	/* Cleanup everything else. */
-	memset(&p->rt_param, 0, sizeof(struct rt_task));
+	memset(&p->rt_param, 0, sizeof(user_config));
 
 	/* Restore preserved fields. */
 	if (restore) {
@@ -595,7 +612,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 			goto out;
 		ret = plugin->activate_plugin();
 		if (0 != ret) {
-			printk(KERN_INFO "Can't activate %s (%d).\n", 
+			printk(KERN_INFO "Can't activate %s (%d).\n",
 			       plugin->plugin_name, ret);
 			plugin = &linux_sched_plugin;
 		}

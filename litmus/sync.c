@@ -44,7 +44,7 @@ static long do_release_ts(lt_t start)
 
 	spin_lock_irqsave(&ts_release.wait.lock, flags);
 	TRACE("<<<<<< synchronous task system release >>>>>>\n");
-	
+
 	sched_trace_sys_release(&start);
 	list_for_each(pos, &ts_release.wait.task_list) {
 		t = (struct task_struct*) list_entry(pos,
@@ -82,7 +82,7 @@ asmlinkage long sys_release_ts(lt_t __user *__delay)
 
 	/* FIXME: check capabilities... */
 
-	ret = copy_from_user(&delay, __delay, sizeof(lt_t));
+	ret = copy_from_user(&delay, __delay, sizeof(delay));
 	if (ret == 0)
 		ret = do_release_ts(litmus_clock() + delay);
 

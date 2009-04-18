@@ -434,7 +434,7 @@ static void schedule_next_quantum(quanta_t time)
 
 	for (cpu = 0; cpu < NR_CPUS; cpu++)
 		if (pstate[cpu]->linked)
-			PTRACE_TASK(pstate[cpu]->linked, 
+			PTRACE_TASK(pstate[cpu]->linked,
 				    " linked on %d.\n", cpu);
 		else
 			PTRACE("(null) linked on %d.\n", cpu);
@@ -511,7 +511,7 @@ static void pfair_tick(struct task_struct* t)
 		cur  = current_quantum(state);
 		PTRACE("q %lu at %llu\n", cur, litmus_clock());
 
-		/* Attempt to advance time. First CPU to get here 
+		/* Attempt to advance time. First CPU to get here
 		 * will prepare the next quantum.
 		 */
 		time = cmpxchg(&pfair_time,
@@ -551,7 +551,7 @@ static void pfair_tick(struct task_struct* t)
 
 	if (state->local != current
 	    && (is_realtime(current) || is_present(state->local)))
-	    set_tsk_need_resched(current);	    
+	    set_tsk_need_resched(current);
 }
 
 static int safe_to_schedule(struct task_struct* t, int cpu)
@@ -802,7 +802,7 @@ static long pfair_admit_task(struct task_struct* t)
 		period = 1;
 	}
 
-	param = kmalloc(sizeof(struct pfair_param) +
+	param = kmalloc(sizeof(*param) +
 			quanta * sizeof(struct subtask), GFP_ATOMIC);
 
 	if (!param)

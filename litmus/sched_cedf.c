@@ -661,7 +661,7 @@ static void cedf_domain_init(int first_cpu, int last_cpu)
 	int cpu;
 
 	/* Create new domain for this cluster. */
-	cedf_domain_t *new_cedf_domain = kmalloc(sizeof(cedf_domain_t),
+	cedf_domain_t *new_cedf_domain = kmalloc(sizeof(*new_cedf_domain),
 						     GFP_KERNEL);
 
 	/* Initialize cluster domain. */

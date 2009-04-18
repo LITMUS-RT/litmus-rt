@@ -23,7 +23,7 @@ static  void* create_fmlp_semaphore(void)
 	struct pi_semaphore* sem;
 	int i;
 
-	sem = kmalloc(sizeof(struct pi_semaphore), GFP_KERNEL);
+	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
 	atomic_set(&sem->count, 1);
