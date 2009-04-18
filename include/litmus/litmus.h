@@ -51,37 +51,6 @@ static inline int in_list(struct list_head* list)
 		);
 }
 
-typedef int (*list_cmp_t)(struct list_head*, struct list_head*);
-
-static inline unsigned int list_insert(struct list_head* new,
-				       struct list_head* head,
-				       list_cmp_t order_before)
-{
-	struct list_head *pos;
-	unsigned int passed = 0;
-
-	BUG_ON(!new);
-
-	/* find a spot where the new entry is less than the next */
-	list_for_each(pos, head) {
-		if (unlikely(order_before(new, pos))) {
-			/* pos is not less than new, thus insert here */
-			__list_add(new, pos->prev, pos);
-			goto out;
-		}
-		passed++;
-	}
-	/* if we get to this point either the list is empty or every entry
-	 * queued element is less than new.
-	 * Let's add new to the end. */
-	list_add_tail(new, head);
- out:
-	return passed;
-}
-
-void list_qsort(struct list_head* list, list_cmp_t less_than);
-
-
 #define RT_PREEMPTIVE 		0x2050 /* = NP */
 #define RT_NON_PREEMPTIVE 	0x4e50 /* =  P */
 #define RT_EXIT_NP_REQUESTED	0x5251 /* = RQ */

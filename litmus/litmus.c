@@ -639,44 +639,6 @@ void exit_litmus(struct task_struct *dead_tsk)
 }
 
 
-void list_qsort(struct list_head* list, list_cmp_t less_than)
-{
-	struct list_head lt;
-	struct list_head geq;
-	struct list_head *pos, *extra, *pivot;
-	int n_lt = 0, n_geq = 0;
-	BUG_ON(!list);
-
-	if (list->next == list)
-		return;
-
-	INIT_LIST_HEAD(&lt);
-	INIT_LIST_HEAD(&geq);
-
-	pivot = list->next;
-	list_del(pivot);
-	list_for_each_safe(pos, extra, list) {
-		list_del(pos);
-		if (less_than(pos, pivot)) {
-			list_add(pos, &lt);
-			n_lt++;
-		} else {
-			list_add(pos, &geq);
-			n_geq++;
-		}
-	}
-	if (n_lt < n_geq) {
-		list_qsort(&lt, less_than);
-		list_qsort(&geq, less_than);
-	} else {
-		list_qsort(&geq, less_than);
-		list_qsort(&lt, less_than);
-	}
-	list_splice(&geq, list);
-	list_add(pivot, list);
-	list_splice(&lt, list);
-}
-
 #ifdef CONFIG_MAGIC_SYSRQ
 int sys_kill(int pid, int sig);
 
