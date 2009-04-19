@@ -1525,7 +1525,7 @@ static int try_to_wake_up(struct task_struct *p, unsigned int state, int sync)
 #endif
 
 	if (is_realtime(p))
-		TRACE_TASK(p, "try_to_wake_up()\n");
+		TRACE_TASK(p, "try_to_wake_up() state:%d\n", p->state);
 	rq = task_rq_lock(p, &flags);
 	old_state = p->state;
 	if (!(old_state & state))
@@ -1661,7 +1661,7 @@ out_running:
 	p->state = TASK_RUNNING;
 out:
 	if (is_realtime(p))
-		TRACE_TASK(p, "try_to_wake_up() done, p->state=%d\n", p->state);
+		TRACE_TASK(p, "try_to_wake_up() done state:%d\n", p->state);
 	task_rq_unlock(rq, &flags);
 	tick_no_rqlock();
 	return success;
