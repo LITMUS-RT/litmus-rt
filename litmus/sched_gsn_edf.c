@@ -395,7 +395,6 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
-	/* Will be released in finish_switch. */
 	spin_lock(&gsnedf_lock);
 	clear_will_schedule();
 
