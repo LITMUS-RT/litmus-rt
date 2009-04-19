@@ -61,6 +61,8 @@ int cheap_insert(cheap_prio_t higher_prio,
 	int stop = 0;
 	unsigned int child, parent, locked;
 	unsigned int wait_for_parent_state;
+	
+	lockdep_off(); /* generates false positives */
 
 	spin_lock(&ch->lock);
 	if (ch->next < ch->size) {
@@ -73,6 +75,7 @@ int cheap_insert(cheap_prio_t higher_prio,
 	} else {
 		/* out of space! */
 		spin_unlock(&ch->lock);
+		lockdep_on();
 		return -1;
 	}		
 	
@@ -133,6 +136,8 @@ int cheap_insert(cheap_prio_t higher_prio,
 			ch->heap[child].tag = CHEAP_READY;
 		spin_unlock(&ch->heap[child].lock);
 	}
+
+	lockdep_on();
 	return 0;
 }
 
@@ -145,6 +150,7 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 	unsigned int ctag;
 	unsigned int left, right, child, parent;
 
+	lockdep_off();
 	spin_lock(&ch->lock);
 	if (ch->next > CHEAP_ROOT) {
 		child = ch->next - 1;
@@ -163,9 +169,11 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 		child = ch->size;
 	spin_unlock(&ch->lock);
 
-	if (child == ch->size)
+	if (child == ch->size) {
+		lockdep_on();
 		/* empty heap */
 		return NULL;
+	}
 
 	/* take value from last leaf */
 	cval = ch->heap[child].value;
@@ -181,6 +189,7 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 	if (ch->heap[CHEAP_ROOT].tag == CHEAP_EMPTY) {
 		/* heap became empty, we got the last one */
 		spin_unlock(&ch->heap[CHEAP_ROOT].lock);
+		lockdep_on();
 		return cval;
 	} else {
 		/* grab value of root (=min), replace with 
@@ -235,5 +244,6 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 		}
 	}
 	spin_unlock(&ch->heap[parent].lock);
+	lockdep_on();
 	return val;
 }
