@@ -106,8 +106,6 @@ cpu_entry_t* cedf_cpu_entries_array[NR_CPUS];
 #define test_will_schedule(cpu) \
 	(atomic_read(&per_cpu(cedf_cpu_entries, cpu).will_schedule))
 
-#define NO_CPU 0xffffffff
-
 /* Cluster size -- currently four. This is a variable to allow for
  * the possibility of changing the cluster size online in the future.
  */

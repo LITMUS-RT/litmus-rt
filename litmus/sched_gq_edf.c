@@ -30,9 +30,6 @@ DEFINE_PER_CPU(cpu_state_t, gq_cpu_entries);
 
 cpu_state_t* gq_cpus[NR_CPUS];
 
-
-#define NO_CPU 0xffffffff
-
 /* the cpus queue themselves according to priority in here */
 static struct heap_node gq_heap_node[NR_CPUS];
 static struct heap      gq_cpu_heap;

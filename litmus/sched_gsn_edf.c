@@ -110,8 +110,6 @@ cpu_entry_t* gsnedf_cpus[NR_CPUS];
 	(atomic_read(&per_cpu(gsnedf_cpu_entries, cpu).will_schedule))
 
 
-#define NO_CPU 0xffffffff
-
 /* the cpus queue themselves according to priority in here */
 static struct heap_node gsnedf_heap_node[NR_CPUS];
 static struct heap      gsnedf_cpu_heap;

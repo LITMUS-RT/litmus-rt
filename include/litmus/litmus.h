@@ -51,6 +51,8 @@ static inline int in_list(struct list_head* list)
 		);
 }
 
+#define NO_CPU			0xffffffff
+
 #define RT_PREEMPTIVE 		0x2050 /* = NP */
 #define RT_NON_PREEMPTIVE 	0x4e50 /* =  P */
 #define RT_EXIT_NP_REQUESTED	0x5251 /* = RQ */

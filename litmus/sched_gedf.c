@@ -28,8 +28,6 @@ DEFINE_PER_CPU(cpu_entry_t, gedf_cpu_entries);
 
 cpu_entry_t* gedf_cpus[NR_CPUS];
 
-#define NO_CPU 0xffffffff
-
 /* the cpus queue themselves according to priority in here */
 static struct heap_node gedf_heap_node[NR_CPUS];
 static struct heap      gedf_cpu_heap;

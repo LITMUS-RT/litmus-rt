@@ -86,8 +86,6 @@ static struct heap release_queue[PFAIR_MAX_PERIOD];
 DEFINE_PER_CPU(struct pfair_state, pfair_state);
 struct pfair_state*  pstate[NR_CPUS]; /* short cut */
 
-#define NO_CPU 0xffffffff
-
 static quanta_t pfair_time = 0; /* the "official" PFAIR clock */
 static quanta_t merge_time = 0; /* Updated after the release queue has been
 				 * merged. Used by drop_all_references().

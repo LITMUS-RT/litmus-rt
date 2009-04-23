@@ -27,8 +27,6 @@ static void litmus_tick(struct rq *rq, struct task_struct *p)
 	litmus->tick(p);
 }
 
-#define NO_CPU -1
-
 static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
 	struct rq* other_rq;
