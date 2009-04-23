@@ -142,25 +142,34 @@ static void arm_release_timer(unsigned long _rt)
 		list_del(pos);
 
 		/* put into release heap while holding release_lock */
-		spin_lock(&rt->release_lock);
+		spin_lock_irqsave(&rt->release_lock, flags);
 		rh = get_release_heap(rt, t);
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
-		armed   = hrtimer_active(&rh->timer);
+		if (rt->release_master == NO_CPU)
+			armed = hrtimer_active(&rh->timer);
+		else
+			armed = atomic_read(&rh->info.state)
+				!= HRTIMER_START_ON_INACTIVE;
 		release = rh->release_time;
-		spin_unlock(&rt->release_lock);
+		spin_unlock_irqrestore(&rt->release_lock, flags);
 
 		/* activate timer if necessary */
 		if (!armed) {
 			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
-			hrtimer_start(&rh->timer,
-				      ns_to_ktime(release),
-				      HRTIMER_MODE_ABS);
+			if (rt->release_master == NO_CPU)
+				hrtimer_start(&rh->timer,
+					      ns_to_ktime(release),
+					      HRTIMER_MODE_ABS);
+			else
+				hrtimer_start_on(rt->release_master,
+						 &rh->info,
+						 &rh->timer,
+						 ns_to_ktime(release),
+						 HRTIMER_MODE_ABS);
 		} else
 			TRACE_TASK(t, "timer already armed.\n");
 	}
-
-	local_irq_restore(flags);
 }
 
 void rt_domain_init(rt_domain_t *rt,
