@@ -3657,6 +3657,8 @@ need_resched:
 need_resched_nonpreemptible:
 	TS_SCHED_START;
 
+	sched_trace_task_switch_away(prev);
+
 	schedule_debug(prev);
 
 	/*
@@ -3692,8 +3694,6 @@ need_resched_nonpreemptible:
 		rq->nr_switches++;
 		rq->curr = next;
 		++*switch_count;
-		sched_trace_task_switch_away(prev);
-		sched_trace_task_switch_to(next);
 
 		TS_SCHED_END(next);
 		TS_CXS_START(next);
@@ -3706,6 +3706,8 @@ need_resched_nonpreemptible:
 	TS_SCHED2_START(current);
 
 	tick_no_rqlock();
+
+	sched_trace_task_switch_to(current);
 
 	if (unlikely(reacquire_kernel_lock(current) < 0)) {
 		cpu = smp_processor_id();
