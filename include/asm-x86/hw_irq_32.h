@@ -32,6 +32,7 @@ extern void (*interrupt[NR_IRQS])(void);
 fastcall void reschedule_interrupt(void);
 fastcall void invalidate_interrupt(void);
 fastcall void call_function_interrupt(void);
+fastcall void pull_timers_interrupt(void);
 #endif
 
 #ifdef CONFIG_X86_LOCAL_APIC

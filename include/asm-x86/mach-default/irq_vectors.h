@@ -49,6 +49,8 @@
 #define RESCHEDULE_VECTOR	0xfc
 #define CALL_FUNCTION_VECTOR	0xfb
 
+#define PULL_TIMERS_VECTOR	0xfa /* LITMUS hrtimer hack */
+
 #define THERMAL_APIC_VECTOR	0xf0
 /*
  * Local APIC timer IRQ vector is on a different priority level,

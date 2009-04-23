@@ -25,6 +25,8 @@
 #include <asm/mmu_context.h>
 #include <mach_apic.h>
 
+#include <litmus/litmus.h>
+
 /*
  *	Some notes on x86 processor bugs affecting SMP operation:
  *
@@ -475,6 +477,12 @@ static void native_smp_send_reschedule(int cpu)
 	send_IPI_mask(cpumask_of_cpu(cpu), RESCHEDULE_VECTOR);
 }
 
+void smp_send_pull_timers(int cpu)
+{
+	WARN_ON(cpu_is_offline(cpu));
+	send_IPI_mask(cpumask_of_cpu(cpu), PULL_TIMERS_VECTOR);
+}
+
 /*
  * Structure and data for smp_call_function(). This is designed to minimise
  * static memory requirements. It also looks cleaner.
@@ -643,6 +651,15 @@ fastcall void smp_reschedule_interrupt(struct pt_regs *regs)
 	ack_APIC_irq();
 	set_tsk_need_resched(current);
 	__get_cpu_var(irq_stat).irq_resched_count++;
+}
+
+extern void hrtimer_pull(void);
+
+fastcall void smp_pull_timers_interrupt(struct pt_regs *regs)
+{
+	ack_APIC_irq();
+	TRACE("pull timers interrupt\n");
+	hrtimer_pull();
 }
 
 fastcall void smp_call_function_interrupt(struct pt_regs *regs)

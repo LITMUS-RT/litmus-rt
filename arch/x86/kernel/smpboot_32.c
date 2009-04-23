@@ -1323,6 +1323,8 @@ void __init smp_intr_init(void)
 
 	/* IPI for generic function call */
 	set_intr_gate(CALL_FUNCTION_VECTOR, call_function_interrupt);
+
+	set_intr_gate(PULL_TIMERS_VECTOR, pull_timers_interrupt);
 }
 
 /*
