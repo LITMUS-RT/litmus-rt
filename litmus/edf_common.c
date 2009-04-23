@@ -29,7 +29,7 @@ int edf_higher_prio(struct task_struct* first,
 	/* There is no point in comparing a task to itself. */
 	if (first && first == second) {
 		TRACE_TASK(first,
-			   "WARNING: pointless edf priority comparison.");
+			   "WARNING: pointless edf priority comparison.\n");
 		return 0;
 	}
 
