@@ -813,6 +813,73 @@ remove_hrtimer(struct hrtimer *timer, struct hrtimer_clock_base *base)
 	return 0;
 }
 
+void hrtimer_pull(void)
+{
+	struct hrtimer_cpu_base* base = &__get_cpu_var(hrtimer_bases);
+	struct hrtimer_start_on_info* info;
+	struct list_head *pos, *safe, list;
+
+	spin_lock(&base->lock);
+	list_replace_init(&base->to_pull, &list);
+	spin_unlock(&base->lock);
+
+	list_for_each_safe(pos, safe, &list) {
+		info = list_entry(pos, struct hrtimer_start_on_info, list);
+		TRACE("pulled timer 0x%x\n", info->timer);
+		list_del(pos);
+		hrtimer_start(info->timer, info->time, info->mode);
+		mb();
+		atomic_set(&info->state, HRTIMER_START_ON_PROCESSED);
+	}
+}
+
+int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
+		     struct hrtimer *timer, ktime_t time,
+		     const enum hrtimer_mode mode)
+{
+	unsigned long flags;
+	struct hrtimer_cpu_base* base;
+	int in_use = 0, was_empty;
+
+	/* serialize access to info through the timer base */
+	lock_hrtimer_base(timer, &flags);
+
+	in_use = atomic_read(&info->state) != HRTIMER_START_ON_INACTIVE;
+	if (!in_use) {
+		INIT_LIST_HEAD(&info->list);
+		info->timer = timer;
+		info->time  = time;
+		info->mode  = mode;
+		/* mark as in use */
+		atomic_set(&info->state, HRTIMER_START_ON_QUEUED);
+	}
+
+	unlock_hrtimer_base(timer, &flags);
+
+	if (!in_use) {
+		/* initiate pull  */
+		preempt_disable();
+		if (cpu == smp_processor_id()) {
+			/* start timer locally */
+			hrtimer_start(info->timer, info->time, info->mode);
+			atomic_set(&info->state, HRTIMER_START_ON_PROCESSED);
+		} else {
+			base = &per_cpu(hrtimer_bases, cpu);
+			spin_lock_irqsave(&base->lock, flags);
+			was_empty = list_empty(&base->to_pull);
+			list_add(&info->list, &base->to_pull);
+			spin_unlock_irqrestore(&base->lock, flags);
+			if (was_empty)
+				/* only send IPI if other no else 
+				 * has done so already
+				 */
+				smp_send_pull_timers(cpu);
+		}
+		preempt_enable();
+	}
+	return in_use;
+}
+
 /**
  * hrtimer_start - (re)start an relative timer on the current CPU
  * @timer:	the timer to be added

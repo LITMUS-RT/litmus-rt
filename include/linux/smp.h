@@ -35,6 +35,12 @@ extern void smp_send_reschedule(int cpu);
 
 
 /*
+ * sends a 'pull timers' event to another CPU:
+ */
+extern void smp_send_pull_timers(int cpu);
+
+
+/*
  * Prepare machine for booting other CPUs.
  */
 extern void smp_prepare_cpus(unsigned int max_cpus);

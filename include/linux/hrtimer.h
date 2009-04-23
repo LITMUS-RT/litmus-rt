@@ -200,6 +200,19 @@ struct hrtimer_cpu_base {
 	struct list_head		cb_pending;
 	unsigned long			nr_events;
 #endif
+	struct list_head		to_pull;
+};
+
+#define HRTIMER_START_ON_INACTIVE	0
+#define HRTIMER_START_ON_QUEUED		1
+#define HRTIMER_START_ON_PROCESSED	2
+
+struct hrtimer_start_on_info {
+	struct list_head	list;
+	struct hrtimer*		timer;
+	ktime_t			time;
+	enum hrtimer_mode	mode;
+	atomic_t		state;
 };
 
 #ifdef CONFIG_HIGH_RES_TIMERS
@@ -262,6 +275,9 @@ extern void hrtimer_init(struct hrtimer *timer, clockid_t which_clock,
 /* Basic timer operations: */
 extern int hrtimer_start(struct hrtimer *timer, ktime_t tim,
 			 const enum hrtimer_mode mode);
+extern int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
+			    struct hrtimer *timer, ktime_t time,
+			    const enum hrtimer_mode mode);
 extern int hrtimer_cancel(struct hrtimer *timer);
 extern int hrtimer_try_to_cancel(struct hrtimer *timer);
 
