@@ -18,6 +18,7 @@
 #define PIL_SMP_CAPTURE		3
 #define PIL_SMP_CTX_NEW_VERSION	4
 #define PIL_DEVICE_IRQ		5
+#define PIL_SMP_PULL_TIMERS	6
 
 #ifndef __ASSEMBLY__
 #define PIL_RESERVED(PIL)	((PIL) == PIL_SMP_CALL_FUNC || \

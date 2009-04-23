@@ -46,6 +46,8 @@
 #include <asm/ldc.h>
 #include <asm/hypervisor.h>
 
+#include <litmus/litmus.h>
+
 extern void calibrate_delay(void);
 
 int sparc64_multi_core __read_mostly;
@@ -903,6 +905,7 @@ extern unsigned long xcall_flush_tlb_kernel_range;
 extern unsigned long xcall_report_regs;
 extern unsigned long xcall_receive_signal;
 extern unsigned long xcall_new_mmu_context_version;
+extern unsigned long xcall_pull_timers;
 
 #ifdef DCACHE_ALIASING_POSSIBLE
 extern unsigned long xcall_flush_dcache_page_cheetah;
@@ -1416,6 +1419,24 @@ void smp_send_reschedule(int cpu)
 {
 	smp_receive_signal(cpu);
 }
+
+void smp_send_pull_timers(int cpu)
+{
+	cpumask_t mask = cpumask_of_cpu(cpu);
+
+	if (cpu_online(cpu))
+		smp_cross_call_masked(&xcall_pull_timers, 0, 0, 0, mask);
+}
+
+void hrtimer_pull(void);
+
+void smp_pull_timers_client(int irq, struct pt_regs *regs)
+{
+	clear_softint(1 << irq);
+	TRACE("pull timers interrupt\n");
+	hrtimer_pull();
+}
+
 
 /* This is a nop because we capture all other cpus
  * anyways when making the PROM active.
