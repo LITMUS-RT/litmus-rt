@@ -339,6 +339,12 @@ static struct task_struct* gedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, exists, blocks;
 	struct task_struct* next = NULL;
 
+	/* Bail out earlier if we are the release master.
+	 * The release master never schedules any real-time tasks.
+	 */
+	if (gedf.release_master == entry->cpu)
+		return NULL;
+
 	TRACE_TASK(prev, "invoked gedf_schedule.\n");
 
 	/* sanity checking */
@@ -540,14 +546,20 @@ static long gedf_activate_plugin(void)
 	cpu_entry_t *entry;
 
 	heap_init(&gedf_cpu_heap);
+	gedf.release_master = atomic_read(&release_master_cpu);
+
 	for_each_online_cpu(cpu) {
-		TRACE("G-EDF: Initializing CPU #%d.\n", cpu);
 		entry = &per_cpu(gedf_cpu_entries, cpu);
 		heap_node_init(&entry->hn, entry);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
 		entry->picked    = 0;
-		update_cpu_position(entry);
+		if (cpu != gedf.release_master) {
+			TRACE("G-EDF: Initializing CPU #%d.\n", cpu);
+			update_cpu_position(entry);
+		} else {
+			TRACE("G-EDF: CPU %d is release master.\n", cpu);
+		}
 	}
 	return 0;
 }
