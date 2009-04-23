@@ -43,6 +43,8 @@ void tick_no_rqlock(void)
 	next = __get_cpu_var(norq_worklist).next;
 	__get_cpu_var(norq_worklist).next = NULL;
 
+	local_irq_restore(flags);
+
 	while (next) {
 		todo = next;
 		next = next->next;
@@ -52,5 +54,5 @@ void tick_no_rqlock(void)
 		todo->work(todo->arg);
 	}
 
-	local_irq_restore(flags);
+
 }
