@@ -9,8 +9,7 @@
 #include <linux/jiffies.h>
 #include <litmus/sched_trace.h>
 
-/*	RT mode start time	*/
-extern volatile unsigned long rt_start_time;
+extern atomic_t release_master_cpu;
 
 extern atomic_t __log_seq_no;
 

@@ -26,6 +26,9 @@ static DEFINE_SPINLOCK(task_transition_lock);
 /* Give log messages sequential IDs. */
 atomic_t __log_seq_no = ATOMIC_INIT(0);
 
+/* current master CPU for handling timer IRQs */
+atomic_t release_master_cpu = ATOMIC_INIT(NO_CPU);
+
 /* To send signals from the scheduler
  * Must drop locks first.
  */
@@ -763,10 +766,61 @@ static int proc_write_curr(struct file *file,
 }
 
 
+static int proc_read_release_master(char *page, char **start,
+				    off_t off, int count,
+				    int *eof, void *data)
+{
+	int len, master;
+	master = atomic_read(&release_master_cpu);
+	if (master == NO_CPU)
+		len = snprintf(page, PAGE_SIZE, "NO_CPU\n");
+	else
+		len = snprintf(page, PAGE_SIZE, "%d\n", master);
+	return len;
+}
+
+static int proc_write_release_master(struct file *file,
+				     const char *buffer,
+				     unsigned long count,
+				     void *data)
+{
+	int cpu, err, online = 0;
+	char msg[64];
+
+	if (count > 63)
+		return -EINVAL;
+	
+	if (copy_from_user(msg, buffer, count))
+		return -EFAULT;
+
+	/* terminate */
+	msg[count] = '\0';
+	/* chomp */
+	if (count > 1 && msg[count - 1] == '\n')
+		msg[count - 1] = '\0';
+
+	if (strcmp(msg, "NO_CPU") == 0) {	       
+		atomic_set(&release_master_cpu, NO_CPU);
+		return count;
+	} else {
+		err = sscanf(msg, "%d", &cpu);
+		if (err == 1 && cpu >= 0 && (online = cpu_online(cpu))) {
+			atomic_set(&release_master_cpu, cpu);
+			return count;
+		} else {
+			TRACE("invalid release master: '%s' "
+			      "(err:%d cpu:%d online:%d)\n",
+			      msg, err, cpu, online);
+			return -EINVAL;
+		}
+	}
+}
+
 static struct proc_dir_entry *litmus_dir = NULL,
 	*curr_file = NULL,
 	*stat_file = NULL,
-	*plugs_file = NULL;
+	*plugs_file = NULL,
+	*release_master_file = NULL;
 
 static int __init init_litmus_proc(void)
 {
@@ -787,6 +841,17 @@ static int __init init_litmus_proc(void)
 	curr_file->owner = THIS_MODULE;
 	curr_file->read_proc  = proc_read_curr;
 	curr_file->write_proc = proc_write_curr;
+
+	release_master_file = create_proc_entry("release_master",
+						0644, litmus_dir);
+	if (!release_master_file) {
+		printk(KERN_ERR "Could not allocate release_master "
+		       "procfs entry.\n");
+		return -ENOMEM;
+	}
+	release_master_file->owner = THIS_MODULE;
+	release_master_file->read_proc = proc_read_release_master;
+	release_master_file->write_proc  = proc_write_release_master;
 
 	stat_file = create_proc_read_entry("stats", 0444, litmus_dir,
 					   proc_read_stats, NULL);
