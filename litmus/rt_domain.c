@@ -95,12 +95,12 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 	if (!heap) {
 		/* use pre-allocated release heap */
 		rh = tsk_rt(t)->rel_heap;
-		
+
 		/* initialize */
 		rh->release_time = release_time;
 		rh->dom = rt;
 		heap_init(&rh->heap);
-		
+
 		/* initialize timer */
 		hrtimer_init(&rh->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 		rh->timer.function = on_release_timer;
@@ -108,6 +108,7 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 		rh->timer.cb_mode = HRTIMER_CB_IRQSAFE;
 #endif
 
+		atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 		/* add to release queue */
 		list_add(&rh->list, pos->prev);
 		heap = rh;
@@ -126,15 +127,14 @@ static void arm_release_timer(unsigned long _rt)
 	int armed;
 	lt_t release = 0;
 
-	local_irq_save(flags);
-	TRACE("arm_release_timer() at %llu\n", litmus_clock());
-	spin_lock(&rt->tobe_lock);
-	list_replace_init(&rt->tobe_released, &list);
-	spin_unlock(&rt->tobe_lock);
-
 	/* We only have to defend against the ISR since norq callbacks
 	 * are serialized.
 	 */
+	TRACE("arm_release_timer() at %llu\n", litmus_clock());
+	spin_lock_irqsave(&rt->tobe_lock, flags);
+	list_replace_init(&rt->tobe_released, &list);
+	spin_unlock_irqrestore(&rt->tobe_lock, flags);
+
 	list_for_each_safe(pos, safe, &list) {
 		/* pick task of work list */
 		t = list_entry(pos, struct task_struct, rt_param.list);
@@ -187,6 +187,8 @@ void rt_domain_init(rt_domain_t *rt,
 		release = default_release_jobs;
 	if (!order)
 		order = dummy_order;
+
+	rt->release_master = NO_CPU;
 
 	heap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->tobe_released);
