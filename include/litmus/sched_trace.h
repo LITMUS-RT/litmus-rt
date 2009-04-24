@@ -140,7 +140,7 @@ feather_callback void do_sched_trace_task_block(unsigned long id,
 feather_callback void do_sched_trace_task_resume(unsigned long id,
 						 struct task_struct* task);
 feather_callback void do_sched_trace_sys_release(unsigned long id,
-						 unsigned long _start);
+						 lt_t* start);
 #endif
 
 #else
