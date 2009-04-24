@@ -304,6 +304,12 @@ static struct task_struct* gq_schedule(struct task_struct * prev)
 	int sleep, preempt, exists, blocks, out_of_time;
 	struct task_struct* next = NULL;
 
+	/* Bail out early if we are the release master.
+	 * The release master never schedules any real-time tasks.
+	 */
+	if (gqedf.release_master == entry->cpu)
+		return NULL;
+
 	spin_lock(&gq_lock);
 
 	/* sanity checking */
@@ -407,18 +413,21 @@ static void gq_task_new(struct task_struct * t, int on_rq, int running)
 	unsigned long 		flags;
 	cpu_state_t* 		entry;
 
-	TRACE("gsn edf: task new %d\n", t->pid);
+	TRACE("gq edf: task new %d\n", t->pid);
 
 	spin_lock_irqsave(&gq_lock, flags);
 	if (running) {
 		entry = &per_cpu(gq_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
-		entry->scheduled = t;
-		t->rt_param.scheduled_on = task_cpu(t);
 		set_tsk_need_resched(t);
+		if (entry->cpu != gqedf.release_master) {
+			tsk_rt(t)->scheduled_on = task_cpu(t);
+			entry->scheduled = t;
+		} else
+			tsk_rt(t)->scheduled_on = NO_CPU;
 	} else
-		t->rt_param.scheduled_on = NO_CPU;
-	t->rt_param.linked_on          = NO_CPU;
+		tsk_rt(t)->scheduled_on = NO_CPU;
+	tsk_rt(t)->linked_on          = NO_CPU;
 
 	/* setup job params */
 	release_at(t, litmus_clock());
@@ -521,15 +530,21 @@ static long gq_activate_plugin(void)
 
 	heap_init(&gq_cpu_heap);
 	heap_init(&gq_released_heap);
+	gqedf.release_master = atomic_read(&release_master_cpu);
+
 
 	for_each_online_cpu(cpu) {
-		TRACE("GQ: Initializing CPU #%d.\n", cpu);
 		entry = &per_cpu(gq_cpu_entries, cpu);
 		heap_node_init(&entry->hn, entry);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
 		entry->absentee  = NULL;
-		update_cpu_position(entry);
+		if (cpu != gqedf.release_master) {
+			TRACE("GQ-EDF: Initializing CPU #%d.\n", cpu);
+			update_cpu_position(entry);
+		} else {
+			TRACE("GQ-EDF: CPU %d is release master.\n", cpu);
+		}
 	}
 	return 0;
 }
