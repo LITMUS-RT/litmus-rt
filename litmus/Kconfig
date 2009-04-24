@@ -37,8 +37,17 @@ endmenu
 
 menu "Tracing"
 
+config FEATHER_TRACE
+	bool "Feather-Trace Infrastructure"
+	default y
+	help
+	  Feather-Trace basic tracing infrastructure. Includes device file
+	  driver and instrumentation point support.
+	  
+
 config SCHED_TASK_TRACE
 	bool "Trace real-time tasks"
+	depends on FEATHER_TRACE
 	default y
 	help
 	  Include support for the sched_trace_XXX() tracing functions. This
@@ -63,13 +72,12 @@ config SCHED_DEBUG_TRACE
 	  Say Yes for debugging.
 	  Say No for overhead tracing.
 
-config FEATHER_TRACE
-	bool "Feather-Trace Instrumentation Support"
-	default y
+config SCHED_OVERHEAD_TRACE
+	bool "Record timestamps for overhead measurements"
+	depends on FEATHER_TRACE
+	default n
 	help
-	  Include Feather-Trace trace points. Currently not supported on
-	  sparc64.
-
+	  Export event stream for overhead tracing.
 	  Say Yes for overhead tracing.
 
 

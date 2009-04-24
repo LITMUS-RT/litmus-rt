@@ -1,7 +1,7 @@
 #ifndef _SYS_TRACE_H_
 #define	_SYS_TRACE_H_
 
-#ifdef CONFIG_FEATHER_TRACE
+#ifdef CONFIG_SCHED_OVERHEAD_TRACE
 
 #include <litmus/feather_trace.h>
 #include <litmus/feather_buffer.h>
@@ -34,7 +34,7 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
 
 #define TTIMESTAMP(id, task) ft_event1(id, save_timestamp_task, (unsigned long) task)
 
-#else /* !CONFIG_FEATHER_TRACE */
+#else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
 #define TIMESTAMP(id)        /* no tracing */
 
