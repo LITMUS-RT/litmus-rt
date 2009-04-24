@@ -339,7 +339,7 @@ static struct task_struct* gedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, exists, blocks;
 	struct task_struct* next = NULL;
 
-	/* Bail out earlier if we are the release master.
+	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
 	if (gedf.release_master == entry->cpu)
@@ -474,11 +474,14 @@ static void gedf_task_new(struct task_struct * t, int on_rq, int running)
 	if (running) {
 		entry = &per_cpu(gedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
-		entry->scheduled = t;
-		t->rt_param.scheduled_on = task_cpu(t);
+		if (entry->cpu != gedf.release_master) {
+			entry->scheduled = t;
+			t->rt_param.scheduled_on = task_cpu(t);
+		} else
+			tsk_rt(t)->scheduled_on = NO_CPU;
 	} else
-		t->rt_param.scheduled_on = NO_CPU;
-	t->rt_param.linked_on          = NO_CPU;
+		tsk_rt(t)->scheduled_on = NO_CPU;
+	tsk_rt(t)->linked_on          = NO_CPU;
 
 	/* setup job params */
 	release_at(t, litmus_clock());
