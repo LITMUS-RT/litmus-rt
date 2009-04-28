@@ -14,7 +14,8 @@ static struct ftdev overhead_dev;
 
 static unsigned int ts_seq_no = 0;
 
-static inline void __save_timestamp(unsigned long event, uint8_t type)
+static inline void __save_timestamp_cpu(unsigned long event,
+					uint8_t type, uint8_t cpu)
 {
 	unsigned int seq_no;
 	struct timestamp *ts;
@@ -23,10 +24,16 @@ static inline void __save_timestamp(unsigned long event, uint8_t type)
 		ts->event     = event;
 		ts->timestamp = ft_timestamp();
 		ts->seq_no    = seq_no;
-		ts->cpu       = raw_smp_processor_id();
+		ts->cpu       = cpu;
 		ts->task_type = type;
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
+}
+
+static inline void __save_timestamp(unsigned long event,
+				   uint8_t type)
+{
+	__save_timestamp_cpu(event, type, raw_smp_processor_id());
 }
 
 feather_callback void save_timestamp(unsigned long event)
@@ -34,15 +41,23 @@ feather_callback void save_timestamp(unsigned long event)
 	__save_timestamp(event, TSK_UNKNOWN);
 }
 
-feather_callback void save_timestamp_def(unsigned long event, unsigned long type)
+feather_callback void save_timestamp_def(unsigned long event,
+					 unsigned long type)
 {
 	__save_timestamp(event, (uint8_t) type);
 }
 
-feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr)
+feather_callback void save_timestamp_task(unsigned long event,
+					  unsigned long t_ptr)
 {
 	int rt = is_realtime((struct task_struct *) t_ptr);
 	__save_timestamp(event, rt ? TSK_RT : TSK_BE);
+}
+
+feather_callback void save_timestamp_cpu(unsigned long event,
+					 unsigned long cpu)
+{
+	__save_timestamp_cpu(event, TSK_UNKNOWN, cpu);
 }
 
 /******************************************************************************/

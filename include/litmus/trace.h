@@ -27,12 +27,18 @@ struct timestamp {
 feather_callback void save_timestamp(unsigned long event);
 feather_callback void save_timestamp_def(unsigned long event, unsigned long type);
 feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr);
+feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu);
+
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
 #define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, def)
 
-#define TTIMESTAMP(id, task) ft_event1(id, save_timestamp_task, (unsigned long) task)
+#define TTIMESTAMP(id, task) \
+	ft_event1(id, save_timestamp_task, (unsigned long) task)
+
+#define CTIMESTAMP(id, cpu) \
+	ft_event1(id, save_timestamp_cpu, cpu)
 
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
@@ -41,6 +47,8 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
 #define DTIMESTAMP(id, def)  /* no tracing */
 
 #define TTIMESTAMP(id, task) /* no tracing */
+
+#define CTIMESTAMP(id, cpu)  /* no tracing */
 
 #endif
 
@@ -98,6 +106,8 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
 #define TS_FIFO_DOWN_START		TIMESTAMP(182)
 #define TS_FIFO_DOWN_END		TIMESTAMP(183)
 
+#define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
+#define TS_SEND_RESCHED_END		DTIMESTAMP(191, TSK_UNKNOWN)
 
 
 #endif /* !_SYS_TRACE_H_ */
