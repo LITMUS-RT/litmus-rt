@@ -47,6 +47,7 @@
 #include <asm/hypervisor.h>
 
 #include <litmus/litmus.h>
+#include <litmus/trace.h>
 
 extern void calibrate_delay(void);
 
@@ -1037,6 +1038,7 @@ void smp_receive_signal_client(int irq, struct pt_regs *regs)
 {
 	clear_softint(1 << irq);
 	set_tsk_need_resched(current);
+	TS_SEND_RESCHED_END;
 }
 
 void smp_new_mmu_context_version_client(int irq, struct pt_regs *regs)
@@ -1417,6 +1419,7 @@ void __init smp_cpus_done(unsigned int max_cpus)
 
 void smp_send_reschedule(int cpu)
 {
+	TS_SEND_RESCHED_START(cpu);
 	smp_receive_signal(cpu);
 }
 
