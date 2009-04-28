@@ -26,6 +26,7 @@
 #include <mach_apic.h>
 
 #include <litmus/litmus.h>
+#include <litmus/trace.h>
 
 /*
  *	Some notes on x86 processor bugs affecting SMP operation:
@@ -474,6 +475,7 @@ void flush_tlb_all(void)
 static void native_smp_send_reschedule(int cpu)
 {
 	WARN_ON(cpu_is_offline(cpu));
+	TS_SEND_RESCHED_START(cpu);
 	send_IPI_mask(cpumask_of_cpu(cpu), RESCHEDULE_VECTOR);
 }
 
@@ -651,6 +653,7 @@ fastcall void smp_reschedule_interrupt(struct pt_regs *regs)
 	ack_APIC_irq();
 	set_tsk_need_resched(current);
 	__get_cpu_var(irq_stat).irq_resched_count++;
+	TS_SEND_RESCHED_END;
 }
 
 extern void hrtimer_pull(void);
