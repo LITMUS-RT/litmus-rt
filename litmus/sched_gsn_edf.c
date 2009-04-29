@@ -393,6 +393,12 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
+	/* Bail out early if we are the release master.
+	 * The release master never schedules any real-time tasks.
+	 */
+	if (gsnedf.release_master == entry->cpu)
+		return NULL;
+
 	spin_lock(&gsnedf_lock);
 	clear_will_schedule();
 
@@ -508,17 +514,22 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 	TRACE("gsn edf: task new %d\n", t->pid);
 
 	spin_lock_irqsave(&gsnedf_lock, flags);
-	if (running) {
-		entry = &per_cpu(gsnedf_cpu_entries, task_cpu(t));
-		BUG_ON(entry->scheduled);
-		entry->scheduled = t;
-		t->rt_param.scheduled_on = task_cpu(t);
-	} else
-		t->rt_param.scheduled_on = NO_CPU;
-	t->rt_param.linked_on          = NO_CPU;
 
 	/* setup job params */
 	release_at(t, litmus_clock());
+
+	if (running) {
+		entry = &per_cpu(gsnedf_cpu_entries, task_cpu(t));
+		BUG_ON(entry->scheduled);
+		if (entry->cpu != gsnedf.release_master) {
+			entry->scheduled = t;
+			tsk_rt(t)->scheduled_on = task_cpu(t);
+		} else
+			tsk_rt(t)->scheduled_on = NO_CPU;
+	} else {
+		t->rt_param.scheduled_on = NO_CPU;
+	}
+	t->rt_param.linked_on          = NO_CPU;
 
 	gsnedf_job_arrival(t);
 	spin_unlock_irqrestore(&gsnedf_lock, flags);
@@ -678,6 +689,29 @@ static long gsnedf_admit_task(struct task_struct* tsk)
 	return 0;
 }
 
+static long gsnedf_activate_plugin(void)
+{
+	int cpu;
+	cpu_entry_t *entry;
+
+	heap_init(&gsnedf_cpu_heap);
+	gsnedf.release_master = atomic_read(&release_master_cpu);
+
+	for_each_online_cpu(cpu) {
+		entry = &per_cpu(gsnedf_cpu_entries, cpu);
+		heap_node_init(&entry->hn, entry);
+		atomic_set(&entry->will_schedule, 0);
+		entry->linked    = NULL;
+		entry->scheduled = NULL;
+		if (cpu != gsnedf.release_master) {
+			TRACE("GSN-EDF: Initializing CPU #%d.\n", cpu);
+			update_cpu_position(entry);
+		} else {
+			TRACE("GSN-EDF: CPU %d is release master.\n", cpu);
+		}
+	}
+	return 0;
+}
 
 /*	Plugin object	*/
 static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
@@ -696,7 +730,8 @@ static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.inherit_priority	= gsnedf_inherit_priority,
 	.return_priority	= gsnedf_return_priority,
 #endif
-	.admit_task		= gsnedf_admit_task
+	.admit_task		= gsnedf_admit_task,
+	.activate_plugin	= gsnedf_activate_plugin,
 };
 
 
@@ -711,8 +746,6 @@ static int __init init_gsn_edf(void)
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
 		gsnedf_cpus[cpu] = entry;
 		atomic_set(&entry->will_schedule, 0);
-		entry->linked    = NULL;
-		entry->scheduled = NULL;
 		entry->cpu 	 = cpu;
 		entry->hn        = &gsnedf_heap_node[cpu];
 		heap_node_init(&entry->hn, entry);
