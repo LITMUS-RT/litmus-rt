@@ -593,12 +593,13 @@ static void ghqedf_task_new(struct task_struct * t, int on_rq, int running)
 			tsk_rt(t)->scheduled_on = NO_CPU;
 	} else {
 		tsk_rt(t)->scheduled_on = NO_CPU;
-		ghqedf_job_arrival(t);
 	}
 	tsk_rt(t)->linked_on          = NO_CPU;
 
 	spin_unlock_irqrestore(&ghqedf_cpu_lock, flags);
 
+	if (!running || entry->cpu == ghqedf.release_master)
+		ghqedf_job_arrival(t);
 }
 
 static void ghqedf_task_wake_up(struct task_struct *task)

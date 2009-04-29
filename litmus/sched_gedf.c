@@ -1,3 +1,4 @@
+
 #include <linux/spinlock.h>
 #include <linux/percpu.h>
 #include <linux/sched.h>
@@ -217,7 +218,7 @@ static void check_for_preemptions(void)
 	struct task_struct *task, *unlinked;
 	cpu_entry_t* last;
 
-	
+
 	local_irq_save(flags);
 	while (!done) {
 		unlinked = NULL;
@@ -258,7 +259,7 @@ static void check_for_preemptions(void)
 	local_irq_restore(flags);
 }
 
-/* gedf_job_arrival: task is either resumed or released 
+/* gedf_job_arrival: task is either resumed or released
  * call only unlocked!
  */
 static noinline void gedf_job_arrival(struct task_struct* task)
@@ -371,7 +372,7 @@ static struct task_struct* gedf_schedule(struct task_struct * prev)
 	if (preempt && entry->linked)
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);
-	
+
 	/* If a task blocks we have no choice but to reschedule.
 	 */
 	if (blocks)
@@ -471,6 +472,10 @@ static void gedf_task_new(struct task_struct * t, int on_rq, int running)
 	TRACE("gedf: task new %d\n", t->pid);
 
 	spin_lock_irqsave(&gedf_cpu_lock, flags);
+
+	/* setup job params */
+	release_at(t, litmus_clock());
+
 	if (running) {
 		entry = &per_cpu(gedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
@@ -479,15 +484,16 @@ static void gedf_task_new(struct task_struct * t, int on_rq, int running)
 			t->rt_param.scheduled_on = task_cpu(t);
 		} else
 			tsk_rt(t)->scheduled_on = NO_CPU;
-	} else
+	} else {
 		tsk_rt(t)->scheduled_on = NO_CPU;
+	}
 	tsk_rt(t)->linked_on          = NO_CPU;
 
-	/* setup job params */
-	release_at(t, litmus_clock());
 	spin_unlock_irqrestore(&gedf_cpu_lock, flags);
 
-	gedf_job_arrival(t);
+	if (!running || entry->cpu == gedf.release_master)
+		/* schedule() will not insert task into ready_queue */
+		gedf_job_arrival(t);
 }
 
 static void gedf_task_wake_up(struct task_struct *task)
