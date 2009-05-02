@@ -694,9 +694,11 @@ static void sysrq_handle_kill_rt_tasks(int key, struct tty_struct *tty)
 
 static struct sysrq_key_op sysrq_kill_rt_tasks_op = {
 	.handler	= sysrq_handle_kill_rt_tasks,
-	.help_msg	= "Quit-rt-tasks",
-	.action_msg	= "sent SIGKILL to all real-time tasks",
+	.help_msg	= "quit-rt-tasks(X)",
+	.action_msg	= "sent SIGKILL to all LITMUS^RT real-time tasks",
 };
+
+
 #endif
 
 static int proc_read_stats(char *page, char **start,
@@ -891,7 +893,7 @@ static int __init _init_litmus(void)
 
 #ifdef CONFIG_MAGIC_SYSRQ
 	/* offer some debugging help */
-	if (!register_sysrq_key('q', &sysrq_kill_rt_tasks_op))
+	if (!register_sysrq_key('x', &sysrq_kill_rt_tasks_op))
 		printk("Registered kill rt tasks magic sysrq.\n");
 	else
 		printk("Could not register kill rt tasks magic sysrq.\n");
