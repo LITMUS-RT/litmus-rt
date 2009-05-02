@@ -6,7 +6,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    edf_common.o jobs.o \
 	    rt_domain.o fdso.o sync.o \
 	    fmlp.o srp.o norqlock.o \
-	    cheap.o \
+	    cheap.o heap.o \
             sched_gsn_edf.o \
 	    sched_psn_edf.o \
             sched_cedf.o \
