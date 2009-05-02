@@ -124,8 +124,6 @@ static void arm_release_timer(unsigned long _rt)
 	struct list_head *pos, *safe;
 	struct task_struct* t;
 	struct release_heap* rh;
-	int armed;
-	lt_t release = 0;
 
 	/* We only have to defend against the ISR since norq callbacks
 	 * are serialized.
@@ -146,29 +144,26 @@ static void arm_release_timer(unsigned long _rt)
 		rh = get_release_heap(rt, t);
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
-		if (rt->release_master == NO_CPU)
-			armed = hrtimer_active(&rh->timer);
-		else
-			armed = atomic_read(&rh->info.state)
-				!= HRTIMER_START_ON_INACTIVE;
-		release = rh->release_time;
 		spin_unlock_irqrestore(&rt->release_lock, flags);
 
-		/* activate timer if necessary */
-		if (!armed) {
+		/* To avoid arming the timer multiple times, we only let the
+		 * owner do the arming (which is the "first" task to reference
+		 * this release_heap anyway).
+		 */
+		if (rh == tsk_rt(t)->rel_heap) {
 			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
 			if (rt->release_master == NO_CPU)
 				hrtimer_start(&rh->timer,
-					      ns_to_ktime(release),
+					      ns_to_ktime(rh->release_time),
 					      HRTIMER_MODE_ABS);
 			else
 				hrtimer_start_on(rt->release_master,
 						 &rh->info,
 						 &rh->timer,
-						 ns_to_ktime(release),
+						 ns_to_ktime(rh->release_time),
 						 HRTIMER_MODE_ABS);
 		} else
-			TRACE_TASK(t, "timer already armed.\n");
+			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
 	}
 }
 
