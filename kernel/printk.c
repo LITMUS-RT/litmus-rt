@@ -59,6 +59,7 @@ int console_printk[4] = {
  */
 #include <litmus/litmus.h>
 int trace_override = 0;
+int trace_recurse  = 0;
 
 /*
  * Low level drivers may need that to know if they can schedule in
@@ -658,7 +659,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 
 	/* Emit the output into the temporary buffer */
 	printed_len = vscnprintf(printk_buf, sizeof(printk_buf), fmt, args);
-	if (trace_override)
+	if (trace_override && !trace_recurse)
 		TRACE("%s", printk_buf);
 
 	/*

@@ -9,6 +9,7 @@
 #include <asm/semaphore.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>
+#include <linux/sysrq.h>
 
 #include <litmus/sched_trace.h>
 #include <litmus/litmus.h>
@@ -300,7 +301,10 @@ static ssize_t log_read(struct file *filp, char __user *to, size_t len,
 
 
 
+/* in kernel/printk.c */
 extern int trace_override;
+extern int trace_recurse;
+
 
 /* log_open - open the global log message ring buffer.
  */
@@ -328,7 +332,8 @@ static int log_open(struct inode *in, struct file *filp)
 	error = 0;
 	filp->private_data = buf;
 	printk(KERN_DEBUG "sched_trace buf: from 0x%p to 0x%p  length: %x\n",
-	       buf->buf.buf, buf->buf.end, buf->buf.end - buf->buf.buf);
+	       buf->buf.buf, buf->buf.end,
+	       (unsigned int) (buf->buf.end - buf->buf.buf));
 	trace_override++;
  out_unlock:
 	up(&buf->reader_mutex);
@@ -415,10 +420,34 @@ static int __init register_buffer_dev(const char* name,
 
 }
 
+#ifdef CONFIG_MAGIC_SYSRQ
+
+static void sysrq_dump_trace_buffer(int key, struct tty_struct *tty)
+{
+	dump_trace_buffer(100);
+}
+
+static struct sysrq_key_op sysrq_dump_trace_buffer_op = {
+	.handler	= sysrq_dump_trace_buffer,
+	.help_msg	= "dump-trace-buffer(Y)",
+	.action_msg	= "writing content of TRACE() buffer",
+};
+
+#endif
+
 static int __init init_sched_trace(void)
 {
 	printk("Initializing TRACE() device\n");
 	init_log_buffer();
+
+#ifdef CONFIG_MAGIC_SYSRQ
+	/* offer some debugging help */
+	if (!register_sysrq_key('y', &sysrq_dump_trace_buffer_op))
+		printk("Registered dump-trace-buffer(Y) magic sysrq.\n");
+	else
+		printk("Could not register dump-trace-buffer(Y) magic sysrq.\n");
+#endif
+
 
 	return register_buffer_dev("litmus_log", &log_fops,
 				   LOG_MAJOR, 1);
@@ -459,4 +488,20 @@ void sched_trace_log_message(const char* fmt, ...)
 
 	local_irq_restore(flags);
 	va_end(args);
+}
+
+void dump_trace_buffer(int max)
+{
+	char line[80];
+	int len;
+	int count = 0;
+
+	/* potential but very unlikely race... */
+	trace_recurse = 1;
+	while ((max == 0 || count++ < max) &&
+	       (len = rb_get(&log_buffer.buf, line, sizeof(line) - 1)) > 0) {
+		line[len] = '\0';
+		printk("%s", line);
+	}
+	trace_recurse = 0;
 }

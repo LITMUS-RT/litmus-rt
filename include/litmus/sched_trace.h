@@ -179,7 +179,7 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 
 #ifdef CONFIG_SCHED_DEBUG_TRACE
 void sched_trace_log_message(const char* fmt, ...);
-
+void dump_trace_buffer(int max);
 #else
 
 #define sched_trace_log_message(fmt, ...)
