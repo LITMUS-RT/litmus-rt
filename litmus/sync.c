@@ -33,6 +33,20 @@ static long do_wait_for_ts_release(void)
 	return ret;
 }
 
+int count_tasks_waiting_for_release(void)
+{
+	long flags;
+	int task_count = 0;
+	struct list_head *pos;
+
+	spin_lock_irqsave(&ts_release.wait.lock, flags);
+	list_for_each(pos, &ts_release.wait.task_list) {
+		task_count++;
+	}
+	spin_unlock_irqrestore(&ts_release.wait.lock, flags);
+
+	return task_count;
+}
 
 static long do_release_ts(lt_t start)
 {

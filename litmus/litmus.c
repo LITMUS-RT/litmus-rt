@@ -701,6 +701,9 @@ static struct sysrq_key_op sysrq_kill_rt_tasks_op = {
 
 #endif
 
+/* in sync.c */
+int count_tasks_waiting_for_release(void);
+
 static int proc_read_stats(char *page, char **start,
 			   off_t off, int count,
 			   int *eof, void *data)
@@ -708,8 +711,10 @@ static int proc_read_stats(char *page, char **start,
 	int len;
 
 	len = snprintf(page, PAGE_SIZE,
-		       "real-time task count = %d\n",
-		       atomic_read(&rt_task_count));
+		       "real-time tasks   = %d\n"
+		       "ready for release = %d\n",
+		       atomic_read(&rt_task_count),
+		       count_tasks_waiting_for_release());
 	return len;
 }
 
