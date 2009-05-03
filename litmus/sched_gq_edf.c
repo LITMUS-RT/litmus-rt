@@ -410,30 +410,42 @@ static void gq_finish_switch(struct task_struct *prev)
  */
 static void gq_task_new(struct task_struct * t, int on_rq, int running)
 {
-	unsigned long 		flags;
-	cpu_state_t* 		entry;
-
-	TRACE("gq edf: task new %d\n", t->pid);
+	unsigned long 	flags;
+	cpu_state_t* 	entry;
+	int		on_rm = 0;
 
 	spin_lock_irqsave(&gq_lock, flags);
-	if (running) {
-		entry = &per_cpu(gq_cpu_entries, task_cpu(t));
-		BUG_ON(entry->scheduled);
-		set_tsk_need_resched(t);
-		if (entry->cpu != gqedf.release_master) {
-			tsk_rt(t)->scheduled_on = task_cpu(t);
-			entry->scheduled = t;
-		} else
-			tsk_rt(t)->scheduled_on = NO_CPU;
-	} else
-		tsk_rt(t)->scheduled_on = NO_CPU;
-	tsk_rt(t)->linked_on          = NO_CPU;
 
 	/* setup job params */
 	release_at(t, litmus_clock());
 
-	gq_add_released_queue(t);
-	
+	if (running) {
+		entry = &per_cpu(gq_cpu_entries, task_cpu(t));
+		BUG_ON(entry->scheduled);
+		on_rm = entry->cpu == gqedf.release_master;
+	}
+
+	TRACE_TASK(t, "gq edf: task new (running:%d on_rm:%d)\n",
+		   running, on_rm);
+
+	if (running && on_rm)
+		set_tsk_need_resched(t);
+
+	if (running && !on_rm) {
+		/* just leave it where it is, CPU was real-time idle */
+		tsk_rt(t)->scheduled_on = task_cpu(t);
+		tsk_rt(t)->linked_on    = task_cpu(t);
+		entry->linked    = t;
+		entry->scheduled = t;
+	}
+
+	if (!running || on_rm) {
+		/* should be released properly */
+		tsk_rt(t)->scheduled_on = NO_CPU;
+		tsk_rt(t)->linked_on    = NO_CPU;
+		gq_add_released_queue(t);
+	}
+
 	spin_unlock_irqrestore(&gq_lock, flags);
 }
 
