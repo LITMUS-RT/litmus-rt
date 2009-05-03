@@ -47,6 +47,8 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 	long flags;
 	struct release_heap* rh;
 
+	TRACE("on_release_timer(0x%p) starts.\n", timer);
+
 	TS_RELEASE_START;
 
 	rh = container_of(timer, struct release_heap, timer);
@@ -61,6 +63,8 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 	/* WARNING: rh can be referenced from other CPUs from now on. */
 
 	TS_RELEASE_END;
+
+	TRACE("on_release_timer(0x%p) ends.\n", timer);
 
 	return  HRTIMER_NORESTART;
 }
@@ -123,6 +127,14 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 	if (!heap) {
 		/* use pre-allocated release heap */
 		rh = tsk_rt(t)->rel_heap;
+
+		/* Make sure it is safe to use.  The timer callback could still
+		 * be executing on another CPU; hrtimer_cancel() will wait
+		 * until the timer callback has completed.  However, under no
+		 * circumstances should the timer be active (= yet to be
+		 * triggered).
+		 */
+		BUG_ON(hrtimer_cancel(&rh->timer));
 
 		/* initialize */
 		rh->release_time = release_time;
