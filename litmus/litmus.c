@@ -36,7 +36,7 @@ static LIST_HEAD(sched_sig_list);
 static DEFINE_SPINLOCK(sched_sig_list_lock);
 
 static struct kmem_cache * heap_node_cache;
-static struct kmem_cache * release_heap_cache;
+extern struct kmem_cache * release_heap_cache;
 
 struct heap_node* heap_node_alloc(int gfp_flags)
 {
@@ -48,15 +48,8 @@ void heap_node_free(struct heap_node* hn)
 	kmem_cache_free(heap_node_cache, hn);
 }
 
-struct release_heap* release_heap_alloc(int gfp_flags)
-{
-	return kmem_cache_alloc(release_heap_cache, gfp_flags);
-}
-
-void release_heap_free(struct release_heap* rh)
-{
-	kmem_cache_free(release_heap_cache, rh);
-}
+struct release_heap* release_heap_alloc(int gfp_flags);
+void release_heap_free(struct release_heap* rh);
 
 /*
  * sys_set_task_rt_param
@@ -578,8 +571,8 @@ long litmus_admit_task(struct task_struct* tsk)
 		retval = -ENOMEM;
 		heap_node_free(tsk_rt(tsk)->heap_node);
 		release_heap_free(tsk_rt(tsk)->rel_heap);
-	} else 
-		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);	
+	} else
+		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
 
 	if (!retval)
 		retval = litmus->admit_task(tsk);

@@ -9,6 +9,7 @@
 #include <linux/percpu.h>
 #include <linux/sched.h>
 #include <linux/list.h>
+#include <linux/slab.h>
 
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
@@ -57,10 +58,37 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 
 	/* call release callback */
 	rh->dom->release_jobs(rh->dom, &rh->heap);
+	/* WARNING: rh can be referenced from other CPUs from now on. */
 
 	TS_RELEASE_END;
 
 	return  HRTIMER_NORESTART;
+}
+
+/* allocated in litmus.c */
+struct kmem_cache * release_heap_cache;
+
+struct release_heap* release_heap_alloc(int gfp_flags)
+{
+	struct release_heap* rh;
+	rh= kmem_cache_alloc(release_heap_cache, gfp_flags);
+	if (rh) {
+		/* FIXME: could be a ctor */
+		/* initialize timer */
+		hrtimer_init(&rh->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		rh->timer.function = on_release_timer;
+#ifdef CONFIG_HIGH_RES_TIMERS
+		rh->timer.cb_mode = HRTIMER_CB_IRQSAFE_NO_RESTART;
+#endif
+	}
+	return rh;
+}
+
+void release_heap_free(struct release_heap* rh)
+{
+	/* make sure timer is no longer in use */
+	hrtimer_cancel(&rh->timer);
+	kmem_cache_free(release_heap_cache, rh);
 }
 
 /* Caller most hold release lock.
@@ -101,14 +129,8 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 		rh->dom = rt;
 		heap_init(&rh->heap);
 
-		/* initialize timer */
-		hrtimer_init(&rh->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-		rh->timer.function = on_release_timer;
-#ifdef CONFIG_HIGH_RES_TIMERS
-		rh->timer.cb_mode = HRTIMER_CB_IRQSAFE;
-#endif
-
 		atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
+
 		/* add to release queue */
 		list_add(&rh->list, pos->prev);
 		heap = rh;
