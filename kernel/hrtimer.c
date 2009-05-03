@@ -831,8 +831,6 @@ void hrtimer_pull(void)
 		TRACE("pulled timer 0x%x\n", info->timer);
 		list_del(pos);
 		hrtimer_start(info->timer, info->time, info->mode);
-		mb();
-		atomic_set(&info->state, HRTIMER_START_ON_PROCESSED);
 	}
 }
 
@@ -865,7 +863,6 @@ int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
 		if (cpu == smp_processor_id()) {
 			/* start timer locally */
 			hrtimer_start(info->timer, info->time, info->mode);
-			atomic_set(&info->state, HRTIMER_START_ON_PROCESSED);
 		} else {
 			base = &per_cpu(hrtimer_bases, cpu);
 			spin_lock_irqsave(&base->lock, flags);
@@ -873,7 +870,7 @@ int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
 			list_add(&info->list, &base->to_pull);
 			spin_unlock_irqrestore(&base->lock, flags);
 			if (was_empty)
-				/* only send IPI if other no else 
+				/* only send IPI if other no else
 				 * has done so already
 				 */
 				smp_send_pull_timers(cpu);

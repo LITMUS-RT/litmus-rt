@@ -205,7 +205,6 @@ struct hrtimer_cpu_base {
 
 #define HRTIMER_START_ON_INACTIVE	0
 #define HRTIMER_START_ON_QUEUED		1
-#define HRTIMER_START_ON_PROCESSED	2
 
 struct hrtimer_start_on_info {
 	struct list_head	list;
