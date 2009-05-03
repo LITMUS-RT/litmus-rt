@@ -59,6 +59,14 @@ config SCHED_TASK_TRACE
 	  Say Yes for debugging.
 	  Say No for overhead tracing.
 
+config SCHED_OVERHEAD_TRACE
+	bool "Record timestamps for overhead measurements"
+	depends on FEATHER_TRACE
+	default n
+	help
+	  Export event stream for overhead tracing.
+	  Say Yes for overhead tracing.
+
 config SCHED_DEBUG_TRACE
 	bool "TRACE() debugging"
 	default y
@@ -71,15 +79,6 @@ config SCHED_DEBUG_TRACE
 
 	  Say Yes for debugging.
 	  Say No for overhead tracing.
-
-config SCHED_OVERHEAD_TRACE
-	bool "Record timestamps for overhead measurements"
-	depends on FEATHER_TRACE
-	default n
-	help
-	  Export event stream for overhead tracing.
-	  Say Yes for overhead tracing.
-
 
 endmenu
 
