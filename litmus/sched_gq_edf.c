@@ -411,7 +411,7 @@ static void gq_finish_switch(struct task_struct *prev)
 static void gq_task_new(struct task_struct * t, int on_rq, int running)
 {
 	unsigned long 	flags;
-	cpu_state_t* 	entry;
+	cpu_state_t* 	entry = NULL;
 	int		on_rm = 0;
 
 	spin_lock_irqsave(&gq_lock, flags);
@@ -434,9 +434,16 @@ static void gq_task_new(struct task_struct * t, int on_rq, int running)
 	if (running && !on_rm) {
 		/* just leave it where it is, CPU was real-time idle */
 		tsk_rt(t)->scheduled_on = task_cpu(t);
-		tsk_rt(t)->linked_on    = task_cpu(t);
-		entry->linked    = t;
+		tsk_rt(t)->linked_on = task_cpu(t);
 		entry->scheduled = t;
+		if (entry->linked != NULL) {
+			/* Something raced and got assigned here.
+			 * Kick it back into the queue, since t is
+			 * already executing.
+			 */
+			__add_ready(&gqedf, entry->linked);
+		}
+		entry->linked = t;
 	}
 
 	if (!running || on_rm) {
