@@ -441,6 +441,7 @@ static void gq_task_new(struct task_struct * t, int on_rq, int running)
 			 * Kick it back into the queue, since t is
 			 * already executing.
 			 */
+			tsk_rt(entry->linked)->linked_on = NO_CPU;
 			__add_ready(&gqedf, entry->linked);
 		}
 		entry->linked = t;
