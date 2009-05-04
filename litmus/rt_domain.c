@@ -1,3 +1,4 @@
+
 /*
  * kernel/rt_domain.c
  *
@@ -54,9 +55,11 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 	rh = container_of(timer, struct release_heap, timer);
 
 	spin_lock_irqsave(&rh->dom->release_lock, flags);
+	TRACE("CB has the release_lock 0x%p\n", &rh->dom->release_lock);
 	/* remove from release queue */
 	list_del(&rh->list);
 	spin_unlock_irqrestore(&rh->dom->release_lock, flags);
+	TRACE("CB returned release_lock 0x%p\n", &rh->dom->release_lock);
 
 	/* call release callback */
 	rh->dom->release_jobs(rh->dom, &rh->heap);
@@ -99,7 +102,9 @@ void release_heap_free(struct release_heap* rh)
  * Will return heap for given time. If no such heap exists prior to the invocation
  * it will be created.
  */
-static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct* t)
+static struct release_heap* get_release_heap(rt_domain_t *rt,
+					     struct task_struct* t,
+					     int use_task_heap)
 {
 	struct list_head* pos;
 	struct release_heap* heap = NULL;
@@ -124,30 +129,57 @@ static struct release_heap* get_release_heap(rt_domain_t *rt, struct task_struct
 			break;
 		}
 	}
-	if (!heap) {
+	if (!heap && use_task_heap) {
 		/* use pre-allocated release heap */
 		rh = tsk_rt(t)->rel_heap;
 
-		/* Make sure it is safe to use.  The timer callback could still
-		 * be executing on another CPU; hrtimer_cancel() will wait
-		 * until the timer callback has completed.  However, under no
-		 * circumstances should the timer be active (= yet to be
-		 * triggered).
-		 */
-		BUG_ON(hrtimer_cancel(&rh->timer));
-
-		/* initialize */
-		rh->release_time = release_time;
 		rh->dom = rt;
-		heap_init(&rh->heap);
-
-		atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
+		rh->release_time = release_time;
 
 		/* add to release queue */
 		list_add(&rh->list, pos->prev);
 		heap = rh;
 	}
 	return heap;
+}
+
+static void reinit_release_heap(struct task_struct* t)
+{
+	struct release_heap* rh;
+
+	/* use pre-allocated release heap */
+	rh = tsk_rt(t)->rel_heap;
+
+/*	{
+		lt_t start = litmus_clock();
+		int ret;
+		do {
+			if (lt_before(start + 1000000, litmus_clock())) {
+				TRACE_TASK(t, "BAD: timer still in use after 1ms! giving up.\n");
+				break;
+			}
+		} while ((ret = hrtimer_try_to_cancel(&rh->timer)) == -1);
+		if (ret != 0) {
+			TRACE_TASK(t, "BAD: cancelled timer and got %d.\n", ret);
+		}
+	}
+*/
+
+	/* Make sure it is safe to use.  The timer callback could still
+	 * be executing on another CPU; hrtimer_cancel() will wait
+	 * until the timer callback has completed.  However, under no
+	 * circumstances should the timer be active (= yet to be
+	 * triggered).
+	 *
+	 * WARNING: If the CPU still holds the release_lock at this point,
+	 *          deadlock may occur!
+	 */
+	BUG_ON(hrtimer_cancel(&rh->timer));
+
+	/* initialize */
+	heap_init(&rh->heap);
+	
+	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 }
 
 static void arm_release_timer(unsigned long _rt)
@@ -175,10 +207,22 @@ static void arm_release_timer(unsigned long _rt)
 
 		/* put into release heap while holding release_lock */
 		spin_lock_irqsave(&rt->release_lock, flags);
-		rh = get_release_heap(rt, t);
+		TRACE_TASK(t, "I have the release_lock 0x%p\n", &rt->release_lock);
+		rh = get_release_heap(rt, t, 0);
+		if (!rh) {
+			/* need to use our own, but drop lock first */
+			spin_unlock(&rt->release_lock);
+			TRACE_TASK(t, "Dropped release_lock 0x%p\n", &rt->release_lock);
+			reinit_release_heap(t);
+			TRACE_TASK(t, "release_heap ready\n");
+			spin_lock(&rt->release_lock);
+			TRACE_TASK(t, "Re-acquired release_lock 0x%p\n", &rt->release_lock);
+			rh = get_release_heap(rt, t, 1);
+		}
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
 		spin_unlock_irqrestore(&rt->release_lock, flags);
+		TRACE_TASK(t, "Returned the release_lock 0x%p\n", &rt->release_lock);
 
 		/* To avoid arming the timer multiple times, we only let the
 		 * owner do the arming (which is the "first" task to reference
