@@ -1314,6 +1314,9 @@ void hrtimer_run_queues(void)
 		run_hrtimer_queue(cpu_base, i);
 }
 
+/* FIXME: this won't be needed anymore once we port to Linux > 2.6.24 */
+void hrtimer_wakeup_hack(int onoff);
+
 /*
  * Sleep related functions:
  */
@@ -1324,8 +1327,11 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 	struct task_struct *task = t->task;
 
 	t->task = NULL;
-	if (task)
+	if (task) {
+		hrtimer_wakeup_hack(1);
 		wake_up_process(task);
+		hrtimer_wakeup_hack(0);
+	}
 
 	return HRTIMER_NORESTART;
 }
