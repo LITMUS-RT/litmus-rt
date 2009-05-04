@@ -150,21 +150,6 @@ static void reinit_release_heap(struct task_struct* t)
 	/* use pre-allocated release heap */
 	rh = tsk_rt(t)->rel_heap;
 
-/*	{
-		lt_t start = litmus_clock();
-		int ret;
-		do {
-			if (lt_before(start + 1000000, litmus_clock())) {
-				TRACE_TASK(t, "BAD: timer still in use after 1ms! giving up.\n");
-				break;
-			}
-		} while ((ret = hrtimer_try_to_cancel(&rh->timer)) == -1);
-		if (ret != 0) {
-			TRACE_TASK(t, "BAD: cancelled timer and got %d.\n", ret);
-		}
-	}
-*/
-
 	/* Make sure it is safe to use.  The timer callback could still
 	 * be executing on another CPU; hrtimer_cancel() will wait
 	 * until the timer callback has completed.  However, under no
@@ -212,11 +197,13 @@ static void arm_release_timer(unsigned long _rt)
 		if (!rh) {
 			/* need to use our own, but drop lock first */
 			spin_unlock(&rt->release_lock);
-			TRACE_TASK(t, "Dropped release_lock 0x%p\n", &rt->release_lock);
+			TRACE_TASK(t, "Dropped release_lock 0x%p\n",
+				   &rt->release_lock);
 			reinit_release_heap(t);
 			TRACE_TASK(t, "release_heap ready\n");
 			spin_lock(&rt->release_lock);
-			TRACE_TASK(t, "Re-acquired release_lock 0x%p\n", &rt->release_lock);
+			TRACE_TASK(t, "Re-acquired release_lock 0x%p\n",
+				   &rt->release_lock);
 			rh = get_release_heap(rt, t, 1);
 		}
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
