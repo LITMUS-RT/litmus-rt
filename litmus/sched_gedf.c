@@ -134,7 +134,7 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 	}
 	entry->linked = linked;
 	entry->picked = entry == sched; /* set to one if we linked to the
-					 * the CPU that the task is 
+					 * the CPU that the task is
 					 * executing on
 					 */
 	if (linked)
@@ -425,7 +425,6 @@ static struct task_struct* gedf_schedule(struct task_struct * prev)
 		/* Schedule a linked job? */
 		if (entry->linked) {
 			entry->linked->rt_param.scheduled_on = entry->cpu;
-			entry->picked = 1;
 			next = entry->linked;
 		}
 		if (entry->scheduled)
@@ -437,6 +436,14 @@ static struct task_struct* gedf_schedule(struct task_struct * prev)
 		if (exists)
 			next = prev;
 
+	/* Mark entry->linked as being ours.  Do this unconditionally since
+	 * entry->linked might have become reassigned to us while we dropped
+	 * the lock even though we never descheduled it. In this case,
+	 * entry->picked became reset.
+	 */
+	entry->picked = 1;
+	if (next)
+		tsk_rt(next)->scheduled_on = entry->cpu;
 	spin_unlock(&gedf_cpu_lock);
 	if (exists && preempt && !blocks)
 		/* stick preempted task back into the ready queue */
