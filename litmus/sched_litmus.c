@@ -55,9 +55,9 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		mb();
 		spin_unlock(&rq->lock);
 
-		/* Don't race with a concurrent switch.
-		 * This could deadlock in the case of cross or circular migrations.
-		 * It's the job of the plugin to make sure that doesn't happen.
+		/* Don't race with a concurrent switch.  This could deadlock in
+		 * the case of cross or circular migrations.  It's the job of
+		 * the plugin to make sure that doesn't happen.
 		 */
 		TRACE_TASK(rq->litmus_next, "stack_in_use=%d\n",
 			   rq->litmus_next->rt_param.stack_in_use);
@@ -71,7 +71,8 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 			if (rq->litmus_next->rt_param.stack_in_use == NO_CPU)
 				TRACE_TASK(rq->litmus_next,
 					   "descheduled. Proceeding.\n");
-			if (lt_before(_maybe_deadlock + 10000000, litmus_clock())) {
+			if (lt_before(_maybe_deadlock + 10000000,
+				      litmus_clock())) {
 				/* We've been spinning for 10ms.
 				 * Something can't be right!
 				 * Let's abandon the task and bail out; at least
@@ -79,7 +80,8 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 				 * deadlock.
 				 */
 				TRACE_TASK(rq->litmus_next,
-					   "stack too long in use. Deadlock?\n");
+					   "stack too long in use. "
+					   "Deadlock?\n");
 				rq->litmus_next = NULL;
 
 				/* bail out */
@@ -118,12 +120,15 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 *  couple of things still hold:
 		 *  - it is still a real-time task
 		 *  - it is still runnable (could have been stopped)
+		 * If either is violated, then the active plugin is
+		 * doing something wrong.
 		 */
 		if (!is_realtime(rq->litmus_next) ||
 		    !is_running(rq->litmus_next)) {
 			/* BAD BAD BAD */
 			TRACE_TASK(rq->litmus_next,
-				   "migration invariant FAILED: rt=%d running=%d\n",
+				   "BAD: migration invariant FAILED: "
+				   "rt=%d running=%d\n",
 				   is_realtime(rq->litmus_next),
 				   is_running(rq->litmus_next));
 			/* drop the task */
@@ -136,7 +141,8 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		rq->litmus_next->rt_param.stack_in_use = rq->cpu;
 }
 
-static void enqueue_task_litmus(struct rq *rq, struct task_struct *p, int wakeup)
+static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
+				int wakeup)
 {
 	if (wakeup) {
 		sched_trace_task_resume(p);
@@ -186,9 +192,9 @@ static void task_tick_litmus(struct rq *rq, struct task_struct *p)
 {
 }
 
-/* This is called when a task became a real-time task, either due
- * to a SCHED_* class transition or due to PI mutex inheritance.\
- * We don't handle Linux PI mutex inheritance yet. Use LITMUS provided
+/* This is called when a task became a real-time task, either due to a SCHED_*
+ * class transition or due to PI mutex inheritance. We don't handle Linux PI
+ * mutex inheritance yet (and probably never will). Use LITMUS provided
  * synchronization primitives instead.
  */
 static void set_curr_task_litmus(struct rq *rq)
