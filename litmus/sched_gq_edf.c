@@ -429,7 +429,7 @@ static void gq_task_new(struct task_struct * t, int on_rq, int running)
 		   running, on_rm);
 
 	if (running && on_rm)
-		set_tsk_need_resched(t);
+		preempt(entry);
 
 	if (running && !on_rm) {
 		/* just leave it where it is, CPU was real-time idle */

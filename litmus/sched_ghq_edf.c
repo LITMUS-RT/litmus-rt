@@ -589,8 +589,10 @@ static void ghqedf_task_new(struct task_struct * t, int on_rq, int running)
 		if (entry->cpu != ghqedf.release_master) {
 			entry->scheduled = t;
 			t->rt_param.scheduled_on = task_cpu(t);
-		} else
+		} else {
+			preempt(entry);
 			tsk_rt(t)->scheduled_on = NO_CPU;
+		}
 	} else {
 		tsk_rt(t)->scheduled_on = NO_CPU;
 	}

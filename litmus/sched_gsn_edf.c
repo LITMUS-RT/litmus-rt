@@ -524,8 +524,10 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 		if (entry->cpu != gsnedf.release_master) {
 			entry->scheduled = t;
 			tsk_rt(t)->scheduled_on = task_cpu(t);
-		} else
+		} else {
+			preempt(entry); /* force resched */
 			tsk_rt(t)->scheduled_on = NO_CPU;
+		}
 	} else {
 		t->rt_param.scheduled_on = NO_CPU;
 	}
