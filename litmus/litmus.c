@@ -490,11 +490,11 @@ asmlinkage long sys_exit_np(void)
 
 /* sys_null_call() is only used for determining raw system call
  * overheads (kernel entry, kernel exit). It has no useful side effects.
- * If ts is non-NULL, then the current Feather-Trace time is recorded. 
+ * If ts is non-NULL, then the current Feather-Trace time is recorded.
  */
 asmlinkage long sys_null_call(cycles_t __user *ts)
 {
-	long ret = 0; 
+	long ret = 0;
 	cycles_t now;
 
 	if (ts) {
@@ -789,7 +789,7 @@ static int proc_write_release_master(struct file *file,
 
 	if (count > 63)
 		return -EINVAL;
-	
+
 	if (copy_from_user(msg, buffer, count))
 		return -EFAULT;
 
@@ -799,7 +799,7 @@ static int proc_write_release_master(struct file *file,
 	if (count > 1 && msg[count - 1] == '\n')
 		msg[count - 1] = '\0';
 
-	if (strcmp(msg, "NO_CPU") == 0) {	       
+	if (strcmp(msg, "NO_CPU") == 0) {
 		atomic_set(&release_master_cpu, NO_CPU);
 		return count;
 	} else {

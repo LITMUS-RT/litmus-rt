@@ -50,7 +50,7 @@ void tick_no_rqlock(void)
 
 	local_irq_save(flags);
 
-	wl = &__get_cpu_var(norq_worklist); 
+	wl = &__get_cpu_var(norq_worklist);
 
 	if (wl->hrtimer_hack) {
 		/* bail out! */

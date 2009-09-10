@@ -134,7 +134,7 @@ static struct od_table_entry*  get_od_entry(struct task_struct* t)
 
 	table = t->od_table;
 	if (!table) {
-		table = kzalloc(sizeof(*table) * MAX_OBJECT_DESCRIPTORS, 
+		table = kzalloc(sizeof(*table) * MAX_OBJECT_DESCRIPTORS,
 				GFP_KERNEL);
 		t->od_table = table;
 	}

@@ -163,7 +163,7 @@ static void reinit_release_heap(struct task_struct* t)
 
 	/* initialize */
 	heap_init(&rh->heap);
-	
+
 	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 }
 

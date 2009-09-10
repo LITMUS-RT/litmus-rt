@@ -19,7 +19,7 @@ config SRP
 	bool "Stack Resource Policy (SRP)"
 	default n
 	help
-	  Include support for Baker's Stack Resource Policy. 
+	  Include support for Baker's Stack Resource Policy.
 
 	  Say Yes if you want FMLP local long  critical section synchronization support.
 
@@ -43,7 +43,7 @@ config FEATHER_TRACE
 	help
 	  Feather-Trace basic tracing infrastructure. Includes device file
 	  driver and instrumentation point support.
-	  
+
 
 config SCHED_TASK_TRACE
 	bool "Trace real-time tasks"

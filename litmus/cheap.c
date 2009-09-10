@@ -61,7 +61,7 @@ int cheap_insert(cheap_prio_t higher_prio,
 	int stop = 0;
 	unsigned int child, parent, locked;
 	unsigned int wait_for_parent_state;
-	
+
 	lockdep_off(); /* generates false positives */
 
 	spin_lock(&ch->lock);
@@ -77,8 +77,8 @@ int cheap_insert(cheap_prio_t higher_prio,
 		spin_unlock(&ch->lock);
 		lockdep_on();
 		return -1;
-	}		
-	
+	}
+
 	spin_unlock(&ch->heap[child].lock);
 
 	/* bubble up */
@@ -115,7 +115,7 @@ int cheap_insert(cheap_prio_t higher_prio,
 		} else {
 			/* Some other process needs to act first.
 			 * We need to back off a little in order
-			 * to give the others a chance to acquire the 
+			 * to give the others a chance to acquire the
 			 * parent's lock.
 			 */
 			wait_for_parent_state = ch->heap[parent].tag;
@@ -123,7 +123,7 @@ int cheap_insert(cheap_prio_t higher_prio,
 
 		spin_unlock(&ch->heap[locked].lock);
 		spin_unlock(&ch->heap[parent].lock);
-		
+
 	        while (wait_for_parent_state != CHEAP_EMPTY &&
 		       ((volatile unsigned int) ch->heap[parent].tag) ==
 		       wait_for_parent_state)
@@ -184,7 +184,7 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 
 	/* unlock before locking root to maintain locking order */
 	spin_unlock(&ch->heap[child].lock);
-	
+
 	spin_lock(&ch->heap[CHEAP_ROOT].lock);
 	if (ch->heap[CHEAP_ROOT].tag == CHEAP_EMPTY) {
 		/* heap became empty, we got the last one */
@@ -192,7 +192,7 @@ void* cheap_take_if(cheap_take_predicate_t pred,
 		lockdep_on();
 		return cval;
 	} else {
-		/* grab value of root (=min), replace with 
+		/* grab value of root (=min), replace with
 		 * what we got from the last leaf
 		 */
 		val = ch->heap[CHEAP_ROOT].value;
