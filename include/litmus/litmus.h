@@ -86,6 +86,7 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_rt_phase(t)		(tsk_rt(t)->task_params.phase)
 #define get_partition(t) 	(tsk_rt(t)->task_params.cpu)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
+#define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_class(t)		(tsk_rt(t)->task_params.cls)
 
 inline static int budget_exhausted(struct task_struct* t)
@@ -100,8 +101,6 @@ inline static int budget_exhausted(struct task_struct* t)
 	(tsk_rt(t)->task_params.class == RT_CLASS_SOFT)
 #define is_be(t)      		\
 	(tsk_rt(t)->task_params.class == RT_CLASS_BEST_EFFORT)
-
-#define get_release(t) (tsk_rt(t)->job_params.release)
 
 /* Our notion of time within LITMUS: kernel monotonic time. */
 static inline lt_t litmus_clock(void)
