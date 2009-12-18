@@ -1598,7 +1598,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 
 	update_curr(cfs_rq);
 
-	if (unlikely(rt_prio(p->prio))) {
+	if (unlikely(rt_prio(p->prio)) || p->policy == SCHED_LITMUS) {
 		resched_task(curr);
 		return;
 	}

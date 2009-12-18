@@ -38,6 +38,7 @@
 #define SCHED_BATCH		3
 /* SCHED_ISO: reserved but not implemented yet */
 #define SCHED_IDLE		5
+#define SCHED_LITMUS		6
 /* Can be ORed in to make sure the process is reverted back to SCHED_NORMAL on fork */
 #define SCHED_RESET_ON_FORK     0x40000000
 
@@ -93,6 +94,8 @@ struct sched_param {
 #include <linux/cred.h>
 
 #include <asm/processor.h>
+
+#include <litmus/rt_param.h>
 
 struct exec_domain;
 struct futex_pi_state;
@@ -1505,6 +1508,10 @@ struct task_struct {
 	int make_it_fail;
 #endif
 	struct prop_local_single dirties;
+
+	/* LITMUS RT parameters and state */
+	struct rt_param rt_param;
+
 #ifdef CONFIG_LATENCYTOP
 	int latency_record_count;
 	struct latency_record latency_record[LT_SAVECOUNT];
