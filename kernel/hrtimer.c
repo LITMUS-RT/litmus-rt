@@ -1077,9 +1077,11 @@ int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
 			/* start timer locally; we may get called
 			 * with rq->lock held, do not wake up anything
 			 */
+			TRACE("hrtimer_start_on: starting on local CPU\n");
 			__hrtimer_start_range_ns(info->timer, info->time,
 						 0, info->mode, 0);
 		} else {
+			TRACE("hrtimer_start_on: pulling to remote CPU\n");
 			base = &per_cpu(hrtimer_bases, cpu);
 			spin_lock_irqsave(&base->lock, flags);
 			was_empty = list_empty(&base->to_pull);

@@ -158,6 +158,7 @@ static void reinit_release_heap(struct task_struct* t)
 
 	/* initialize */
 	heap_init(&rh->heap);
+	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 }
 /* arm_release_timer() - start local release timer or trigger
  *     remote timer (pull timer)
@@ -217,14 +218,18 @@ static void arm_release_timer(rt_domain_t *_rt)
 			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
 			/* we cannot arm the timer using hrtimer_start()
 			 * as it may deadlock on rq->lock
+			 *
+			 * PINNED mode is ok on both local and remote CPU
 			 */
-			/* FIXME now only one cpu without pulling
-			 * later more cpus; hrtimer_pull should call
-			 * __hrtimer_start... always with PINNED mode
-			 */
-			__hrtimer_start_range_ns(&rh->timer,
-					ns_to_ktime(rh->release_time),
-					0, HRTIMER_MODE_ABS_PINNED, 0);
+			if (rt->release_master == NO_CPU)
+				__hrtimer_start_range_ns(&rh->timer,
+						ns_to_ktime(rh->release_time),
+						0, HRTIMER_MODE_ABS_PINNED, 0);
+			else
+				hrtimer_start_on(rt->release_master,
+						&rh->info, &rh->timer,
+						ns_to_ktime(rh->release_time),
+						HRTIMER_MODE_ABS_PINNED);
 		} else
 			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
 	}
@@ -245,6 +250,8 @@ void rt_domain_init(rt_domain_t *rt,
 		release = default_release_jobs;
 	if (!order)
 		order = dummy_order;
+
+	rt->release_master = NO_CPU;
 
 	heap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->tobe_released);
