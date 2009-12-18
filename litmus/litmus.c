@@ -1,4 +1,6 @@
-/* litmus.c -- Implementation of the LITMUS syscalls, the LITMUS intialization code,
+/*
+ * litmus.c -- Implementation of the LITMUS syscalls,
+ *             the LITMUS intialization code,
  *             and the procfs interface..
  */
 #include <asm/uaccess.h>
@@ -438,10 +440,10 @@ static struct sysrq_key_op sysrq_kill_rt_tasks_op = {
 	.help_msg	= "quit-rt-tasks(X)",
 	.action_msg	= "sent SIGKILL to all LITMUS^RT real-time tasks",
 };
-
-
 #endif
 
+/* in litmus/sync.c */
+int count_tasks_waiting_for_release(void);
 
 static int proc_read_stats(char *page, char **start,
 			   off_t off, int count,
@@ -453,7 +455,7 @@ static int proc_read_stats(char *page, char **start,
 		       "real-time tasks   = %d\n"
 		       "ready for release = %d\n",
 		       atomic_read(&rt_task_count),
-		       0);
+		       count_tasks_waiting_for_release());
 	return len;
 }
 

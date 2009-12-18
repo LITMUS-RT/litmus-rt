@@ -4,6 +4,7 @@
 
 obj-y     = sched_plugin.o litmus.o \
 	    jobs.o \
+	    sync.o \
 	    heap.o
 
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
