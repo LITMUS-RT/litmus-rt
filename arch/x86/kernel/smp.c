@@ -150,6 +150,16 @@ void native_send_call_func_ipi(const struct cpumask *mask)
 	free_cpumask_var(allbutself);
 }
 
+/* trigger timers on remote cpu */
+void smp_send_pull_timers(int cpu)
+{
+	if (unlikely(cpu_is_offline(cpu))) {
+		WARN_ON(1);
+		return;
+	}
+	apic->send_IPI_mask(cpumask_of(cpu), PULL_TIMERS_VECTOR);
+}
+
 /*
  * this function calls the 'stop' function on all other CPUs in the system.
  */
@@ -228,6 +238,14 @@ void smp_call_function_single_interrupt(struct pt_regs *regs)
 	generic_smp_call_function_single_interrupt();
 	inc_irq_stat(irq_call_count);
 	irq_exit();
+}
+
+extern void hrtimer_pull(void);
+
+void smp_pull_timers_interrupt(struct pt_regs *regs)
+{
+	ack_APIC_irq();
+	TRACE("pull timer interrupt\n");
 }
 
 struct smp_ops smp_ops = {

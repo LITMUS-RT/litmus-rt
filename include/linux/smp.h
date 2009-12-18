@@ -77,6 +77,11 @@ void __smp_call_function_single(int cpuid, struct call_single_data *data,
 				int wait);
 
 /*
+ * sends a 'pull timer' event to a remote CPU
+ */
+extern void smp_send_pull_timers(int cpu);
+
+/*
  * Generic and arch helpers
  */
 #ifdef CONFIG_USE_GENERIC_SMP_HELPERS
