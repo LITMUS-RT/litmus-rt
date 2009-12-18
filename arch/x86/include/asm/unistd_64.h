@@ -662,6 +662,10 @@ __SYSCALL(__NR_rt_tgsigqueueinfo, sys_rt_tgsigqueueinfo)
 #define __NR_perf_event_open			298
 __SYSCALL(__NR_perf_event_open, sys_perf_event_open)
 
+#define __NR_LITMUS				299
+
+#include "litmus/unistd_64.h"
+
 #ifndef __NO_STUBS
 #define __ARCH_WANT_OLD_READDIR
 #define __ARCH_WANT_OLD_STAT

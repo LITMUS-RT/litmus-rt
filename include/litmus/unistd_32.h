@@ -7,7 +7,7 @@
 
 #define __NR_set_rt_task_param	__LSC(0)
 #define __NR_get_rt_task_param	__LSC(1)
-#define __NR_sleep_next_period  __LSC(2)
+#define __NR_complete_job	__LSC(2)
 #define __NR_od_open		__LSC(3)
 #define __NR_od_close		__LSC(4)
 #define __NR_fmlp_down		__LSC(5)

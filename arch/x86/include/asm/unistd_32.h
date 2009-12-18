@@ -345,7 +345,7 @@
 
 #define __NR_LITMUS		337
 
-#include "litmus/unistd.h"
+#include "litmus/unistd_32.h"
 
 #ifdef __KERNEL__
 
