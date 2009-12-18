@@ -1,4 +1,5 @@
-/* sched_trace.h -- record scheduler events to a byte stream for offline analysis.
+/*
+ * sched_trace.h -- record scheduler events to a byte stream for offline analysis.
  */
 #ifndef _LINUX_SCHED_TRACE_H_
 #define _LINUX_SCHED_TRACE_H_
