@@ -8,8 +8,19 @@ config SRP
 	help
 	  Include support for Baker's Stack Resource Policy.
 
-	  Say Yes if you want FMLP local long
-	  critical section synchronization support.
+	  Say Yes if you want FMLP local long critical section
+	  synchronization support.
+
+config FMLP
+	bool "FMLP support"
+#	depends on NP_SECTION
+	default n
+	help
+	  Include support for deterministic multiprocessor real-time
+	  synchronization support.
+
+	  Say Yes if you want FMLP long critical section
+	  synchronization support.
 
 endmenu
 
