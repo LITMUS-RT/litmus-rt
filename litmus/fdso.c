@@ -18,6 +18,7 @@
 
 #include <litmus/fdso.h>
 
+extern struct fdso_ops srp_sem_ops;
 
 static struct fdso_ops dummy_ops = {
 	.create  = NULL
@@ -25,7 +26,7 @@ static struct fdso_ops dummy_ops = {
 
 static const struct fdso_ops* fdso_ops[] = {
 	&dummy_ops,
-	&dummy_ops,
+	&srp_sem_ops,
 };
 
 static void* fdso_create(obj_type_t type)

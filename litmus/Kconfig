@@ -1,5 +1,18 @@
 menu "LITMUS^RT"
 
+menu "Real-Time Synchronization"
+
+config SRP
+	bool "Stack Resource Policy (SRP)"
+	default n
+	help
+	  Include support for Baker's Stack Resource Policy.
+
+	  Say Yes if you want FMLP local long
+	  critical section synchronization support.
+
+endmenu
+
 menu "Tracing"
 
 config FEATHER_TRACE

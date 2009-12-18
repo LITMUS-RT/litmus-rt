@@ -8,6 +8,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    rt_domain.o \
 	    edf_common.o \
 	    fdso.o \
+	    srp.o \
 	    heap.o
 
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
