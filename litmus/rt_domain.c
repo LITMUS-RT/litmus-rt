@@ -159,23 +159,23 @@ static void reinit_release_heap(struct task_struct* t)
 	/* initialize */
 	heap_init(&rh->heap);
 }
-
-static void arm_release_timer(unsigned long _rt)
+/* arm_release_timer() - start local release timer or trigger
+ *     remote timer (pull timer)
+ *
+ * Called by add_release() with:
+ * - tobe_lock taken
+ * - IRQ disabled
+ */
+static void arm_release_timer(rt_domain_t *_rt)
 {
-	rt_domain_t *rt = (rt_domain_t*) _rt;
-	unsigned long flags;
+	rt_domain_t *rt = _rt;
 	struct list_head list;
 	struct list_head *pos, *safe;
 	struct task_struct* t;
 	struct release_heap* rh;
 
-	/* We only have to defend against the ISR since norq callbacks
-	 * are serialized.
-	 */
 	TRACE("arm_release_timer() at %llu\n", litmus_clock());
-	spin_lock_irqsave(&rt->tobe_lock, flags);
 	list_replace_init(&rt->tobe_released, &list);
-	spin_unlock_irqrestore(&rt->tobe_lock, flags);
 
 	list_for_each_safe(pos, safe, &list) {
 		/* pick task of work list */
@@ -184,24 +184,29 @@ static void arm_release_timer(unsigned long _rt)
 		list_del(pos);
 
 		/* put into release heap while holding release_lock */
-		spin_lock_irqsave(&rt->release_lock, flags);
+		spin_lock(&rt->release_lock);
 		TRACE_TASK(t, "I have the release_lock 0x%p\n", &rt->release_lock);
+
 		rh = get_release_heap(rt, t, 0);
 		if (!rh) {
 			/* need to use our own, but drop lock first */
 			spin_unlock(&rt->release_lock);
 			TRACE_TASK(t, "Dropped release_lock 0x%p\n",
 				   &rt->release_lock);
+
 			reinit_release_heap(t);
 			TRACE_TASK(t, "release_heap ready\n");
+
 			spin_lock(&rt->release_lock);
 			TRACE_TASK(t, "Re-acquired release_lock 0x%p\n",
 				   &rt->release_lock);
+
 			rh = get_release_heap(rt, t, 1);
 		}
 		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
-		spin_unlock_irqrestore(&rt->release_lock, flags);
+
+		spin_unlock(&rt->release_lock);
 		TRACE_TASK(t, "Returned the release_lock 0x%p\n", &rt->release_lock);
 
 		/* To avoid arming the timer multiple times, we only let the
@@ -210,9 +215,16 @@ static void arm_release_timer(unsigned long _rt)
 		 */
 		if (rh == tsk_rt(t)->rel_heap) {
 			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
-			hrtimer_start(&rh->timer,
-				      ns_to_ktime(rh->release_time),
-				      HRTIMER_MODE_ABS);
+			/* we cannot arm the timer using hrtimer_start()
+			 * as it may deadlock on rq->lock
+			 */
+			/* FIXME now only one cpu without pulling
+			 * later more cpus; hrtimer_pull should call
+			 * __hrtimer_start... always with PINNED mode
+			 */
+			__hrtimer_start_range_ns(&rh->timer,
+					ns_to_ktime(rh->release_time),
+					0, HRTIMER_MODE_ABS_PINNED, 0);
 		} else
 			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
 	}
@@ -280,8 +292,8 @@ void __add_release(rt_domain_t* rt, struct task_struct *task)
 	TRACE_TASK(task, "add_release(), rel=%llu\n", get_release(task));
 	list_add(&tsk_rt(task)->list, &rt->tobe_released);
 	task->rt_param.domain = rt;
-	/* XXX arm_release_timer() used to be activated here
-	 *     such that it would be called with the runqueue lock dropped.
-	 */
+
+	/* start release timer */
+	arm_release_timer(rt);
 }
 
