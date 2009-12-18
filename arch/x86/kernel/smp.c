@@ -246,6 +246,7 @@ void smp_pull_timers_interrupt(struct pt_regs *regs)
 {
 	ack_APIC_irq();
 	TRACE("pull timer interrupt\n");
+	hrtimer_pull();
 }
 
 struct smp_ops smp_ops = {
