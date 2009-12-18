@@ -19,6 +19,8 @@
 
 #include <litmus/trace.h>
 
+#include <litmus/rt_domain.h>
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(task_transition_lock);
@@ -30,6 +32,7 @@ atomic_t __log_seq_no = ATOMIC_INIT(0);
 atomic_t release_master_cpu = ATOMIC_INIT(NO_CPU);
 
 static struct kmem_cache * heap_node_cache;
+extern struct kmem_cache * release_heap_cache;
 
 struct heap_node* heap_node_alloc(int gfp_flags)
 {
@@ -40,6 +43,9 @@ void heap_node_free(struct heap_node* hn)
 {
 	kmem_cache_free(heap_node_cache, hn);
 }
+
+struct release_heap* release_heap_alloc(int gfp_flags);
+void release_heap_free(struct release_heap* rh);
 
 /*
  * sys_set_task_rt_param
@@ -299,15 +305,16 @@ long litmus_admit_task(struct task_struct* tsk)
 	    get_exec_cost(tsk) > get_rt_period(tsk)) {
 		TRACE_TASK(tsk, "litmus admit: invalid task parameters "
 			   "(%lu, %lu)\n",
-		       get_exec_cost(tsk), get_rt_period(tsk));
-		return -EINVAL;
+		           get_exec_cost(tsk), get_rt_period(tsk));
+		retval = -EINVAL;
+		goto out;
 	}
 
-	if (!cpu_online(get_partition(tsk)))
-	{
+	if (!cpu_online(get_partition(tsk))) {
 		TRACE_TASK(tsk, "litmus admit: cpu %d is not online\n",
 			   get_partition(tsk));
-		return -EINVAL;
+		retval = -EINVAL;
+		goto out;
 	}
 
 	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
@@ -316,17 +323,22 @@ long litmus_admit_task(struct task_struct* tsk)
 	spin_lock_irqsave(&task_transition_lock, flags);
 
 	/* allocate heap node for this task */
-	tsk_rt(tsk)->heap_node    = heap_node_alloc(GFP_ATOMIC);
-	if (!tsk_rt(tsk)->heap_node ||
-	    !tsk_rt(tsk)->rel_heap) {
-		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
-		retval = -ENOMEM;
-		heap_node_free(tsk_rt(tsk)->heap_node);
-	} else
-		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
+	tsk_rt(tsk)->heap_node = heap_node_alloc(GFP_ATOMIC);
+	tsk_rt(tsk)->rel_heap = release_heap_alloc(GFP_ATOMIC);
 
-	if (!retval)
-		retval = litmus->admit_task(tsk);
+	if (!tsk_rt(tsk)->heap_node || !tsk_rt(tsk)->rel_heap) {
+		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
+
+		heap_node_free(tsk_rt(tsk)->heap_node);
+		release_heap_free(tsk_rt(tsk)->rel_heap);
+
+		retval = -ENOMEM;
+		goto out_unlock;
+	} else {
+		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
+	}
+
+	retval = litmus->admit_task(tsk);
 
 	if (!retval) {
 		sched_trace_task_name(tsk);
@@ -334,8 +346,9 @@ long litmus_admit_task(struct task_struct* tsk)
 		atomic_inc(&rt_task_count);
 	}
 
+out_unlock:
 	spin_unlock_irqrestore(&task_transition_lock, flags);
-
+out:
 	return retval;
 }
 
@@ -343,9 +356,13 @@ void litmus_exit_task(struct task_struct* tsk)
 {
 	if (is_realtime(tsk)) {
 		sched_trace_task_completion(tsk, 1);
+
 		litmus->task_exit(tsk);
+
 		BUG_ON(heap_node_in_heap(tsk_rt(tsk)->heap_node));
 	        heap_node_free(tsk_rt(tsk)->heap_node);
+		release_heap_free(tsk_rt(tsk)->rel_heap);
+
 		atomic_dec(&rt_task_count);
 		reinit_litmus_state(tsk, 1);
 	}
@@ -632,6 +649,7 @@ static int __init _init_litmus(void)
 	register_sched_plugin(&linux_sched_plugin);
 
 	heap_node_cache    = KMEM_CACHE(heap_node, SLAB_PANIC);
+	release_heap_cache = KMEM_CACHE(release_heap, SLAB_PANIC);
 
 #ifdef CONFIG_MAGIC_SYSRQ
 	/* offer some debugging help */
@@ -650,6 +668,7 @@ static void _exit_litmus(void)
 {
 	exit_litmus_proc();
 	kmem_cache_destroy(heap_node_cache);
+	kmem_cache_destroy(release_heap_cache);
 }
 
 module_init(_init_litmus);
