@@ -1214,6 +1214,7 @@ struct sched_rt_entity {
 };
 
 struct rcu_node;
+struct od_table_entry;
 
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
@@ -1296,9 +1297,9 @@ struct task_struct {
 	unsigned long stack_canary;
 #endif
 
-	/* 
+	/*
 	 * pointers to (original) parent process, youngest child, younger sibling,
-	 * older sibling, respectively.  (p->father can be replaced with 
+	 * older sibling, respectively.  (p->father can be replaced with
 	 * p->real_parent->pid)
 	 */
 	struct task_struct *real_parent; /* real parent process */
@@ -1511,6 +1512,9 @@ struct task_struct {
 
 	/* LITMUS RT parameters and state */
 	struct rt_param rt_param;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry *od_table;
 
 #ifdef CONFIG_LATENCYTOP
 	int latency_record_count;
@@ -2051,7 +2055,7 @@ static inline int dequeue_signal_lock(struct task_struct *tsk, sigset_t *mask, s
 	spin_unlock_irqrestore(&tsk->sighand->siglock, flags);
 
 	return ret;
-}	
+}
 
 extern void block_all_signals(int (*notifier)(void *priv), void *priv,
 			      sigset_t *mask);
