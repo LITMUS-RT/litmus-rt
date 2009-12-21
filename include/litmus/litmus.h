@@ -133,7 +133,7 @@ void srp_ceiling_block(void);
 #define srp_ceiling_block() /* nothing */
 #endif
 
-#define heap2task(hn) ((struct task_struct*) hn->value)
+#define bheap2task(hn) ((struct task_struct*) hn->value)
 
 static inline int is_np(struct task_struct *t)
 {

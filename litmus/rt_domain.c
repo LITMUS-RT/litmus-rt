@@ -19,20 +19,20 @@
 
 #include <litmus/trace.h>
 
-#include <litmus/heap.h>
+#include <litmus/bheap.h>
 
 static int dummy_resched(rt_domain_t *rt)
 {
 	return 0;
 }
 
-static int dummy_order(struct heap_node* a, struct heap_node* b)
+static int dummy_order(struct bheap_node* a, struct bheap_node* b)
 {
 	return 0;
 }
 
 /* default implementation: use default lock */
-static void default_release_jobs(rt_domain_t* rt, struct heap* tasks)
+static void default_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 {
 	merge_ready(rt, tasks);
 }
@@ -157,7 +157,7 @@ static void reinit_release_heap(struct task_struct* t)
 	BUG_ON(hrtimer_cancel(&rh->timer));
 
 	/* initialize */
-	heap_init(&rh->heap);
+	bheap_init(&rh->heap);
 	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 }
 /* arm_release_timer() - start local release timer or trigger
@@ -204,7 +204,7 @@ static void arm_release_timer(rt_domain_t *_rt)
 
 			rh = get_release_heap(rt, t, 1);
 		}
-		heap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
+		bheap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
 		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
 
 		spin_unlock(&rt->release_lock);
@@ -236,7 +236,7 @@ static void arm_release_timer(rt_domain_t *_rt)
 }
 
 void rt_domain_init(rt_domain_t *rt,
-		    heap_prio_t order,
+		    bheap_prio_t order,
 		    check_resched_needed_t check,
 		    release_jobs_t release
 		   )
@@ -253,7 +253,7 @@ void rt_domain_init(rt_domain_t *rt,
 
 	rt->release_master = NO_CPU;
 
-	heap_init(&rt->ready_queue);
+	bheap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->tobe_released);
 	for (i = 0; i < RELEASE_QUEUE_SLOTS; i++)
 		INIT_LIST_HEAD(&rt->release_queue.slot[i]);
@@ -276,18 +276,18 @@ void __add_ready(rt_domain_t* rt, struct task_struct *new)
 	      new->comm, new->pid, get_exec_cost(new), get_rt_period(new),
 	      get_release(new), litmus_clock());
 
-	BUG_ON(heap_node_in_heap(tsk_rt(new)->heap_node));
+	BUG_ON(bheap_node_in_heap(tsk_rt(new)->heap_node));
 
-	heap_insert(rt->order, &rt->ready_queue, tsk_rt(new)->heap_node);
+	bheap_insert(rt->order, &rt->ready_queue, tsk_rt(new)->heap_node);
 	rt->check_resched(rt);
 }
 
 /* merge_ready - Add a sorted set of tasks to the rt ready queue. They must be runnable.
  * @tasks      - the newly released tasks
  */
-void __merge_ready(rt_domain_t* rt, struct heap* tasks)
+void __merge_ready(rt_domain_t* rt, struct bheap* tasks)
 {
-	heap_union(rt->order, &rt->ready_queue, tasks);
+	bheap_union(rt->order, &rt->ready_queue, tasks);
 	rt->check_resched(rt);
 }
 

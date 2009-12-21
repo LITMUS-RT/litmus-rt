@@ -10,7 +10,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    fdso.o \
 	    srp.o \
 	    fmlp.o \
-	    heap.o \
+	    bheap.o \
 	    sched_gsn_edf.o
 
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o

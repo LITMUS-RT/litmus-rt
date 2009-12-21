@@ -1,15 +1,15 @@
 #include "linux/kernel.h"
-#include "litmus/heap.h"
+#include "litmus/bheap.h"
 
-void heap_init(struct heap* heap)
+void bheap_init(struct bheap* heap)
 {
 	heap->head = NULL;
 	heap->min  = NULL;
 }
 
-void heap_node_init(struct heap_node** _h, void* value)
+void bheap_node_init(struct bheap_node** _h, void* value)
 {
-	struct heap_node* h = *_h;
+	struct bheap_node* h = *_h;
 	h->parent = NULL;
 	h->next   = NULL;
 	h->child  = NULL;
@@ -20,8 +20,8 @@ void heap_node_init(struct heap_node** _h, void* value)
 
 
 /* make child a subtree of root */
-static void __heap_link(struct heap_node* root,
-			struct heap_node* child)
+static void __bheap_link(struct bheap_node* root,
+			struct bheap_node* child)
 {
 	child->parent = root;
 	child->next   = root->child;
@@ -30,11 +30,11 @@ static void __heap_link(struct heap_node* root,
 }
 
 /* merge root lists */
-static  struct heap_node* __heap_merge(struct heap_node* a,
-					     struct heap_node* b)
+static  struct bheap_node* __bheap_merge(struct bheap_node* a,
+					     struct bheap_node* b)
 {
-	struct heap_node* head = NULL;
-	struct heap_node** pos = &head;
+	struct bheap_node* head = NULL;
+	struct bheap_node** pos = &head;
 
 	while (a && b) {
 		if (a->degree < b->degree) {
@@ -54,10 +54,10 @@ static  struct heap_node* __heap_merge(struct heap_node* a,
 }
 
 /* reverse a linked list of nodes. also clears parent pointer */
-static  struct heap_node* __heap_reverse(struct heap_node* h)
+static  struct bheap_node* __bheap_reverse(struct bheap_node* h)
 {
-	struct heap_node* tail = NULL;
-	struct heap_node* next;
+	struct bheap_node* tail = NULL;
+	struct bheap_node* next;
 
 	if (!h)
 		return h;
@@ -74,10 +74,10 @@ static  struct heap_node* __heap_reverse(struct heap_node* h)
 	return h;
 }
 
-static  void __heap_min(heap_prio_t higher_prio, struct heap* heap,
-			      struct heap_node** prev, struct heap_node** node)
+static  void __bheap_min(bheap_prio_t higher_prio, struct bheap* heap,
+			      struct bheap_node** prev, struct bheap_node** node)
 {
-	struct heap_node *_prev, *cur;
+	struct bheap_node *_prev, *cur;
 	*prev = NULL;
 
 	if (!heap->head) {
@@ -98,11 +98,11 @@ static  void __heap_min(heap_prio_t higher_prio, struct heap* heap,
 	}
 }
 
-static  void __heap_union(heap_prio_t higher_prio, struct heap* heap,
-				struct heap_node* h2)
+static  void __bheap_union(bheap_prio_t higher_prio, struct bheap* heap,
+				struct bheap_node* h2)
 {
-	struct heap_node* h1;
-	struct heap_node *prev, *x, *next;
+	struct bheap_node* h1;
+	struct bheap_node *prev, *x, *next;
 	if (!h2)
 		return;
 	h1 = heap->head;
@@ -110,7 +110,7 @@ static  void __heap_union(heap_prio_t higher_prio, struct heap* heap,
 		heap->head = h2;
 		return;
 	}
-	h1 = __heap_merge(h1, h2);
+	h1 = __bheap_merge(h1, h2);
 	prev = NULL;
 	x    = h1;
 	next = x->next;
@@ -123,14 +123,14 @@ static  void __heap_union(heap_prio_t higher_prio, struct heap* heap,
 		} else if (higher_prio(x, next)) {
 			/* x becomes the root of next */
 			x->next = next->next;
-			__heap_link(x, next);
+			__bheap_link(x, next);
 		} else {
 			/* next becomes the root of x */
 			if (prev)
 				prev->next = next;
 			else
 				h1 = next;
-			__heap_link(next, x);
+			__bheap_link(next, x);
 			x = next;
 		}
 		next = x->next;
@@ -138,26 +138,26 @@ static  void __heap_union(heap_prio_t higher_prio, struct heap* heap,
 	heap->head = h1;
 }
 
-static struct heap_node* __heap_extract_min(heap_prio_t higher_prio,
-					    struct heap* heap)
+static struct bheap_node* __bheap_extract_min(bheap_prio_t higher_prio,
+					    struct bheap* heap)
 {
-	struct heap_node *prev, *node;
-	__heap_min(higher_prio, heap, &prev, &node);
+	struct bheap_node *prev, *node;
+	__bheap_min(higher_prio, heap, &prev, &node);
 	if (!node)
 		return NULL;
 	if (prev)
 		prev->next = node->next;
 	else
 		heap->head = node->next;
-	__heap_union(higher_prio, heap, __heap_reverse(node->child));
+	__bheap_union(higher_prio, heap, __bheap_reverse(node->child));
 	return node;
 }
 
 /* insert (and reinitialize) a node into the heap */
-void heap_insert(heap_prio_t higher_prio, struct heap* heap,
-		 struct heap_node* node)
+void bheap_insert(bheap_prio_t higher_prio, struct bheap* heap,
+		 struct bheap_node* node)
 {
-	struct heap_node *min;
+	struct bheap_node *min;
 	node->child  = NULL;
 	node->parent = NULL;
 	node->next   = NULL;
@@ -169,48 +169,48 @@ void heap_insert(heap_prio_t higher_prio, struct heap* heap,
 		min->parent = NULL;
 		min->next   = NULL;
 		min->degree = 0;
-		__heap_union(higher_prio, heap, min);
+		__bheap_union(higher_prio, heap, min);
 		heap->min   = node;
 	} else
-		__heap_union(higher_prio, heap, node);
+		__bheap_union(higher_prio, heap, node);
 }
 
-void heap_uncache_min(heap_prio_t higher_prio, struct heap* heap)
+void bheap_uncache_min(bheap_prio_t higher_prio, struct bheap* heap)
 {
-	struct heap_node* min;
+	struct bheap_node* min;
 	if (heap->min) {
 		min = heap->min;
 		heap->min = NULL;
-		heap_insert(higher_prio, heap, min);
+		bheap_insert(higher_prio, heap, min);
 	}
 }
 
 /* merge addition into target */
-void heap_union(heap_prio_t higher_prio,
-		struct heap* target, struct heap* addition)
+void bheap_union(bheap_prio_t higher_prio,
+		struct bheap* target, struct bheap* addition)
 {
 	/* first insert any cached minima, if necessary */
-	heap_uncache_min(higher_prio, target);
-	heap_uncache_min(higher_prio, addition);
-	__heap_union(higher_prio, target, addition->head);
+	bheap_uncache_min(higher_prio, target);
+	bheap_uncache_min(higher_prio, addition);
+	__bheap_union(higher_prio, target, addition->head);
 	/* this is a destructive merge */
 	addition->head = NULL;
 }
 
-struct heap_node* heap_peek(heap_prio_t higher_prio,
-			    struct heap* heap)
+struct bheap_node* bheap_peek(bheap_prio_t higher_prio,
+			    struct bheap* heap)
 {
 	if (!heap->min)
-		heap->min = __heap_extract_min(higher_prio, heap);
+		heap->min = __bheap_extract_min(higher_prio, heap);
 	return heap->min;
 }
 
-struct heap_node* heap_take(heap_prio_t higher_prio,
-			    struct heap* heap)
+struct bheap_node* bheap_take(bheap_prio_t higher_prio,
+			    struct bheap* heap)
 {
-	struct heap_node *node;
+	struct bheap_node *node;
 	if (!heap->min)
-		heap->min = __heap_extract_min(higher_prio, heap);
+		heap->min = __bheap_extract_min(higher_prio, heap);
 	node = heap->min;
 	heap->min = NULL;
 	if (node)
@@ -218,10 +218,10 @@ struct heap_node* heap_take(heap_prio_t higher_prio,
 	return node;
 }
 
-int heap_decrease(heap_prio_t higher_prio, struct heap_node* node)
+int bheap_decrease(bheap_prio_t higher_prio, struct bheap_node* node)
 {
-	struct heap_node  *parent;
-	struct heap_node** tmp_ref;
+	struct bheap_node  *parent;
+	struct bheap_node** tmp_ref;
 	void* tmp;
 
 	/* bubble up */
@@ -245,11 +245,11 @@ int heap_decrease(heap_prio_t higher_prio, struct heap_node* node)
 	return parent != NULL;
 }
 
-void heap_delete(heap_prio_t higher_prio, struct heap* heap,
-		 struct heap_node* node)
+void bheap_delete(bheap_prio_t higher_prio, struct bheap* heap,
+		 struct bheap_node* node)
 {
-	struct heap_node *parent, *prev, *pos;
-	struct heap_node** tmp_ref;
+	struct bheap_node *parent, *prev, *pos;
+	struct bheap_node** tmp_ref;
 	void* tmp;
 
 	if (heap->min != node) {
@@ -283,32 +283,32 @@ void heap_delete(heap_prio_t higher_prio, struct heap* heap,
 			prev->next = node->next;
 		else
 			heap->head = node->next;
-		__heap_union(higher_prio, heap, __heap_reverse(node->child));
+		__bheap_union(higher_prio, heap, __bheap_reverse(node->child));
 	} else
 		heap->min = NULL;
 	node->degree = NOT_IN_HEAP;
 }
 
 /* allocate a heap node for value and insert into the heap */
-int heap_add(heap_prio_t higher_prio, struct heap* heap,
+int bheap_add(bheap_prio_t higher_prio, struct bheap* heap,
 	     void* value, int gfp_flags)
 {
-	struct heap_node* hn = heap_node_alloc(gfp_flags);
+	struct bheap_node* hn = bheap_node_alloc(gfp_flags);
 	if (likely(hn)) {
-		heap_node_init(&hn, value);
-		heap_insert(higher_prio, heap, hn);
+		bheap_node_init(&hn, value);
+		bheap_insert(higher_prio, heap, hn);
 	}
 	return hn != NULL;
 }
 
-void* heap_take_del(heap_prio_t higher_prio,
-		    struct heap* heap)
+void* bheap_take_del(bheap_prio_t higher_prio,
+		    struct bheap* heap)
 {
-	struct heap_node* hn = heap_take(higher_prio, heap);
+	struct bheap_node* hn = bheap_take(higher_prio, heap);
 	void* ret = NULL;
 	if (hn) {
 		ret = hn->value;
-		heap_node_free(hn);
+		bheap_node_free(hn);
 	}
 	return ret;
 }

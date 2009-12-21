@@ -39,7 +39,7 @@ struct rt_task {
 #ifdef __KERNEL__
 
 struct _rt_domain;
-struct heap_node;
+struct bheap_node;
 struct release_heap;
 
 struct rt_job {
@@ -157,7 +157,7 @@ struct rt_param {
 	 *          other than this pointer (which is updated by the heap
 	 *          implementation).
 	 */
-	struct heap_node*	heap_node;
+	struct bheap_node*	heap_node;
 	struct release_heap*	rel_heap;
 
 	/* Used by rt_domain to queue task in release list.

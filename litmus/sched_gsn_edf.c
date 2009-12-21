@@ -18,7 +18,7 @@
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
 
-#include <litmus/heap.h>
+#include <litmus/bheap.h>
 
 #include <linux/module.h>
 
@@ -96,7 +96,7 @@ typedef struct  {
 	struct task_struct*	linked;		/* only RT tasks */
 	struct task_struct*	scheduled;	/* only RT tasks */
 	atomic_t		will_schedule;	/* prevent unneeded IPIs */
-	struct heap_node*	hn;
+	struct bheap_node*	hn;
 } cpu_entry_t;
 DEFINE_PER_CPU(cpu_entry_t, gsnedf_cpu_entries);
 
@@ -111,14 +111,14 @@ cpu_entry_t* gsnedf_cpus[NR_CPUS];
 
 
 /* the cpus queue themselves according to priority in here */
-static struct heap_node gsnedf_heap_node[NR_CPUS];
-static struct heap      gsnedf_cpu_heap;
+static struct bheap_node gsnedf_heap_node[NR_CPUS];
+static struct bheap      gsnedf_cpu_heap;
 
 static rt_domain_t gsnedf;
 #define gsnedf_lock (gsnedf.ready_lock)
 
 
-static int cpu_lower_prio(struct heap_node *_a, struct heap_node *_b)
+static int cpu_lower_prio(struct bheap_node *_a, struct bheap_node *_b)
 {
 	cpu_entry_t *a, *b;
 	a = _a->value;
@@ -134,16 +134,16 @@ static int cpu_lower_prio(struct heap_node *_a, struct heap_node *_b)
  */
 static void update_cpu_position(cpu_entry_t *entry)
 {
-	if (likely(heap_node_in_heap(entry->hn)))
-		heap_delete(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
-	heap_insert(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
+	if (likely(bheap_node_in_heap(entry->hn)))
+		bheap_delete(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
+	bheap_insert(cpu_lower_prio, &gsnedf_cpu_heap, entry->hn);
 }
 
 /* caller must hold gsnedf lock */
 static cpu_entry_t* lowest_prio_cpu(void)
 {
-	struct heap_node* hn;
-	hn = heap_peek(cpu_lower_prio, &gsnedf_cpu_heap);
+	struct bheap_node* hn;
+	hn = bheap_peek(cpu_lower_prio, &gsnedf_cpu_heap);
 	return hn->value;
 }
 
@@ -304,7 +304,7 @@ static noinline void gsnedf_job_arrival(struct task_struct* task)
 	check_for_preemptions();
 }
 
-static void gsnedf_release_jobs(rt_domain_t* rt, struct heap* tasks)
+static void gsnedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 {
 	unsigned long flags;
 
@@ -628,9 +628,9 @@ static void update_queue_position(struct task_struct *holder)
 		 * We can't use heap_decrease() here since
 		 * the cpu_heap is ordered in reverse direction, so
 		 * it is actually an increase. */
-		heap_delete(cpu_lower_prio, &gsnedf_cpu_heap,
+		bheap_delete(cpu_lower_prio, &gsnedf_cpu_heap,
 			    gsnedf_cpus[tsk_rt(holder)->linked_on]->hn);
-		heap_insert(cpu_lower_prio, &gsnedf_cpu_heap,
+		bheap_insert(cpu_lower_prio, &gsnedf_cpu_heap,
 			    gsnedf_cpus[tsk_rt(holder)->linked_on]->hn);
 	} else {
 		/* holder may be queued: first stop queue changes */
@@ -642,7 +642,7 @@ static void update_queue_position(struct task_struct *holder)
 			 * of holder in some heap. Note that this
 			 * may be a release heap. */
 			check_preempt =
-				!heap_decrease(edf_ready_order,
+				!bheap_decrease(edf_ready_order,
 					       tsk_rt(holder)->heap_node);
 		} else {
 			/* Nothing to do: if it is not queued and not linked
@@ -664,7 +664,7 @@ static void update_queue_position(struct task_struct *holder)
 			/* heap_decrease() hit the top level of the heap: make
 			 * sure preemption checks get the right task, not the
 			 * potentially stale cache. */
-			heap_uncache_min(edf_ready_order,
+			bheap_uncache_min(edf_ready_order,
 					 &gsnedf.ready_queue);
 			check_for_preemptions();
 		}
@@ -770,12 +770,12 @@ static long gsnedf_activate_plugin(void)
 	int cpu;
 	cpu_entry_t *entry;
 
-	heap_init(&gsnedf_cpu_heap);
+	bheap_init(&gsnedf_cpu_heap);
 	gsnedf.release_master = atomic_read(&release_master_cpu);
 
 	for_each_online_cpu(cpu) {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
-		heap_node_init(&entry->hn, entry);
+		bheap_node_init(&entry->hn, entry);
 		atomic_set(&entry->will_schedule, 0);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
@@ -816,7 +816,7 @@ static int __init init_gsn_edf(void)
 	int cpu;
 	cpu_entry_t *entry;
 
-	heap_init(&gsnedf_cpu_heap);
+	bheap_init(&gsnedf_cpu_heap);
 	/* initialize CPU state */
 	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
@@ -824,7 +824,7 @@ static int __init init_gsn_edf(void)
 		atomic_set(&entry->will_schedule, 0);
 		entry->cpu 	 = cpu;
 		entry->hn        = &gsnedf_heap_node[cpu];
-		heap_node_init(&entry->hn, entry);
+		bheap_node_init(&entry->hn, entry);
 	}
 	edf_domain_init(&gsnedf, NULL, gsnedf_release_jobs);
 	return register_sched_plugin(&gsn_edf_plugin);

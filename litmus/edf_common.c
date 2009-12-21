@@ -68,9 +68,9 @@ int edf_higher_prio(struct task_struct* first,
 		 !second->rt_param.inh_task))));
 }
 
-int edf_ready_order(struct heap_node* a, struct heap_node* b)
+int edf_ready_order(struct bheap_node* a, struct bheap_node* b)
 {
-	return edf_higher_prio(heap2task(a), heap2task(b));
+	return edf_higher_prio(bheap2task(a), bheap2task(b));
 }
 
 void edf_domain_init(rt_domain_t* rt, check_resched_needed_t resched,

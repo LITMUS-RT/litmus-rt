@@ -15,7 +15,7 @@
 #include <linux/sched.h>
 #include <litmus/sched_plugin.h>
 
-#include <litmus/heap.h>
+#include <litmus/bheap.h>
 
 #include <litmus/trace.h>
 
@@ -31,17 +31,17 @@ atomic_t __log_seq_no = ATOMIC_INIT(0);
 /* current master CPU for handling timer IRQs */
 atomic_t release_master_cpu = ATOMIC_INIT(NO_CPU);
 
-static struct kmem_cache * heap_node_cache;
+static struct kmem_cache * bheap_node_cache;
 extern struct kmem_cache * release_heap_cache;
 
-struct heap_node* heap_node_alloc(int gfp_flags)
+struct bheap_node* bheap_node_alloc(int gfp_flags)
 {
-	return kmem_cache_alloc(heap_node_cache, gfp_flags);
+	return kmem_cache_alloc(bheap_node_cache, gfp_flags);
 }
 
-void heap_node_free(struct heap_node* hn)
+void bheap_node_free(struct bheap_node* hn)
 {
-	kmem_cache_free(heap_node_cache, hn);
+	kmem_cache_free(bheap_node_cache, hn);
 }
 
 struct release_heap* release_heap_alloc(int gfp_flags);
@@ -323,19 +323,19 @@ long litmus_admit_task(struct task_struct* tsk)
 	spin_lock_irqsave(&task_transition_lock, flags);
 
 	/* allocate heap node for this task */
-	tsk_rt(tsk)->heap_node = heap_node_alloc(GFP_ATOMIC);
+	tsk_rt(tsk)->heap_node = bheap_node_alloc(GFP_ATOMIC);
 	tsk_rt(tsk)->rel_heap = release_heap_alloc(GFP_ATOMIC);
 
 	if (!tsk_rt(tsk)->heap_node || !tsk_rt(tsk)->rel_heap) {
 		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
 
-		heap_node_free(tsk_rt(tsk)->heap_node);
+		bheap_node_free(tsk_rt(tsk)->heap_node);
 		release_heap_free(tsk_rt(tsk)->rel_heap);
 
 		retval = -ENOMEM;
 		goto out_unlock;
 	} else {
-		heap_node_init(&tsk_rt(tsk)->heap_node, tsk);
+		bheap_node_init(&tsk_rt(tsk)->heap_node, tsk);
 	}
 
 	retval = litmus->admit_task(tsk);
@@ -359,8 +359,8 @@ void litmus_exit_task(struct task_struct* tsk)
 
 		litmus->task_exit(tsk);
 
-		BUG_ON(heap_node_in_heap(tsk_rt(tsk)->heap_node));
-	        heap_node_free(tsk_rt(tsk)->heap_node);
+		BUG_ON(bheap_node_in_heap(tsk_rt(tsk)->heap_node));
+	        bheap_node_free(tsk_rt(tsk)->heap_node);
 		release_heap_free(tsk_rt(tsk)->rel_heap);
 
 		atomic_dec(&rt_task_count);
@@ -648,7 +648,7 @@ static int __init _init_litmus(void)
 
 	register_sched_plugin(&linux_sched_plugin);
 
-	heap_node_cache    = KMEM_CACHE(heap_node, SLAB_PANIC);
+	bheap_node_cache    = KMEM_CACHE(bheap_node, SLAB_PANIC);
 	release_heap_cache = KMEM_CACHE(release_heap, SLAB_PANIC);
 
 #ifdef CONFIG_MAGIC_SYSRQ
@@ -667,7 +667,7 @@ static int __init _init_litmus(void)
 static void _exit_litmus(void)
 {
 	exit_litmus_proc();
-	kmem_cache_destroy(heap_node_cache);
+	kmem_cache_destroy(bheap_node_cache);
 	kmem_cache_destroy(release_heap_cache);
 }
 
