@@ -28,6 +28,8 @@
 /*
  * Major number for the tracing char device.
  * the major numbes are from the unassigned/local use block
+ *
+ * set MAJOR to 0 to have it dynamically assigned
  */
 #define LOG_MAJOR	251
 
@@ -328,14 +330,19 @@ static int __init register_buffer_dev(const char* name,
 				      struct file_operations* fops,
 				      int major, int count)
 {
-	dev_t  trace_dev;
+	dev_t trace_dev;
 	struct cdev *cdev;
 	int error = 0;
 
-	trace_dev = MKDEV(major, 0);
-	error = register_chrdev_region(trace_dev, count, name);
-	if (error)
-	{
+	if(major) {
+		trace_dev = MKDEV(major, 0);
+		error = register_chrdev_region(trace_dev, count, name);
+	} else {
+		/* dynamically allocate major number */
+		error = alloc_chrdev_region(&trace_dev, 0, count, name);
+		major = MAJOR(trace_dev);
+	}
+	if (error) {
 		printk(KERN_WARNING "sched trace: "
 		       "Could not register major/minor number %d\n", major);
 		return error;

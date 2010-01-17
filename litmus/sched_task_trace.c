@@ -15,6 +15,8 @@
 #include <litmus/feather_trace.h>
 #include <litmus/ftdev.h>
 
+
+/* set MAJOR to 0 to have it dynamically assigned */
 #define FT_TASK_TRACE_MAJOR	253
 #define NO_EVENTS		4096 /* this is a buffer of 12 4k pages per CPU */
 

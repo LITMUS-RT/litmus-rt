@@ -332,8 +332,15 @@ int register_ftdev(struct ftdev* ftdev, const char* name, int major)
 	dev_t   trace_dev;
 	int error = 0;
 
-	trace_dev = MKDEV(major, 0);
-	error     = register_chrdev_region(trace_dev, ftdev->minor_cnt, name);
+	if(major) {
+		trace_dev = MKDEV(major, 0);
+		error = register_chrdev_region(trace_dev, ftdev->minor_cnt,
+					       name);
+	} else {
+		error = alloc_chrdev_region(&trace_dev, 0, ftdev->minor_cnt,
+				name);
+		major = MAJOR(trace_dev);
+	}
 	if (error)
 	{
 		printk(KERN_WARNING "ftdev(%s): "

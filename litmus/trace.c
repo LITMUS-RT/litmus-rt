@@ -70,6 +70,7 @@ feather_callback void save_timestamp_cpu(unsigned long event,
  */
 #define NO_TIMESTAMPS (2 << 11)
 
+/* set MAJOR to 0 to have it dynamically assigned */
 #define FT_TRACE_MAJOR	252
 
 static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
