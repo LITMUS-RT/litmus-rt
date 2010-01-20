@@ -167,12 +167,12 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 5, do_sched_trace_task_switch_away, t)
 #define sched_trace_task_completion(t, forced) \
 	SCHED_TRACE2(SCHED_TRACE_BASE_ID + 6, do_sched_trace_task_completion, t, \
-		     forced)
+		     (unsigned long) forced)
 #define sched_trace_task_block(t) \
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 7, do_sched_trace_task_block, t)
 #define sched_trace_task_resume(t) \
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 8, do_sched_trace_task_resume, t)
-
+/* when is a pointer, it does not need an explicit cast to unsigned long */
 #define sched_trace_sys_release(when) \
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 9, do_sched_trace_sys_release, when)
 

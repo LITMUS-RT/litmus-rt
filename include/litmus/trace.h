@@ -32,13 +32,13 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
-#define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, def)
+#define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, (unsigned long) def)
 
 #define TTIMESTAMP(id, task) \
 	ft_event1(id, save_timestamp_task, (unsigned long) task)
 
 #define CTIMESTAMP(id, cpu) \
-	ft_event1(id, save_timestamp_cpu, cpu)
+	ft_event1(id, save_timestamp_cpu, (unsigned long) cpu)
 
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
