@@ -285,7 +285,7 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 //	__setscheduler(p, p->rt_param.old_policy, p->rt_param.old_prio);
 
 	/* Cleanup everything else. */
-	memset(&p->rt_param, 0, sizeof(user_config));
+	memset(&p->rt_param, 0, sizeof(p->rt_param));
 
 	/* Restore preserved fields. */
 	if (restore) {

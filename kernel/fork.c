@@ -249,7 +249,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	tsk->stack = ti;
 
 	/* Don't let the new task be a real-time task. */
-	memset(&tsk->rt_param, 0, sizeof(struct rt_task));
+	litmus_fork(tsk);
 
 	err = prop_local_init_single(&tsk->dirties);
 	if (err)
