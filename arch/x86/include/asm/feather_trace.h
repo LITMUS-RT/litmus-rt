@@ -11,8 +11,7 @@ static inline unsigned long long ft_timestamp(void)
 #ifdef CONFIG_X86_32
 #include "feather_trace_32.h"
 #else
-/* not ready for integration yet */
-//#include "feather_trace_64.h"
+#include "feather_trace_64.h"
 #endif
 
 #endif

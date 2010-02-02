@@ -64,7 +64,7 @@ module_init(init_sched_task_trace);
 
 static inline struct st_event_record* get_record(u8 type, struct task_struct* t)
 {
-	struct st_event_record* rec;
+	struct st_event_record* rec = NULL;
 	struct local_buffer* buf;
 
 	buf = &get_cpu_var(st_event_buffer);

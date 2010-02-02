@@ -96,6 +96,7 @@ static inline struct task_struct* __peek_ready(rt_domain_t* rt)
 
 static inline int  is_queued(struct task_struct *t)
 {
+	BUG_ON(!tsk_rt(t)->heap_node);
 	return bheap_node_in_heap(tsk_rt(t)->heap_node);
 }
 
