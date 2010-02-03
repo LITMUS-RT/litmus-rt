@@ -118,6 +118,11 @@ static rt_domain_t gsnedf;
 #define gsnedf_lock (gsnedf.ready_lock)
 
 
+/* Uncomment this if you want to see all scheduling decisions in the
+ * TRACE() log.
+#define WANT_ALL_SCHED_EVENTS
+ */
+
 static int cpu_lower_prio(struct bheap_node *_a, struct bheap_node *_b)
 {
 	cpu_entry_t *a, *b;
@@ -196,10 +201,12 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 			linked->rt_param.linked_on = entry->cpu;
 	}
 	entry->linked = linked;
+#ifdef WANT_ALL_SCHED_EVENTS
 	if (linked)
 		TRACE_TASK(linked, "linked to %d.\n", entry->cpu);
 	else
 		TRACE("NULL linked to %d.\n", entry->cpu);
+#endif
 	update_cpu_position(entry);
 }
 
@@ -415,7 +422,9 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
 	preempt     = entry->scheduled != entry->linked;
 
+#ifdef WANT_ALL_SCHED_EVENTS
 	TRACE_TASK(prev, "invoked gsnedf_schedule.\n");
+#endif
 
 	if (exists)
 		TRACE_TASK(prev,
@@ -480,13 +489,14 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 
 	spin_unlock(&gsnedf_lock);
 
+#ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("gsnedf_lock released, next=0x%p\n", next);
-
 
 	if (next)
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
 	else if (exists && !next)
 		TRACE("becomes idle at %llu.\n", litmus_clock());
+#endif
 
 
 	return next;
@@ -500,7 +510,9 @@ static void gsnedf_finish_switch(struct task_struct *prev)
 	cpu_entry_t* 	entry = &__get_cpu_var(gsnedf_cpu_entries);
 
 	entry->scheduled = is_realtime(current) ? current : NULL;
+#ifdef WANT_ALL_SCHED_EVENTS
 	TRACE_TASK(prev, "switched away from\n");
+#endif
 }
 
 
