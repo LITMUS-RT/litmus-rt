@@ -35,6 +35,30 @@ struct rt_task {
 	task_class_t  	cls;
 };
 
+/* The definition of the data that is shared between the kernel and real-time
+ * tasks via a shared page (see litmus/ctrldev.c).
+ *
+ * WARNING: User space can write to this, so don't trust
+ * the correctness of the fields!
+ *
+ * This servees two purposes: to enable efficient signaling
+ * of non-preemptive sections (user->kernel) and
+ * delayed preemptions (kernel->user), and to export
+ * some real-time relevant statistics such as preemption and
+ * migration data to user space. We can't use a device to export
+ * statistics because we want to avoid system call overhead when
+ * determining preemption/migration overheads).
+ */
+struct control_page {
+	/* Is the task currently in a non-preemptive section? */
+	int np_flag;
+	/* Should the task call into the kernel when it leaves
+	 * its non-preemptive section? */
+	int delayed_preemption;
+
+	/* to be extended */
+};
+
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
 
@@ -163,6 +187,9 @@ struct rt_param {
 	/* Used by rt_domain to queue task in release list.
 	 */
 	struct list_head list;
+
+	/* Pointer to the page shared between userspace and kernel. */
+	struct control_page * ctrl_page;
 };
 
 /*	Possible RT flags	*/
