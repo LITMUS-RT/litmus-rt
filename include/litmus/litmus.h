@@ -27,11 +27,11 @@ extern atomic_t __log_seq_no;
 	do { if (cond) TRACE("BUG_ON(%s) at %s:%d " \
 			     "called from %p current=%s/%d state=%d " \
 			     "flags=%x partition=%d cpu=%d rtflags=%d"\
-			     " job=%u knp=%d timeslice=%u\n",		\
+			     " job=%u timeslice=%u\n",		\
 	#cond, __FILE__, __LINE__, __builtin_return_address(0), current->comm, \
 	current->pid, current->state, current->flags,  \
 	get_partition(current), smp_processor_id(), get_rt_flags(current), \
-	current->rt_param.job_params.job_no, current->rt_param.kernel_np, \
+	current->rt_param.job_params.job_no, \
 	current->rt.time_slice\
 	); } while(0);
 
@@ -124,8 +124,6 @@ static inline lt_t litmus_clock(void)
 	(a)->rt_param.job_params.release,\
 	(b)->rt_param.job_params.release))
 
-#define make_np(t) do {t->rt_param.kernel_np++;} while(0);
-#define take_np(t) do {t->rt_param.kernel_np--;} while(0);
 
 #ifdef CONFIG_SRP
 void srp_ceiling_block(void);
@@ -135,12 +133,88 @@ void srp_ceiling_block(void);
 
 #define bheap2task(hn) ((struct task_struct*) hn->value)
 
-static inline int is_np(struct task_struct *t)
+#ifdef CONFIG_NP_SECTION
+
+static inline int is_kernel_np(struct task_struct *t)
 {
 	return tsk_rt(t)->kernel_np;
 }
 
-#define  request_exit_np(t)
+static inline int is_user_np(struct task_struct *t)
+{
+	return tsk_rt(t)->ctrl_page ? tsk_rt(t)->ctrl_page->np_flag : 0;
+}
+
+static inline void request_exit_np(struct task_struct *t)
+{
+	if (is_user_np(t)) {
+		/* Set the flag that tells user space to call
+		 * into the kernel at the end of a critical section. */
+		if (likely(tsk_rt(t)->ctrl_page)) {
+			TRACE_TASK(t, "setting delayed_preemption flag\n");
+			tsk_rt(t)->ctrl_page->delayed_preemption = 1;
+		}
+	}
+}
+
+static inline void clear_exit_np(struct task_struct *t)
+{
+	if (likely(tsk_rt(t)->ctrl_page))
+		tsk_rt(t)->ctrl_page->delayed_preemption = 0;
+}
+
+static inline void make_np(struct task_struct *t)
+{
+	tsk_rt(t)->kernel_np++;
+}
+
+/* Caller should check if preemption is necessary when
+ * the function return 0.
+ */
+static inline int take_np(struct task_struct *t)
+{
+	return --tsk_rt(t)->kernel_np;
+}
+
+#else
+
+static inline int is_kernel_np(struct task_struct* t)
+{
+	return 0;
+}
+
+static inline int is_user_np(struct task_struct* t)
+{
+	return 0;
+}
+
+static inline void request_exit_np(struct task_struct *t)
+{
+	/* request_exit_np() shouldn't be called if !CONFIG_NP_SECTION */
+	BUG();
+}
+
+static inline void clear_exit_np(struct task_struct* t)
+{
+}
+
+#endif
+
+static inline int is_np(struct task_struct *t)
+{
+#ifdef CONFIG_SCHED_DEBUG_TRACE
+	int kernel, user;
+	kernel = is_kernel_np(t);
+	user   = is_user_np(t);
+	if (kernel || user)
+		TRACE_TASK(t, " is non-preemptive: kernel=%d user=%d\n",
+
+			   kernel, user);
+	return kernel || user;
+#else
+	return unlikely(is_kernel_np(t) || is_user_np(t));
+#endif
+}
 
 static inline int is_present(struct task_struct* t)
 {

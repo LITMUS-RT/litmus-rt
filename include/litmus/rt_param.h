@@ -85,7 +85,6 @@ struct rt_job {
 	unsigned int    job_no;
 };
 
-
 struct pfair_param;
 
 /*	RT task parameters for scheduling extensions
@@ -116,26 +115,14 @@ struct rt_param {
 	 */
 	 struct task_struct*	inh_task;
 
-	/* Don't just dereference this pointer in kernel space!
-	 * It might very well point to junk or nothing at all.
-	 * NULL indicates that the task has not requested any non-preemptable
-	 * section support.
-	 * Not inherited upon fork.
+#ifdef CONFIG_NP_SECTION
+	/* For the FMLP under PSN-EDF, it is required to make the task
+	 * non-preemptive from kernel space. In order not to interfere with
+	 * user space, this counter indicates the kernel space np setting.
+	 * kernel_np > 0 => task is non-preemptive
 	 */
-	short* 			np_flag;
-
-	/* re-use unused counter in plugins that don't need it */
-	union {
-		/* For the FMLP under PSN-EDF, it is required to make the task
-		 * non-preemptive from kernel space. In order not to interfere with
-		 * user space, this counter indicates the kernel space np setting.
-		 * kernel_np > 0 => task is non-preemptive
-		 */
-		unsigned int	kernel_np;
-
-		/* Used by GQ-EDF */
-		unsigned int	last_cpu;
-	};
+	unsigned int	kernel_np;
+#endif
 
 	/* This field can be used by plugins to store where the task
 	 * is currently scheduled. It is the responsibility of the

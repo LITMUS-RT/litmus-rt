@@ -2,6 +2,17 @@ menu "LITMUS^RT"
 
 menu "Real-Time Synchronization"
 
+config NP_SECTION
+        bool "Non-preemptive section support"
+	default n
+	help
+	  Allow tasks to become non-preemptable.
+          Note that plugins still need to explicitly support non-preemptivity.
+          Currently, only GSN-EDF and PSN-EDF have such support.
+
+	  This is required to support the FMLP.
+	  If disabled, all tasks will be considered preemptable at all times.
+
 config SRP
 	bool "Stack Resource Policy (SRP)"
 	default n
@@ -13,7 +24,7 @@ config SRP
 
 config FMLP
 	bool "FMLP support"
-#	depends on NP_SECTION
+	depends on NP_SECTION
 	default n
 	help
 	  Include support for deterministic multiprocessor real-time
