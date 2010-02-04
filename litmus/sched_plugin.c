@@ -1,7 +1,7 @@
 /* sched_plugin.c -- core infrastructure for the scheduler plugin system
  *
  * This file includes the initialization of the plugin system, the no-op Linux
- * scheduler plugin and some dummy functions.
+ * scheduler plugin, some dummy functions, and some helper functions.
  */
 
 #include <linux/list.h>
@@ -11,6 +11,64 @@
 #include <litmus/sched_plugin.h>
 
 #include <litmus/jobs.h>
+
+/*
+ * Generic function to trigger preemption on either local or remote cpu
+ * from scheduler plugins. The key feature is that this function is
+ * non-preemptive section aware and does not invoke the scheduler / send
+ * IPIs if the to-be-preempted task is actually non-preemptive.
+ */
+void preempt_if_preemptable(struct task_struct* t, int on_cpu)
+{
+	/* t is the real-time task executing on CPU on_cpu If t is NULL, then
+	 * on_cpu is currently scheduling background work.
+	 */
+
+	int send_ipi;
+
+	if (smp_processor_id() == on_cpu) {
+		/* local CPU case */
+		if (t) {
+			/* check if we need to poke userspace */
+			if (is_user_np(t))
+				/* yes, poke it */
+				request_exit_np(t);
+			else
+				/* no, see if we are allowed to preempt the
+				 * currently-executing task */
+				if (!is_kernel_np(t))
+					set_tsk_need_resched(t);
+		} else
+			/* move non-real-time task out of the way */
+			set_tsk_need_resched(current);
+	} else {
+		/* remote CPU case */
+		if (!t)
+			/* currently schedules non-real-time work */
+			send_ipi = 1;
+		else {
+			/* currently schedules real-time work */
+			if (is_user_np(t)) {
+				/* need to notify user space of delayed
+				 * preemption */
+
+				/* to avoid a race, set the flag, then test
+				 * again */
+				request_exit_np(t);
+				/* make sure it got written */
+				mb();
+			}
+			/* Only send an ipi if remote task might have raced our
+			 * request, i.e., send an IPI to make sure if it exited
+			 * its critical section.
+			 */
+			send_ipi = !is_np(t) && !is_kernel_np(t);
+		}
+		if (likely(send_ipi))
+			smp_send_reschedule(on_cpu);
+	}
+}
+
 
 /*************************************************************
  *                   Dummy plugin functions                  *

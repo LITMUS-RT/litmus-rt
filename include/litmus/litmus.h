@@ -124,6 +124,7 @@ static inline lt_t litmus_clock(void)
 	(a)->rt_param.job_params.release,\
 	(b)->rt_param.job_params.release))
 
+void preempt_if_preemptable(struct task_struct* t, int on_cpu);
 
 #ifdef CONFIG_SRP
 void srp_ceiling_block(void);
