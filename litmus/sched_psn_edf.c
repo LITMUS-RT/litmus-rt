@@ -68,16 +68,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 /* we assume the lock is being held */
 static void preempt(psnedf_domain_t *pedf)
 {
-	if (smp_processor_id() == pedf->cpu) {
-		if (pedf->scheduled && is_np(pedf->scheduled))
-			request_exit_np(pedf->scheduled);
-		else
-			set_tsk_need_resched(current);
-	} else
-		/* in case that it is a remote CPU we have to defer the
-		 * the decision to the remote CPU
-		 */
-		smp_send_reschedule(pedf->cpu);
+	preempt_if_preemptable(pedf->scheduled, pedf->cpu);
 }
 
 /* This check is trivial in partioned systems as we only have to consider
@@ -86,16 +77,15 @@ static void preempt(psnedf_domain_t *pedf)
 static int psnedf_check_resched(rt_domain_t *edf)
 {
 	psnedf_domain_t *pedf = container_of(edf, psnedf_domain_t, domain);
-	int ret = 0;
 
 	/* because this is a callback from rt_domain_t we already hold
 	 * the necessary lock for the ready queue
 	 */
 	if (edf_preemption_needed(edf, pedf->scheduled)) {
 		preempt(pedf);
-		ret = 1;
-	}
-	return ret;
+		return 1;
+	} else
+		return 0;
 }
 
 static void job_completion(struct task_struct* t)
@@ -121,7 +111,7 @@ static void psnedf_tick(struct task_struct *t)
 			TRACE("psnedf_scheduler_tick: "
 			      "%d is preemptable "
 			      " => FORCE_RESCHED\n", t->pid);
-		} else {
+		} else if (is_user_np(t)) {
 			TRACE("psnedf_scheduler_tick: "
 			      "%d is non-preemptable, "
 			      "preemption delayed.\n", t->pid);
@@ -394,6 +384,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 	rt_domain_t*		edf  = task_edf(t);
 	int 			ret  = 0;
 	int			cpu  = get_partition(current);
+	int still_np;
 
 
         /* Find new highest-priority semaphore task
@@ -404,23 +395,34 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 	if (t == sem->hp.cpu_task[cpu])
 		edf_set_hp_cpu_task(sem, cpu);
 
-	take_np(t);
+	still_np = take_np(current);
+
+	/* Since we don't nest resources, this
+	 * should always be zero */
+	BUG_ON(still_np);
+
 	if (current->rt_param.inh_task) {
 		TRACE_CUR("return priority of %s/%d\n",
 			  current->rt_param.inh_task->comm,
 			  current->rt_param.inh_task->pid);
-		spin_lock(&pedf->slock);
-
-		/* Reset inh_task to NULL. */
-		current->rt_param.inh_task = NULL;
-
-		/* check if we need to reschedule */
-		if (edf_preemption_needed(edf, current))
-			preempt(pedf);
-
-		spin_unlock(&pedf->slock);
 	} else
 		TRACE_CUR(" no priority to return %p\n", sem);
+
+
+	/* Always check for delayed preemptions that might have become
+	 * necessary due to non-preemptive execution.
+	 */
+	spin_lock(&pedf->slock);
+
+	/* Reset inh_task to NULL. */
+	current->rt_param.inh_task = NULL;
+
+	/* check if we need to reschedule */
+	if (edf_preemption_needed(edf, current))
+		preempt(pedf);
+
+	spin_unlock(&pedf->slock);
+
 
 	return ret;
 }

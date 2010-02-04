@@ -242,27 +242,9 @@ static noinline void unlink(struct task_struct* t)
 
 /* preempt - force a CPU to reschedule
  */
-static noinline void preempt(cpu_entry_t *entry)
+static void preempt(cpu_entry_t *entry)
 {
-	/* We cannot make the is_np() decision here if it is a remote CPU
-	 * because requesting exit_np() requires that we currently use the
-	 * address space of the task. Thus, in the remote case we just send
-	 * the IPI and let schedule() handle the problem.
-	 */
-
-	if (smp_processor_id() == entry->cpu) {
-		if (entry->scheduled && is_np(entry->scheduled))
-			request_exit_np(entry->scheduled);
-		else
-			set_tsk_need_resched(current);
-	} else
-		/* in case that it is a remote CPU we have to defer the
-		 * the decision to the remote CPU
-		 * FIXME: We could save a few IPI's here if we leave the flag
-		 * set when we are waiting for a np_exit().
-		 */
-		if (!test_will_schedule(entry->cpu))
-			smp_send_reschedule(entry->cpu);
+	preempt_if_preemptable(entry->scheduled, entry->cpu);
 }
 
 /* requeue - Put an unlinked task into gsn-edf domain.
@@ -364,7 +346,7 @@ static void gsnedf_tick(struct task_struct* t)
 			TRACE("gsnedf_scheduler_tick: "
 			      "%d is preemptable "
 			      " => FORCE_RESCHED\n", t->pid);
-		} else {
+		} else if (is_user_np(t)) {
 			TRACE("gsnedf_scheduler_tick: "
 			      "%d is non-preemptable, "
 			      "preemption delayed.\n", t->pid);
