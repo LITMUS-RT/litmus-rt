@@ -5,7 +5,7 @@
 #include <linux/semaphore.h>
 
 #include <linux/fs.h>
-#include <linux/cdev.h>
+#include <linux/miscdevice.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/sysrq.h>
@@ -14,6 +14,8 @@
 
 #include <litmus/sched_trace.h>
 #include <litmus/litmus.h>
+
+#define SCHED_TRACE_NAME "litmus/log"
 
 /* Allocate a buffer of about 32k per CPU */
 #define LITMUS_TRACE_BUF_PAGES 8
@@ -24,14 +26,6 @@
 
 /* Max length for one write --- from kernel --- to the buffer */
 #define MSG_SIZE 255
-
-/*
- * Major number for the tracing char device.
- * the major numbes are from the unassigned/local use block
- *
- * set MAJOR to 0 to have it dynamically assigned
- */
-#define LOG_MAJOR	251
 
 /* Inner ring buffer structure */
 typedef struct {
@@ -316,54 +310,18 @@ static int log_release(struct inode *in, struct file *filp)
  *
  * Except for opening the device file it uses the same operations as trace_fops.
  */
-struct file_operations log_fops = {
+static struct file_operations log_fops = {
 	.owner   = THIS_MODULE,
 	.open    = log_open,
 	.release = log_release,
 	.read    = log_read,
 };
 
-/*
- * Device registration
- */
-static int __init register_buffer_dev(const char* name,
-				      struct file_operations* fops,
-				      int major, int count)
-{
-	dev_t trace_dev;
-	struct cdev *cdev;
-	int error = 0;
-
-	if(major) {
-		trace_dev = MKDEV(major, 0);
-		error = register_chrdev_region(trace_dev, count, name);
-	} else {
-		/* dynamically allocate major number */
-		error = alloc_chrdev_region(&trace_dev, 0, count, name);
-		major = MAJOR(trace_dev);
-	}
-	if (error) {
-		printk(KERN_WARNING "sched trace: "
-		       "Could not register major/minor number %d\n", major);
-		return error;
-	}
-	cdev = cdev_alloc();
-	if (!cdev) {
-		printk(KERN_WARNING "sched trace: "
-			"Could not get a cdev for %s.\n", name);
-		return -ENOMEM;
-	}
-	cdev->owner = THIS_MODULE;
-	cdev->ops   = fops;
-	error = cdev_add(cdev, trace_dev, count);
-	if (error) {
-		printk(KERN_WARNING "sched trace: "
-			"add_cdev failed for %s.\n", name);
-		return -ENOMEM;
-	}
-	return error;
-
-}
+static struct miscdevice litmus_log_dev = {
+	.name    = SCHED_TRACE_NAME,
+	.minor   = MISC_DYNAMIC_MINOR,
+	.fops    = &log_fops,
+};
 
 #ifdef CONFIG_MAGIC_SYSRQ
 void dump_trace_buffer(int max)
@@ -372,7 +330,7 @@ void dump_trace_buffer(int max)
 	int len;
 	int count = 0;
 
-	/* potentially, but very unlikely race... */
+	/* potential, but very unlikely, race... */
 	trace_recurse = 1;
 	while ((max == 0 || count++ < max) &&
 	       (len = rb_get(&log_buffer.buf, line, sizeof(line) - 1)) > 0) {
@@ -408,9 +366,13 @@ static int __init init_sched_trace(void)
 #endif
 
 
-	return register_buffer_dev("litmus_log", &log_fops,
-				   LOG_MAJOR, 1);
+	return misc_register(&litmus_log_dev);
+}
+
+static void __exit exit_sched_trace(void)
+{
+	misc_deregister(&litmus_log_dev);
 }
 
 module_init(init_sched_trace);
-
+module_exit(exit_sched_trace);

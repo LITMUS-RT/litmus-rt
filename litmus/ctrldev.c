@@ -7,7 +7,7 @@
 #include <litmus/litmus.h>
 
 /* only one page for now, but we might want to add a RO version at some point */
-#define CTRL_MINOR_COUNT 1
+
 #define CTRL_NAME        "litmus/ctrl"
 
 /* allocate t->rt_param.ctrl_page*/
