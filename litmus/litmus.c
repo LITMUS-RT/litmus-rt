@@ -418,6 +418,9 @@ void litmus_fork(struct task_struct* p)
 	else
 		/* non-rt tasks might have ctrl_page set */
 		tsk_rt(p)->ctrl_page = NULL;
+
+	/* od tables are never inherited across a fork */
+	p->od_table = NULL;
 }
 
 /* Called upon execve().
