@@ -223,7 +223,7 @@ struct od_table_entry* __od_lookup(int od)
 }
 
 
-asmlinkage int sys_od_open(int fd, int type, int obj_id, void* __user config)
+asmlinkage long sys_od_open(int fd, int type, int obj_id, void* __user config)
 {
 	int ret = 0;
 	struct file*  file;
@@ -259,7 +259,7 @@ out:
 }
 
 
-asmlinkage int sys_od_close(int od)
+asmlinkage long sys_od_close(int od)
 {
 	int ret = -EINVAL;
 	struct task_struct *t = current;
