@@ -258,28 +258,27 @@ static void psnedf_task_wake_up(struct task_struct *task)
 		release_at(task, now);
 		sched_trace_task_release(task);
 	}
-	requeue(task, edf);
+
+	/* Only add to ready queue if it is not the currently-scheduled
+	 * task. This could be the case if a task was woken up concurrently
+	 * on a remote CPU before the executing CPU got around to actually
+	 * de-scheduling the task, i.e., wake_up() raced with schedule()
+	 * and won.
+	 */
+	if (pedf->scheduled != task)
+		requeue(task, edf);
+
 	spin_unlock_irqrestore(&pedf->slock, flags);
 	TRACE_TASK(task, "wake up done\n");
 }
 
 static void psnedf_task_block(struct task_struct *t)
 {
-	psnedf_domain_t *pedf = task_pedf(t);
-
 	/* only running tasks can block, thus t is in no queue */
 	TRACE_TASK(t, "block at %llu, state=%d\n", litmus_clock(), t->state);
 
 	BUG_ON(!is_realtime(t));
 	BUG_ON(is_queued(t));
-
-	/* if this task is dead, then we need to reset pedf->schedule now
-	 * as we might get rescheduled before task_exit executes
-	 */
-	if(unlikely(t->state == TASK_DEAD)) {
-		TRACE_TASK(t, "Dead, setting scheduled = NULL\n");
-		pedf->scheduled = NULL;
-	}
 }
 
 static void psnedf_task_exit(struct task_struct * t)
