@@ -88,9 +88,11 @@ static int psnedf_check_resched(rt_domain_t *edf)
 		return 0;
 }
 
-static void job_completion(struct task_struct* t)
+static void job_completion(struct task_struct* t, int forced)
 {
+	sched_trace_task_completion(t,forced);
 	TRACE_TASK(t, "job_completion().\n");
+
 	set_rt_flags(t, RT_F_SLEEP);
 	prepare_for_next_period(t);
 }
@@ -168,7 +170,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	 * this.
 	 */
 	if (!np && (out_of_time || sleep) && !blocks) {
-		job_completion(pedf->scheduled);
+		job_completion(pedf->scheduled, !sleep);
 		resched = 1;
 	}
 
