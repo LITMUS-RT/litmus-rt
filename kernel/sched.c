@@ -5520,19 +5520,15 @@ need_resched_nonpreemptible:
 		spin_unlock_irq(&rq->lock);
 	}
 
-	TS_SCHED2_START(current);
 	sched_trace_task_switch_to(current);
 
 	post_schedule(rq);
 
 	if (unlikely(reacquire_kernel_lock(current) < 0)) {
-		TS_SCHED2_END(current);
 		goto need_resched_nonpreemptible;
 	}
 
 	preempt_enable_no_resched();
-
-	TS_SCHED2_END(current);
 
 	if (need_resched())
 		goto need_resched;

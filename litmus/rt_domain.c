@@ -301,6 +301,10 @@ void __add_release(rt_domain_t* rt, struct task_struct *task)
 	task->rt_param.domain = rt;
 
 	/* start release timer */
+	TS_SCHED2_START(task);
+
 	arm_release_timer(rt);
+
+	TS_SCHED2_END(task);
 }
 
