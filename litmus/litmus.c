@@ -24,6 +24,8 @@
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(task_transition_lock);
+/* synchronize plugin switching */
+atomic_t cannot_use_plugin	= ATOMIC_INIT(0);
 
 /* Give log messages sequential IDs. */
 atomic_t __log_seq_no = ATOMIC_INIT(0);
@@ -369,13 +371,17 @@ void litmus_exit_task(struct task_struct* tsk)
 	}
 }
 
+/* IPI callback to synchronize plugin switching */
+static void synch_on_plugin_switch(void* info)
+{
+	while (atomic_read(&cannot_use_plugin))
+		cpu_relax();
+}
+
 /* Switching a plugin in use is tricky.
  * We must watch out that no real-time tasks exists
  * (and that none is created in parallel) and that the plugin is not
  * currently in use on any processor (in theory).
- *
- * For now, we don't enforce the second part since it is unlikely to cause
- * any trouble by itself as long as we don't unload modules.
  */
 int switch_sched_plugin(struct sched_plugin* plugin)
 {
@@ -383,6 +389,11 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	int ret = 0;
 
 	BUG_ON(!plugin);
+
+	/* forbid other cpus to use the plugin */
+	atomic_set(&cannot_use_plugin, 1);
+	/* send IPI to force other CPUs to synch with us */
+	smp_call_function(synch_on_plugin_switch, NULL, 0);
 
 	/* stop task transitions */
 	spin_lock_irqsave(&task_transition_lock, flags);
@@ -404,6 +415,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 		ret = -EBUSY;
 out:
 	spin_unlock_irqrestore(&task_transition_lock, flags);
+	atomic_set(&cannot_use_plugin, 0);
 	return ret;
 }
 
