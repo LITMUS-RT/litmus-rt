@@ -12,9 +12,13 @@
  *   the programmer needs to be aware of the topology to place tasks
  *   in the desired cluster
  * - default clustering is around L2 cache (cache index = 2)
- *   supported clusters are: L1 (private cache: pedf), L2, L3
+ *   supported clusters are: L1 (private cache: pedf), L2, L3, ALL (all
+ *   online_cpus are placed in a single cluster).
  *
  *   For details on functions, take a look at sched_gsn_edf.c
+ *
+ * Currently, we do not support changes in the number of online cpus.
+ * If the num_online_cpus() dynamically changes, the plugin is broken.
  *
  * This version uses the simple approach and serializes all scheduling
  * decisions by the use of a queue lock. This is probably not the
@@ -643,17 +647,23 @@ static long cedf_activate_plugin(void)
 	if(!zalloc_cpumask_var(&mask, GFP_ATOMIC))
 		return -ENOMEM;
 
-	chk = get_shared_cpu_map(mask, 0, cluster_cache_index);
-	if (chk) {
-		/* if chk != 0 then it is the max allowed index */
-		printk(KERN_INFO "C-EDF: Cannot support cache index = %d\n",
-				cluster_cache_index);
-		printk(KERN_INFO "C-EDF: Using cache index = %d\n",
-				chk);
-		cluster_cache_index = chk;
-	}
+	if (unlikely(cluster_cache_index == num_online_cpus())) {
 
-	cluster_size = cpumask_weight(mask);
+		cluster_size = num_online_cpus();
+	} else {
+
+		chk = get_shared_cpu_map(mask, 0, cluster_cache_index);
+		if (chk) {
+			/* if chk != 0 then it is the max allowed index */
+			printk(KERN_INFO "C-EDF: Cannot support cache index = %d\n",
+					cluster_cache_index);
+			printk(KERN_INFO "C-EDF: Using cache index = %d\n",
+					chk);
+			cluster_cache_index = chk;
+		}
+
+		cluster_size = cpumask_weight(mask);
+	}
 
 	if ((num_online_cpus() % cluster_size) != 0) {
 		/* this can't be right, some cpus are left out */
@@ -696,7 +706,11 @@ static long cedf_activate_plugin(void)
 
 			/* this cpu isn't in any cluster */
 			/* get the shared cpus */
-			get_shared_cpu_map(mask, cpu, cluster_cache_index);
+			if (unlikely(cluster_cache_index == num_online_cpus()))
+				cpumask_copy(mask, cpu_online_mask);
+			else
+				get_shared_cpu_map(mask, cpu, cluster_cache_index);
+
 			cpumask_copy(cedf[i].cpu_map, mask);
 #ifdef VERBOSE_INIT
 			print_cluster_topology(mask, cpu);

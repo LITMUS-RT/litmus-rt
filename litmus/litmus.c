@@ -582,8 +582,10 @@ static int proc_read_cluster_size(char *page, char **start,
 		len = snprintf(page, PAGE_SIZE, "L2\n");
 	else if (cluster_cache_index == 3)
 		len = snprintf(page, PAGE_SIZE, "L3\n");
-	else /* (cluster_cache_index == 1) */
+	else if (cluster_cache_index == 1)
 		len = snprintf(page, PAGE_SIZE, "L1\n");
+	else
+		len = snprintf(page, PAGE_SIZE, "ALL\n");
 
 	return len;
 }
@@ -617,6 +619,8 @@ static int proc_write_cluster_size(struct file *file,
 		cluster_cache_index = 3;
 	else if (!strcmp(cache_name, "L1"))
 		cluster_cache_index = 1;
+	else if (!strcmp(cache_name, "ALL"))
+		cluster_cache_index = num_online_cpus();
 	else
 		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
 
