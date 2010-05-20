@@ -112,6 +112,13 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		       "because wcet > period\n", pid);
 		goto out_unlock;
 	}
+	if (tp.budget_policy != NO_ENFORCEMENT &&
+		tp.budget_policy != QUANTUM_ENFORCEMENT)
+	{
+		printk(KERN_INFO "litmus: real-time task %d rejected "
+			"because unsupported budget enforcement policy specified\n", pid);
+		goto out_unlock;
+	}
 
 	target->rt_param.task_params = tp;
 

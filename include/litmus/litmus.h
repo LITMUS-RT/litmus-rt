@@ -83,6 +83,8 @@ inline static int budget_exhausted(struct task_struct* t)
 	return get_exec_time(t) >= get_exec_cost(t);
 }
 
+#define budget_enforced(t) (tsk_rt(t)->task_params.budget_policy != NO_ENFORCEMENT)
+
 
 #define is_hrt(t)     		\
 	(tsk_rt(t)->task_params.class == RT_CLASS_HARD)

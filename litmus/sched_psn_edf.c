@@ -107,7 +107,7 @@ static void psnedf_tick(struct task_struct *t)
 	 */
 	BUG_ON(is_realtime(t) && t != pedf->scheduled);
 
-	if (is_realtime(t) && budget_exhausted(t)) {
+	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
 		if (!is_np(t)) {
 			set_tsk_need_resched(t);
 			TRACE("psnedf_scheduler_tick: "
@@ -143,7 +143,9 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	/* (0) Determine state */
 	exists      = pedf->scheduled != NULL;
 	blocks      = exists && !is_running(pedf->scheduled);
-	out_of_time = exists && budget_exhausted(pedf->scheduled);
+	out_of_time = exists &&
+				  budget_enforced(pedf->scheduled) &&
+				  budget_exhausted(pedf->scheduled);
 	np 	    = exists && is_np(pedf->scheduled);
 	sleep	    = exists && get_rt_flags(pedf->scheduled) == RT_F_SLEEP;
 	preempt     = edf_preemption_needed(edf, prev);

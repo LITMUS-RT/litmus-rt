@@ -336,7 +336,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
  */
 static void gsnedf_tick(struct task_struct* t)
 {
-	if (is_realtime(t) && budget_exhausted(t)) {
+	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
 		if (!is_np(t)) {
 			/* np tasks will be preempted when they become
 			 * preemptable again
@@ -399,7 +399,9 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
 	blocks      = exists && !is_running(entry->scheduled);
-	out_of_time = exists && budget_exhausted(entry->scheduled);
+	out_of_time = exists &&
+				  budget_enforced(entry->scheduled) &&
+				  budget_exhausted(entry->scheduled);
 	np 	    = exists && is_np(entry->scheduled);
 	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
 	preempt     = entry->scheduled != entry->linked;

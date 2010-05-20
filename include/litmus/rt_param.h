@@ -27,12 +27,19 @@ typedef enum {
 	RT_CLASS_BEST_EFFORT
 } task_class_t;
 
+typedef enum {
+	NO_ENFORCEMENT,      /* job may overrun unhindered */
+	QUANTUM_ENFORCEMENT, /* budgets are only checked on quantum boundaries */
+	PRECISE_ENFORCEMENT  /* NOT IMPLEMENTED - enforced with hrtimers */
+} budget_policy_t;
+
 struct rt_task {
 	lt_t 		exec_cost;
 	lt_t 		period;
 	lt_t		phase;
-	unsigned int  	cpu;
-	task_class_t  	cls;
+	unsigned int	cpu;
+	task_class_t	cls;
+	budget_policy_t budget_policy; /* ignored by pfair */
 };
 
 /* The definition of the data that is shared between the kernel and real-time
