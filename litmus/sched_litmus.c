@@ -20,33 +20,40 @@ static void update_time_litmus(struct rq *rq, struct task_struct *p)
 static void double_rq_lock(struct rq *rq1, struct rq *rq2);
 static void double_rq_unlock(struct rq *rq1, struct rq *rq2);
 
+/*
+ * litmus_tick gets called by scheduler_tick() with HZ freq
+ * Interrupts are disabled
+ */
 static void litmus_tick(struct rq *rq, struct task_struct *p)
 {
+	TS_PLUGIN_TICK_START;
+
 	if (is_realtime(p))
 		update_time_litmus(rq, p);
+
+	/* plugin tick */
 	litmus->tick(p);
+
+	return;
 }
 
-static void litmus_schedule(struct rq *rq, struct task_struct *prev)
+static struct task_struct *
+litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
 	struct rq* other_rq;
+	struct task_struct *next;
+
 	long was_running;
 	lt_t _maybe_deadlock = 0;
-	/* WARNING: rq is _not_ locked! */
-	if (is_realtime(prev)) {
-		update_time_litmus(rq, prev);
-		if (!is_running(prev))
-			tsk_rt(prev)->present = 0;
-	}
 
 	/* let the plugin schedule */
-	rq->litmus_next = litmus->schedule(prev);
+	next = litmus->schedule(prev);
 
 	/* check if a global plugin pulled a task from a different RQ */
-	if (rq->litmus_next && task_rq(rq->litmus_next) != rq) {
+	if (next && task_rq(next) != rq) {
 		/* we need to migrate the task */
-		other_rq = task_rq(rq->litmus_next);
-		TRACE_TASK(rq->litmus_next, "migrate from %d\n", other_rq->cpu);
+		other_rq = task_rq(next);
+		TRACE_TASK(next, "migrate from %d\n", other_rq->cpu);
 
 		/* while we drop the lock, the prev task could change its
 		 * state
@@ -59,18 +66,18 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * the case of cross or circular migrations.  It's the job of
 		 * the plugin to make sure that doesn't happen.
 		 */
-		TRACE_TASK(rq->litmus_next, "stack_in_use=%d\n",
-			   rq->litmus_next->rt_param.stack_in_use);
-		if (rq->litmus_next->rt_param.stack_in_use != NO_CPU) {
-			TRACE_TASK(rq->litmus_next, "waiting to deschedule\n");
+		TRACE_TASK(next, "stack_in_use=%d\n",
+			   next->rt_param.stack_in_use);
+		if (next->rt_param.stack_in_use != NO_CPU) {
+			TRACE_TASK(next, "waiting to deschedule\n");
 			_maybe_deadlock = litmus_clock();
 		}
-		while (rq->litmus_next->rt_param.stack_in_use != NO_CPU) {
+		while (next->rt_param.stack_in_use != NO_CPU) {
 			cpu_relax();
 			mb();
-			if (rq->litmus_next->rt_param.stack_in_use == NO_CPU)
-				TRACE_TASK(rq->litmus_next,
-					   "descheduled. Proceeding.\n");
+			if (next->rt_param.stack_in_use == NO_CPU)
+				TRACE_TASK(next,"descheduled. Proceeding.\n");
+
 			if (lt_before(_maybe_deadlock + 10000000,
 				      litmus_clock())) {
 				/* We've been spinning for 10ms.
@@ -79,20 +86,19 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 				 * we will have debug info instead of a hard
 				 * deadlock.
 				 */
-				TRACE_TASK(rq->litmus_next,
-					   "stack too long in use. "
+				TRACE_TASK(next,"stack too long in use. "
 					   "Deadlock?\n");
-				rq->litmus_next = NULL;
+				next = NULL;
 
 				/* bail out */
 				spin_lock(&rq->lock);
-				return;
+				return next;
 			}
 		}
 #ifdef  __ARCH_WANT_UNLOCKED_CTXSW
-		if (rq->litmus_next->oncpu)
-			TRACE_TASK(rq->litmus_next, "waiting for !oncpu");
-		while (rq->litmus_next->oncpu) {
+		if (next->oncpu)
+			TRACE_TASK(next, "waiting for !oncpu");
+		while (next->oncpu) {
 			cpu_relax();
 			mb();
 		}
@@ -114,7 +120,7 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 			}
 		}
 
-		set_task_cpu(rq->litmus_next, smp_processor_id());
+		set_task_cpu(next, smp_processor_id());
 
 		/* DEBUG: now that we have the lock we need to make sure a
 		 *  couple of things still hold:
@@ -123,22 +129,24 @@ static void litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * If either is violated, then the active plugin is
 		 * doing something wrong.
 		 */
-		if (!is_realtime(rq->litmus_next) ||
-		    !is_running(rq->litmus_next)) {
+		if (!is_realtime(next) || !is_running(next)) {
 			/* BAD BAD BAD */
-			TRACE_TASK(rq->litmus_next,
-				   "BAD: migration invariant FAILED: "
+			TRACE_TASK(next,"BAD: migration invariant FAILED: "
 				   "rt=%d running=%d\n",
-				   is_realtime(rq->litmus_next),
-				   is_running(rq->litmus_next));
+				   is_realtime(next),
+				   is_running(next));
 			/* drop the task */
-			rq->litmus_next = NULL;
+			next = NULL;
 		}
 		/* release the other CPU's runqueue, but keep ours */
 		spin_unlock(&other_rq->lock);
 	}
-	if (rq->litmus_next)
-		rq->litmus_next->rt_param.stack_in_use = rq->cpu;
+	if (next) {
+		next->rt_param.stack_in_use = rq->cpu;
+		next->se.exec_start = rq->clock;
+	}
+
+	return next;
 }
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
@@ -174,22 +182,46 @@ static void check_preempt_curr_litmus(struct rq *rq, struct task_struct *p, int 
 {
 }
 
-/* has already been taken care of */
 static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
 {
 }
 
+static void pre_schedule_litmus(struct rq *rq, struct task_struct *prev)
+{
+	update_time_litmus(rq, prev);
+	if (!is_running(prev))
+		tsk_rt(prev)->present = 0;
+}
+
+/* pick_next_task_litmus() - litmus_schedule() function
+ *
+ * return the next task to be scheduled
+ */
 static struct task_struct *pick_next_task_litmus(struct rq *rq)
 {
-	struct task_struct* picked = rq->litmus_next;
-	rq->litmus_next = NULL;
-	if (picked)
-		picked->se.exec_start = rq->clock;
-	return picked;
+	/* get the to-be-switched-out task (prev) */
+	struct task_struct *prev = rq->litmus.prev;
+	struct task_struct *next;
+
+	/* if not called from schedule() but from somewhere
+	 * else (e.g., migration), return now!
+	 */
+	if(!rq->litmus.prev)
+		return NULL;
+
+	rq->litmus.prev = NULL;
+
+	TS_PLUGIN_SCHED_START;
+	next = litmus_schedule(rq, prev);
+	TS_PLUGIN_SCHED_END;
+
+	return next;
 }
 
 static void task_tick_litmus(struct rq *rq, struct task_struct *p, int queued)
 {
+	/* nothing to do; tick related tasks are done by litmus_tick() */
+	return;
 }
 
 static void switched_to_litmus(struct rq *rq, struct task_struct *p, int running)
@@ -263,6 +295,7 @@ const struct sched_class litmus_sched_class = {
 
 	.load_balance		= load_balance_litmus,
 	.move_one_task		= move_one_task_litmus,
+	.pre_schedule		= pre_schedule_litmus,
 #endif
 
 	.set_curr_task          = set_curr_task_litmus,

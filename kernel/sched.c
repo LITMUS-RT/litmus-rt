@@ -485,6 +485,11 @@ struct rt_rq {
 #endif
 };
 
+/* Litmus related fields in a runqueue */
+struct litmus_rq {
+	struct task_struct *prev;
+};
+
 #ifdef CONFIG_SMP
 
 /*
@@ -549,6 +554,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
+	struct litmus_rq litmus;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
@@ -573,8 +579,6 @@ struct rq {
 	u64 clock;
 
 	atomic_t nr_iowait;
-
-	struct task_struct *litmus_next;
 
 #ifdef CONFIG_SMP
 	struct root_domain *rd;
@@ -2786,6 +2790,15 @@ static inline void pre_schedule(struct rq *rq, struct task_struct *prev)
 {
 	if (prev->sched_class->pre_schedule)
 		prev->sched_class->pre_schedule(rq, prev);
+
+	/* LITMUS^RT not very clean hack: we need to save the prev task
+	 * as our scheduling decision rely on it (as we drop the rq lock
+	 * something in prev can change...); there is no way to escape
+	 * this ack apart from modifying pick_nex_task(rq, _prev_) or
+	 * falling back on the previous solution of decoupling
+	 * scheduling decisions
+	 */
+	rq->litmus.prev = prev;
 }
 
 /* rq->lock is NOT held, but preemption is disabled */
@@ -5252,13 +5265,8 @@ void scheduler_tick(void)
 	update_cpu_load(rq);
 	curr->sched_class->task_tick(rq, curr, 0);
 
-	/*
-	 * LITMUS_TODO: can we move litmus_tick inside task_tick
-	 * or will deadlock ?
-	 */
-	TS_PLUGIN_TICK_START;
+	/* litmus_tick may force current to resched */
 	litmus_tick(rq, curr);
-	TS_PLUGIN_TICK_END;
 
 	spin_unlock(&rq->lock);
 
@@ -5469,14 +5477,6 @@ need_resched_nonpreemptible:
 	spin_lock_irq(&rq->lock);
 	update_rq_clock(rq);
 	clear_tsk_need_resched(prev);
-
-	/*
-	 * LITMUS_TODO: can we integrate litmus_schedule in
-	 * pick_next_task?
-	 */
-	TS_PLUGIN_SCHED_START;
-	litmus_schedule(rq, prev);
-	TS_PLUGIN_SCHED_END;
 
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
 		if (unlikely(signal_pending_state(prev->state, prev)))
