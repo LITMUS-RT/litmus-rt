@@ -34,6 +34,8 @@ static void litmus_tick(struct rq *rq, struct task_struct *p)
 	/* plugin tick */
 	litmus->tick(p);
 
+	TS_PLUGIN_TICK_END;
+
 	return;
 }
 
