@@ -171,6 +171,14 @@ struct sched_plugin linux_sched_plugin = {
 };
 
 /*
+ * The cluster size is needed in C-EDF: it makes sense only to cluster
+ * around L2 or L3, so if cluster_cache_index = 2 (default) we cluster
+ * all the CPUs that shares a L2 cache, while cluster_cache_index = 3
+ * we cluster all CPs that shares a L3 cache
+ */
+int cluster_cache_index = 2;
+
+/*
  *	The reference to current plugin that is used to schedule tasks within
  *	the system. It stores references to actual function implementations
  *	Should be initialized by calling "init_***_plugin()"

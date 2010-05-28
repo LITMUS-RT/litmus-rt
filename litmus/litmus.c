@@ -566,6 +566,55 @@ static int proc_write_curr(struct file *file,
 	return len;
 }
 
+static int proc_read_cluster_size(char *page, char **start,
+			  off_t off, int count,
+			  int *eof, void *data)
+{
+	int len;
+	if (cluster_cache_index == 2)
+		len = snprintf(page, PAGE_SIZE, "L2\n");
+	else if (cluster_cache_index == 3)
+		len = snprintf(page, PAGE_SIZE, "L3\n");
+	else /* (cluster_cache_index == 1) */
+		len = snprintf(page, PAGE_SIZE, "L1\n");
+
+	return len;
+}
+
+static int proc_write_cluster_size(struct file *file,
+			   const char *buffer,
+			   unsigned long count,
+			   void *data)
+{
+	int len;
+	/* L2, L3 */
+	char cache_name[33];
+
+	if(count > 32)
+		len = 32;
+	else
+		len = count;
+
+	if(copy_from_user(cache_name, buffer, len))
+		return -EFAULT;
+
+	cache_name[len] = '\0';
+	/* chomp name */
+	if (len > 1 && cache_name[len - 1] == '\n')
+		cache_name[len - 1] = '\0';
+
+	/* do a quick and dirty comparison to find the cluster size */
+	if (!strcmp(cache_name, "L2"))
+		cluster_cache_index = 2;
+	else if (!strcmp(cache_name, "L3"))
+		cluster_cache_index = 3;
+	else if (!strcmp(cache_name, "L1"))
+		cluster_cache_index = 1;
+	else
+		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
+
+	return len;
+}
 
 static int proc_read_release_master(char *page, char **start,
 				    off_t off, int count,
@@ -621,6 +670,7 @@ static struct proc_dir_entry *litmus_dir = NULL,
 	*curr_file = NULL,
 	*stat_file = NULL,
 	*plugs_file = NULL,
+	*clus_cache_idx_file = NULL,
 	*release_master_file = NULL;
 
 static int __init init_litmus_proc(void)
@@ -651,6 +701,16 @@ static int __init init_litmus_proc(void)
 	release_master_file->read_proc = proc_read_release_master;
 	release_master_file->write_proc  = proc_write_release_master;
 
+	clus_cache_idx_file = create_proc_entry("cluster_cache",
+						0644, litmus_dir);
+	if (!clus_cache_idx_file) {
+		printk(KERN_ERR "Could not allocate cluster_cache "
+		       "procfs entry.\n");
+		return -ENOMEM;
+	}
+	clus_cache_idx_file->read_proc = proc_read_cluster_size;
+	clus_cache_idx_file->write_proc = proc_write_cluster_size;
+
 	stat_file = create_proc_read_entry("stats", 0444, litmus_dir,
 					   proc_read_stats, NULL);
 
@@ -668,6 +728,10 @@ static void exit_litmus_proc(void)
 		remove_proc_entry("stats", litmus_dir);
 	if (curr_file)
 		remove_proc_entry("active_plugin", litmus_dir);
+	if (clus_cache_idx_file)
+		remove_proc_entry("cluster_cache", litmus_dir);
+	if (release_master_file)
+		remove_proc_entry("release_master", litmus_dir);
 	if (litmus_dir)
 		remove_proc_entry("litmus", NULL);
 }

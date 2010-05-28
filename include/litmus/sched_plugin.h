@@ -133,6 +133,9 @@ struct sched_plugin {
 
 extern struct sched_plugin *litmus;
 
+/* cluster size: cache_index = 2 L2, cache_index = 3 L3 */
+extern int cluster_cache_index;
+
 int register_sched_plugin(struct sched_plugin* plugin);
 struct sched_plugin* find_sched_plugin(const char* name);
 int print_sched_plugins(char* buf, int max);

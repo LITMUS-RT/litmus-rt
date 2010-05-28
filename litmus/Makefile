@@ -14,6 +14,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    ctrldev.o \
 	    sched_gsn_edf.o \
 	    sched_psn_edf.o \
+	    sched_cedf.o \
 	    sched_pfair.o
 
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
