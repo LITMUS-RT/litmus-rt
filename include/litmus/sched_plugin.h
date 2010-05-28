@@ -12,7 +12,7 @@ struct pi_semaphore {
 	atomic_t count;
 	int sleepers;
 	wait_queue_head_t wait;
-	union {
+	struct {
 		/* highest-prio holder/waiter */
 		struct task_struct *task;
 		struct task_struct* cpu_task[NR_CPUS];

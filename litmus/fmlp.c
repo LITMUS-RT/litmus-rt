@@ -180,7 +180,11 @@ static int do_fmlp_down(struct pi_semaphore* sem)
 		suspended = 0;
 		TRACE_CUR("acquired PI lock %p, no contention\n", sem);
 		sem->holder  = tsk;
+
+		/* don't know if we're global or partitioned. */
 		sem->hp.task = tsk;
+		sem->hp.cpu_task[get_partition(tsk)] = tsk;
+
 		litmus->inherit_priority(sem, tsk);
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 	}
