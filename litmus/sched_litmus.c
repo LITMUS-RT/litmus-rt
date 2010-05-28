@@ -156,6 +156,8 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		sched_trace_task_resume(p);
 		tsk_rt(p)->present = 1;
 		litmus->task_wake_up(p);
+
+		rq->litmus.nr_running++;
 	} else
 		TRACE_TASK(p, "ignoring an enqueue, not a wake up.\n");
 }
@@ -166,6 +168,8 @@ static void dequeue_task_litmus(struct rq *rq, struct task_struct *p, int sleep)
 		litmus->task_block(p);
 		tsk_rt(p)->present = 0;
 		sched_trace_task_block(p);
+
+		rq->litmus.nr_running--;
 	} else
 		TRACE_TASK(p, "ignoring a dequeue, not going to sleep.\n");
 }

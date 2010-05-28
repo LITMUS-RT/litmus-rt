@@ -487,6 +487,7 @@ struct rt_rq {
 
 /* Litmus related fields in a runqueue */
 struct litmus_rq {
+	unsigned long nr_running;
 	struct task_struct *prev;
 };
 
@@ -5420,13 +5421,15 @@ pick_next_task(struct rq *rq)
 	/*
 	 * Optimization: we know that if all tasks are in
 	 * the fair class we can call that function directly:
-	 */
-	/*
-	 * LITMUS_TODO: can we move processes out of fair class?
-	 * i.e., create a litmus_rq
-	 */
-	/* Don't do this for LITMUS
-	if (likely(rq->nr_running == rq->cfs.nr_running)) {
+
+	 * NOT IN LITMUS^RT!
+
+	 * This breaks many assumptions in the plugins.
+	 * Do not uncomment without thinking long and hard
+	 * about how this affects global plugins such as GSN-EDF.
+
+	if (rq->nr_running == rq->cfs.nr_running) {
+		TRACE("taking shortcut in pick_next_task()\n");
 		p = fair_sched_class.pick_next_task(rq);
 		if (likely(p))
 			return p;
