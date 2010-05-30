@@ -109,6 +109,11 @@
 #define LOCAL_TIMER_VECTOR		0xef
 
 /*
+ * LITMUS^RT pull timers IRQ vector
+ */
+#define PULL_TIMERS_VECTOR		0xee
+
+/*
  * Generic system vector for platform specific use
  */
 #define X86_PLATFORM_IPI_VECTOR		0xed

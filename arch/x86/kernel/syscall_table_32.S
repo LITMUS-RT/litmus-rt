@@ -337,3 +337,17 @@ ENTRY(sys_call_table)
 	.long sys_rt_tgsigqueueinfo	/* 335 */
 	.long sys_perf_event_open
 	.long sys_recvmmsg
+	.long sys_set_rt_task_param	/* LITMUS^RT 338 */
+	.long sys_get_rt_task_param
+	.long sys_complete_job
+	.long sys_od_open
+	.long sys_od_close
+	.long sys_fmlp_down
+	.long sys_fmlp_up
+	.long sys_srp_down
+	.long sys_srp_up
+	.long sys_query_job_no
+	.long sys_wait_for_job_release
+	.long sys_wait_for_ts_release
+	.long sys_release_ts
+	.long sys_null_call

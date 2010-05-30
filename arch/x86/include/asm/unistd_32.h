@@ -344,9 +344,13 @@
 #define __NR_perf_event_open	336
 #define __NR_recvmmsg		337
 
+#define __NR_LITMUS		338
+
+#include "litmus/unistd_32.h"
+
 #ifdef __KERNEL__
 
-#define NR_syscalls 338
+#define NR_syscalls 338 + NR_litmus_syscalls
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR
