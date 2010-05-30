@@ -1043,6 +1043,8 @@ hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode)
 }
 EXPORT_SYMBOL_GPL(hrtimer_start);
 
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+
 /**
  *  hrtimer_pull - PULL_TIMERS_VECTOR callback on remote cpu
  */
@@ -1122,6 +1124,8 @@ int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
 	}
 	return in_use;
 }
+
+#endif
 
 /**
  * hrtimer_try_to_cancel - try to deactivate a timer

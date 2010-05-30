@@ -184,6 +184,8 @@ struct hrtimer_cpu_base {
 	struct list_head		to_pull;
 };
 
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+
 #define HRTIMER_START_ON_INACTIVE	0
 #define HRTIMER_START_ON_QUEUED		1
 
@@ -202,6 +204,8 @@ struct hrtimer_start_on_info {
 	enum hrtimer_mode	mode;
 	atomic_t		state;
 };
+
+#endif
 
 static inline void hrtimer_set_expires(struct hrtimer *timer, ktime_t time)
 {
@@ -369,9 +373,11 @@ __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 			 unsigned long delta_ns,
 			 const enum hrtimer_mode mode, int wakeup);
 
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
 extern int hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
 			struct hrtimer *timer, ktime_t time,
 			const enum hrtimer_mode mode);
+#endif
 
 extern int hrtimer_cancel(struct hrtimer *timer);
 extern int hrtimer_try_to_cancel(struct hrtimer *timer);
