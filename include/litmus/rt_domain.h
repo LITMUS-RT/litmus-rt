@@ -28,7 +28,10 @@ typedef struct _rt_domain {
 	/* real-time tasks waiting for release are in here */
 	raw_spinlock_t 			release_lock;
 	struct release_queue 		release_queue;
+
+#ifdef CONFIG_RELEASE_MASTER
 	int				release_master;
+#endif
 
 	/* for moving tasks to the release queue */
 	raw_spinlock_t			tobe_lock;
@@ -52,8 +55,11 @@ struct release_heap {
 	struct bheap			heap;
 	/* used to trigger the release */
 	struct hrtimer			timer;
+
+#ifdef CONFIG_RELEASE_MASTER
 	/* used to delegate releases */
 	struct hrtimer_start_on_info	info;
+#endif
 	/* required for the timer callback */
 	rt_domain_t*			dom;
 };

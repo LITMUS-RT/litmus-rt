@@ -1,6 +1,6 @@
 menu "LITMUS^RT"
 
-menu "Plugins"
+menu "Scheduling"
 
 config PLUGIN_CEDF
         bool "Clustered-EDF"
@@ -10,6 +10,16 @@ config PLUGIN_CEDF
           This is appropriate for large platforms with shared caches.
           On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
           makes little sense since there aren't any shared caches.
+
+config RELEASE_MASTER
+        bool "Release-master Support"
+	default n
+	help
+           Allow one processor to act as a dedicated interrupt processor
+           that services all timer interrupts, but that does not schedule
+           real-time tasks. See RTSS'09 paper for details
+	   (http://www.cs.unc.edu/~anderson/papers.html).
+           Currently only supported by GSN-EDF.
 
 endmenu
 

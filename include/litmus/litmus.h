@@ -9,7 +9,9 @@
 #include <linux/jiffies.h>
 #include <litmus/sched_trace.h>
 
+#ifdef CONFIG_RELEASE_MASTER
 extern atomic_t release_master_cpu;
+#endif
 
 extern atomic_t __log_seq_no;
 

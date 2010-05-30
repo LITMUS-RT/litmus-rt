@@ -30,8 +30,10 @@ atomic_t cannot_use_plugin	= ATOMIC_INIT(0);
 /* Give log messages sequential IDs. */
 atomic_t __log_seq_no = ATOMIC_INIT(0);
 
+#ifdef CONFIG_RELEASE_MASTER
 /* current master CPU for handling timer IRQs */
 atomic_t release_master_cpu = ATOMIC_INIT(NO_CPU);
+#endif
 
 static struct kmem_cache * bheap_node_cache;
 extern struct kmem_cache * release_heap_cache;
@@ -627,6 +629,7 @@ static int proc_write_cluster_size(struct file *file,
 	return len;
 }
 
+#ifdef CONFIG_RELEASE_MASTER
 static int proc_read_release_master(char *page, char **start,
 				    off_t off, int count,
 				    int *eof, void *data)
@@ -676,13 +679,16 @@ static int proc_write_release_master(struct file *file,
 		}
 	}
 }
+#endif
 
 static struct proc_dir_entry *litmus_dir = NULL,
 	*curr_file = NULL,
 	*stat_file = NULL,
 	*plugs_file = NULL,
-	*clus_cache_idx_file = NULL,
-	*release_master_file = NULL;
+#ifdef CONFIG_RELEASE_MASTER
+	*release_master_file = NULL,
+#endif
+	*clus_cache_idx_file = NULL;
 
 static int __init init_litmus_proc(void)
 {
@@ -702,6 +708,7 @@ static int __init init_litmus_proc(void)
 	curr_file->read_proc  = proc_read_curr;
 	curr_file->write_proc = proc_write_curr;
 
+#ifdef CONFIG_RELEASE_MASTER
 	release_master_file = create_proc_entry("release_master",
 						0644, litmus_dir);
 	if (!release_master_file) {
@@ -711,6 +718,7 @@ static int __init init_litmus_proc(void)
 	}
 	release_master_file->read_proc = proc_read_release_master;
 	release_master_file->write_proc  = proc_write_release_master;
+#endif
 
 	clus_cache_idx_file = create_proc_entry("cluster_cache",
 						0644, litmus_dir);
@@ -741,8 +749,10 @@ static void exit_litmus_proc(void)
 		remove_proc_entry("active_plugin", litmus_dir);
 	if (clus_cache_idx_file)
 		remove_proc_entry("cluster_cache", litmus_dir);
+#ifdef CONFIG_RELEASE_MASTER
 	if (release_master_file)
 		remove_proc_entry("release_master", litmus_dir);
+#endif
 	if (litmus_dir)
 		remove_proc_entry("litmus", NULL);
 }

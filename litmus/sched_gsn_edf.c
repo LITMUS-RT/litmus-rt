@@ -382,11 +382,13 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
+#ifdef CONFIG_RELEASE_MASTER
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
 	if (gsnedf.release_master == entry->cpu)
 		return NULL;
+#endif
 
 	raw_spin_lock(&gsnedf_lock);
 	clear_will_schedule();
@@ -518,14 +520,18 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 		entry = &per_cpu(gsnedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
 
+#ifdef CONFIG_RELEASE_MASTER
 		if (entry->cpu != gsnedf.release_master) {
+#endif
 			entry->scheduled = t;
 			tsk_rt(t)->scheduled_on = task_cpu(t);
+#ifdef CONFIG_RELEASE_MASTER
 		} else {
 			/* do not schedule on release master */
 			preempt(entry); /* force resched */
 			tsk_rt(t)->scheduled_on = NO_CPU;
 		}
+#endif
 	} else {
 		t->rt_param.scheduled_on = NO_CPU;
 	}
@@ -767,7 +773,9 @@ static long gsnedf_activate_plugin(void)
 	cpu_entry_t *entry;
 
 	bheap_init(&gsnedf_cpu_heap);
+#ifdef CONFIG_RELEASE_MASTER
 	gsnedf.release_master = atomic_read(&release_master_cpu);
+#endif
 
 	for_each_online_cpu(cpu) {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
@@ -775,12 +783,16 @@ static long gsnedf_activate_plugin(void)
 		atomic_set(&entry->will_schedule, 0);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
+#ifdef CONFIG_RELEASE_MASTER
 		if (cpu != gsnedf.release_master) {
+#endif
 			TRACE("GSN-EDF: Initializing CPU #%d.\n", cpu);
 			update_cpu_position(entry);
+#ifdef CONFIG_RELEASE_MASTER
 		} else {
 			TRACE("GSN-EDF: CPU %d is release master.\n", cpu);
 		}
+#endif
 	}
 	return 0;
 }

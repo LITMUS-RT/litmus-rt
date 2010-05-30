@@ -158,7 +158,9 @@ static void reinit_release_heap(struct task_struct* t)
 
 	/* initialize */
 	bheap_init(&rh->heap);
+#ifdef __ARCH_HAS_SEND_PULL_TIMERS
 	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
+#endif
 }
 /* arm_release_timer() - start local release timer or trigger
  *     remote timer (pull timer)
@@ -221,15 +223,19 @@ static void arm_release_timer(rt_domain_t *_rt)
 			 *
 			 * PINNED mode is ok on both local and remote CPU
 			 */
+#ifdef CONFIG_RELEASE_MASTER
 			if (rt->release_master == NO_CPU)
+#endif
 				__hrtimer_start_range_ns(&rh->timer,
 						ns_to_ktime(rh->release_time),
 						0, HRTIMER_MODE_ABS_PINNED, 0);
+#ifdef CONFIG_RELEASE_MASTER
 			else
 				hrtimer_start_on(rt->release_master,
 						&rh->info, &rh->timer,
 						ns_to_ktime(rh->release_time),
 						HRTIMER_MODE_ABS_PINNED);
+#endif
 		} else
 			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
 	}
@@ -251,7 +257,9 @@ void rt_domain_init(rt_domain_t *rt,
 	if (!order)
 		order = dummy_order;
 
+#ifdef CONFIG_RELEASE_MASTER
 	rt->release_master = NO_CPU;
+#endif
 
 	bheap_init(&rt->ready_queue);
 	INIT_LIST_HEAD(&rt->tobe_released);
