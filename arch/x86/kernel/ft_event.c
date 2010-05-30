@@ -2,7 +2,6 @@
 
 #include <litmus/feather_trace.h>
 
-#ifdef __ARCH_HAS_FEATHER_TRACE
 /* the feather trace management functions assume
  * exclusive access to the event table
  */
@@ -107,6 +106,3 @@ int ft_is_event_enabled(unsigned long id)
 	}
 	return 0;
 }
-
-#endif
-

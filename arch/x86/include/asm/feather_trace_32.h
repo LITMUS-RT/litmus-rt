@@ -77,4 +77,3 @@
             "2:                                           \n\t" \
         : : "r" (p), "r" (p2), "r" (p3)  : CLOBBER_LIST)
 
-#define __ARCH_HAS_FEATHER_TRACE

@@ -2,7 +2,7 @@
 
 #include <litmus/feather_trace.h>
 
-#ifndef __ARCH_HAS_FEATHER_TRACE
+#ifndef CONFIG_ARCH_HAS_FEATHER_TRACE
 /* provide dummy implementation */
 
 int ft_events[MAX_EVENTS];
