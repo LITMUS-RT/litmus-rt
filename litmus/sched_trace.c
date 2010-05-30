@@ -5,6 +5,7 @@
 #include <linux/semaphore.h>
 
 #include <linux/fs.h>
+#include <linux/slab.h>
 #include <linux/miscdevice.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>
@@ -32,7 +33,7 @@ typedef struct {
 	rwlock_t	del_lock;
 
 	/* the buffer */
-	struct kfifo	*kfifo;
+	struct kfifo	kfifo;
 } ring_buffer_t;
 
 /* Main buffer structure */
@@ -49,25 +50,26 @@ typedef struct {
 void rb_init(ring_buffer_t* buf)
 {
 	rwlock_init(&buf->del_lock);
-	buf->kfifo = NULL;
 }
 
 int rb_alloc_buf(ring_buffer_t* buf, unsigned int size)
 {
 	unsigned long flags;
+	int ret = 0;
 
 	write_lock_irqsave(&buf->del_lock, flags);
 
-	buf->kfifo = kfifo_alloc(size, GFP_ATOMIC, NULL);
+	/* kfifo size must be a power of 2
+	 * atm kfifo alloc is automatically rounding the size
+	 */
+	ret = kfifo_alloc(&buf->kfifo, size, GFP_ATOMIC);
 
 	write_unlock_irqrestore(&buf->del_lock, flags);
 
-	if(IS_ERR(buf->kfifo)) {
+	if(ret < 0)
 		printk(KERN_ERR "kfifo_alloc failed\n");
-		return PTR_ERR(buf->kfifo);
-	}
 
-	return 0;
+	return ret;
 }
 
 int rb_free_buf(ring_buffer_t* buf)
@@ -76,10 +78,8 @@ int rb_free_buf(ring_buffer_t* buf)
 
 	write_lock_irqsave(&buf->del_lock, flags);
 
-	BUG_ON(!buf->kfifo);
-	kfifo_free(buf->kfifo);
-
-	buf->kfifo = NULL;
+	BUG_ON(!kfifo_initialized(&buf->kfifo));
+	kfifo_free(&buf->kfifo);
 
 	write_unlock_irqrestore(&buf->del_lock, flags);
 
@@ -98,12 +98,12 @@ int rb_put(ring_buffer_t* buf, char* mem, size_t len)
 
 	read_lock_irqsave(&buf->del_lock, flags);
 
-	if (!buf->kfifo) {
+	if (!kfifo_initialized(&buf->kfifo)) {
 		error = -ENODEV;
 		goto out;
 	}
 
-	if((__kfifo_put(buf->kfifo, mem, len)) < len) {
+	if((kfifo_in(&buf->kfifo, mem, len)) < len) {
 		error = -ENOMEM;
 		goto out;
 	}
@@ -120,12 +120,12 @@ int rb_get(ring_buffer_t* buf, char* mem, size_t len)
 	int error = 0;
 
 	read_lock_irqsave(&buf->del_lock, flags);
-	if (!buf->kfifo) {
+	if (!kfifo_initialized(&buf->kfifo)) {
 		error = -ENODEV;
 		goto out;
 	}
 
-	error = __kfifo_get(buf->kfifo, (unsigned char*)mem, len);
+	error = kfifo_out(&buf->kfifo, (unsigned char*)mem, len);
 
  out:
 	read_unlock_irqrestore(&buf->del_lock, flags);
@@ -135,7 +135,7 @@ int rb_get(ring_buffer_t* buf, char* mem, size_t len)
 /*
  * Device Driver management
  */
-static spinlock_t log_buffer_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_RAW_SPINLOCK(log_buffer_lock);
 static trace_buffer_t log_buffer;
 
 static void init_log_buffer(void)
@@ -170,12 +170,12 @@ void sched_trace_log_message(const char* fmt, ...)
 	buf = __get_cpu_var(fmt_buffer);
 	len = vscnprintf(buf, MSG_SIZE, fmt, args);
 
-	spin_lock(&log_buffer_lock);
+	raw_spin_lock(&log_buffer_lock);
 	/* Don't copy the trailing null byte, we don't want null bytes
 	 * in a text file.
 	 */
 	rb_put(&log_buffer.buf, buf, len);
-	spin_unlock(&log_buffer_lock);
+	raw_spin_unlock(&log_buffer_lock);
 
 	local_irq_restore(flags);
 	va_end(args);
@@ -265,8 +265,8 @@ static int log_open(struct inode *in, struct file *filp)
 	filp->private_data = tbuf;
 
 	printk(KERN_DEBUG
-	       "sched_trace kfifo at 0x%p with buffer starting at: 0x%p\n",
-	       tbuf->buf.kfifo, &((tbuf->buf.kfifo)->buffer));
+	       "sched_trace kfifo with buffer starting at: 0x%p\n",
+	       (tbuf->buf.kfifo).buffer);
 
 	/* override printk() */
 	trace_override++;
