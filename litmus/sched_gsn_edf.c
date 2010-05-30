@@ -297,12 +297,12 @@ static void gsnedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&gsnedf_lock, flags);
+	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 
 	__merge_ready(rt, tasks);
 	check_for_preemptions();
 
-	spin_unlock_irqrestore(&gsnedf_lock, flags);
+	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
 
 /* caller holds gsnedf_lock */
@@ -388,7 +388,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	if (gsnedf.release_master == entry->cpu)
 		return NULL;
 
-	spin_lock(&gsnedf_lock);
+	raw_spin_lock(&gsnedf_lock);
 	clear_will_schedule();
 
 	/* sanity checking */
@@ -469,7 +469,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		if (exists)
 			next = prev;
 
-	spin_unlock(&gsnedf_lock);
+	raw_spin_unlock(&gsnedf_lock);
 
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("gsnedf_lock released, next=0x%p\n", next);
@@ -507,7 +507,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 
 	TRACE("gsn edf: task new %d\n", t->pid);
 
-	spin_lock_irqsave(&gsnedf_lock, flags);
+	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 
 	/* setup job params */
 	release_at(t, litmus_clock());
@@ -530,7 +530,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int running)
 	t->rt_param.linked_on          = NO_CPU;
 
 	gsnedf_job_arrival(t);
-	spin_unlock_irqrestore(&gsnedf_lock, flags);
+	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
 
 static void gsnedf_task_wake_up(struct task_struct *task)
@@ -540,7 +540,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
 
-	spin_lock_irqsave(&gsnedf_lock, flags);
+	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
 	 * a semaphore, it should never be treated as a new job release.
@@ -563,7 +563,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 		}
 	}
 	gsnedf_job_arrival(task);
-	spin_unlock_irqrestore(&gsnedf_lock, flags);
+	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
 
 static void gsnedf_task_block(struct task_struct *t)
@@ -573,9 +573,9 @@ static void gsnedf_task_block(struct task_struct *t)
 	TRACE_TASK(t, "block at %llu\n", litmus_clock());
 
 	/* unlink if necessary */
-	spin_lock_irqsave(&gsnedf_lock, flags);
+	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	unlink(t);
-	spin_unlock_irqrestore(&gsnedf_lock, flags);
+	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 
 	BUG_ON(!is_realtime(t));
 }
@@ -586,13 +586,13 @@ static void gsnedf_task_exit(struct task_struct * t)
 	unsigned long flags;
 
 	/* unlink if necessary */
-	spin_lock_irqsave(&gsnedf_lock, flags);
+	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
 		gsnedf_cpus[tsk_rt(t)->scheduled_on]->scheduled = NULL;
 		tsk_rt(t)->scheduled_on = NO_CPU;
 	}
-	spin_unlock_irqrestore(&gsnedf_lock, flags);
+	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");
@@ -628,7 +628,7 @@ static void update_queue_position(struct task_struct *holder)
 			    gsnedf_cpus[tsk_rt(holder)->linked_on]->hn);
 	} else {
 		/* holder may be queued: first stop queue changes */
-		spin_lock(&gsnedf.release_lock);
+		raw_spin_lock(&gsnedf.release_lock);
 		if (is_queued(holder)) {
 			TRACE_TASK(holder, "%s: is queued\n",
 				   __FUNCTION__);
@@ -646,7 +646,7 @@ static void update_queue_position(struct task_struct *holder)
 			TRACE_TASK(holder, "%s: is NOT queued => Done.\n",
 				   __FUNCTION__);
 		}
-		spin_unlock(&gsnedf.release_lock);
+		raw_spin_unlock(&gsnedf.release_lock);
 
 		/* If holder was enqueued in a release heap, then the following
 		 * preemption check is pointless, but we can't easily detect
@@ -680,7 +680,7 @@ static long gsnedf_pi_block(struct pi_semaphore *sem,
 	if (edf_higher_prio(new_waiter, sem->hp.task)) {
 		TRACE_TASK(new_waiter, " boosts priority via %p\n", sem);
 		/* called with IRQs disabled */
-		spin_lock(&gsnedf_lock);
+		raw_spin_lock(&gsnedf_lock);
 		/* store new highest-priority task */
 		sem->hp.task = new_waiter;
 		if (sem->holder) {
@@ -692,7 +692,7 @@ static long gsnedf_pi_block(struct pi_semaphore *sem,
 			sem->holder->rt_param.inh_task = new_waiter;
 			update_queue_position(sem->holder);
 		}
-		spin_unlock(&gsnedf_lock);
+		raw_spin_unlock(&gsnedf_lock);
 	}
 
 	return 0;
@@ -738,7 +738,7 @@ static long gsnedf_return_priority(struct pi_semaphore *sem)
 
 	if (t->rt_param.inh_task) {
 		/* interrupts already disabled by PI code */
-		spin_lock(&gsnedf_lock);
+		raw_spin_lock(&gsnedf_lock);
 
 		/* Reset inh_task to NULL. */
 		t->rt_param.inh_task = NULL;
@@ -746,7 +746,7 @@ static long gsnedf_return_priority(struct pi_semaphore *sem)
 		/* Check if rescheduling is necessary */
 		unlink(t);
 		gsnedf_job_arrival(t);
-		spin_unlock(&gsnedf_lock);
+		raw_spin_unlock(&gsnedf_lock);
 	}
 
 	return ret;

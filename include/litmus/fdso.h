@@ -10,6 +10,7 @@
 #include <asm/atomic.h>
 
 #include <linux/fs.h>
+#include <linux/slab.h>
 
 #define MAX_OBJECT_DESCRIPTORS 32
 

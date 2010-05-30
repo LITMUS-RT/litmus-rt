@@ -24,6 +24,7 @@
 #include <linux/spinlock.h>
 #include <linux/percpu.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
@@ -281,12 +282,12 @@ static void cedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 	cedf_domain_t* cluster = container_of(rt, cedf_domain_t, domain);
 	unsigned long flags;
 
-	spin_lock_irqsave(&cluster->lock, flags);
+	raw_spin_lock_irqsave(&cluster->lock, flags);
 
 	__merge_ready(&cluster->domain, tasks);
 	check_for_preemptions(cluster);
 
-	spin_unlock_irqrestore(&cluster->lock, flags);
+	raw_spin_unlock_irqrestore(&cluster->lock, flags);
 }
 
 /* caller holds cedf_lock */
@@ -367,7 +368,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
-	spin_lock(&cluster->lock);
+	raw_spin_lock(&cluster->lock);
 	clear_will_schedule();
 
 	/* sanity checking */
@@ -448,7 +449,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 		if (exists)
 			next = prev;
 
-	spin_unlock(&cluster->lock);
+	raw_spin_unlock(&cluster->lock);
 
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("cedf_lock released, next=0x%p\n", next);
@@ -490,7 +491,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	/* the cluster doesn't change even if t is running */
 	cluster = task_cpu_cluster(t);
 
-	spin_lock_irqsave(&cluster->domain.ready_lock, flags);
+	raw_spin_lock_irqsave(&cluster->domain.ready_lock, flags);
 
 	/* setup job params */
 	release_at(t, litmus_clock());
@@ -507,7 +508,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	t->rt_param.linked_on          = NO_CPU;
 
 	cedf_job_arrival(t);
-	spin_unlock_irqrestore(&(cluster->domain.ready_lock), flags);
+	raw_spin_unlock_irqrestore(&(cluster->domain.ready_lock), flags);
 }
 
 static void cedf_task_wake_up(struct task_struct *task)
@@ -520,7 +521,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 
 	cluster = task_cpu_cluster(task);
 
-	spin_lock_irqsave(&cluster->lock, flags);
+	raw_spin_lock_irqsave(&cluster->lock, flags);
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
 	 * a semaphore, it should never be treated as a new job release.
@@ -543,7 +544,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 		}
 	}
 	cedf_job_arrival(task);
-	spin_unlock_irqrestore(&cluster->lock, flags);
+	raw_spin_unlock_irqrestore(&cluster->lock, flags);
 }
 
 static void cedf_task_block(struct task_struct *t)
@@ -556,9 +557,9 @@ static void cedf_task_block(struct task_struct *t)
 	cluster = task_cpu_cluster(t);
 
 	/* unlink if necessary */
-	spin_lock_irqsave(&cluster->lock, flags);
+	raw_spin_lock_irqsave(&cluster->lock, flags);
 	unlink(t);
-	spin_unlock_irqrestore(&cluster->lock, flags);
+	raw_spin_unlock_irqrestore(&cluster->lock, flags);
 
 	BUG_ON(!is_realtime(t));
 }
@@ -570,13 +571,13 @@ static void cedf_task_exit(struct task_struct * t)
 	cedf_domain_t *cluster = task_cpu_cluster(t);
 
 	/* unlink if necessary */
-	spin_lock_irqsave(&cluster->lock, flags);
+	raw_spin_lock_irqsave(&cluster->lock, flags);
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
 		cluster->cpus[tsk_rt(t)->scheduled_on]->scheduled = NULL;
 		tsk_rt(t)->scheduled_on = NO_CPU;
 	}
-	spin_unlock_irqrestore(&cluster->lock, flags);
+	raw_spin_unlock_irqrestore(&cluster->lock, flags);
 
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");

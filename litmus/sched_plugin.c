@@ -187,7 +187,7 @@ struct sched_plugin *litmus = &linux_sched_plugin;
 
 /* the list of registered scheduling plugins */
 static LIST_HEAD(sched_plugins);
-static DEFINE_SPINLOCK(sched_plugins_lock);
+static DEFINE_RAW_SPINLOCK(sched_plugins_lock);
 
 #define CHECK(func) {\
 	if (!plugin->func) \
@@ -220,9 +220,9 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	if (!plugin->release_at)
 		plugin->release_at = release_at;
 
-	spin_lock(&sched_plugins_lock);
+	raw_spin_lock(&sched_plugins_lock);
 	list_add(&plugin->list, &sched_plugins);
-	spin_unlock(&sched_plugins_lock);
+	raw_spin_unlock(&sched_plugins_lock);
 
 	return 0;
 }
@@ -234,7 +234,7 @@ struct sched_plugin* find_sched_plugin(const char* name)
 	struct list_head *pos;
 	struct sched_plugin *plugin;
 
-	spin_lock(&sched_plugins_lock);
+	raw_spin_lock(&sched_plugins_lock);
 	list_for_each(pos, &sched_plugins) {
 		plugin = list_entry(pos, struct sched_plugin, list);
 		if (!strcmp(plugin->plugin_name, name))
@@ -243,7 +243,7 @@ struct sched_plugin* find_sched_plugin(const char* name)
 	plugin = NULL;
 
 out_unlock:
-	spin_unlock(&sched_plugins_lock);
+	raw_spin_unlock(&sched_plugins_lock);
 	return plugin;
 }
 
@@ -253,13 +253,13 @@ int print_sched_plugins(char* buf, int max)
 	struct list_head *pos;
 	struct sched_plugin *plugin;
 
-	spin_lock(&sched_plugins_lock);
+	raw_spin_lock(&sched_plugins_lock);
 	list_for_each(pos, &sched_plugins) {
 		plugin = list_entry(pos, struct sched_plugin, list);
 		count += snprintf(buf + count, max - count, "%s\n", plugin->plugin_name);
 		if (max - count <= 0)
 			break;
 	}
-	spin_unlock(&sched_plugins_lock);
+	raw_spin_unlock(&sched_plugins_lock);
 	return 	count;
 }

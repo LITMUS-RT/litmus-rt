@@ -12,6 +12,7 @@
 #include <linux/percpu.h>
 #include <linux/sched.h>
 #include <linux/list.h>
+#include <linux/slab.h>
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
@@ -415,7 +416,7 @@ static void schedule_next_quantum(quanta_t time)
 	/* called with interrupts disabled */
 	PTRACE("--- Q %lu at %llu PRE-SPIN\n",
 	       time, litmus_clock());
-	spin_lock(&pfair_lock);
+	raw_spin_lock(&pfair_lock);
 	PTRACE("<<< Q %lu at %llu\n",
 	       time, litmus_clock());
 
@@ -448,7 +449,7 @@ static void schedule_next_quantum(quanta_t time)
 	}
 	PTRACE(">>> Q %lu at %llu\n",
 	       time, litmus_clock());
-	spin_unlock(&pfair_lock);
+	raw_spin_unlock(&pfair_lock);
 }
 
 static noinline void wait_for_quantum(quanta_t q, struct pfair_state* state)
@@ -564,7 +565,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	int blocks;
 	struct task_struct* next = NULL;
 
-	spin_lock(&pfair_lock);
+	raw_spin_lock(&pfair_lock);
 
 	blocks  = is_realtime(prev) && !is_running(prev);
 
@@ -577,7 +578,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 			tsk_rt(next)->scheduled_on = state->cpu;
 	}
 
-	spin_unlock(&pfair_lock);
+	raw_spin_unlock(&pfair_lock);
 
 	if (next)
 		TRACE_TASK(next, "scheduled rel=%lu at %lu (%llu)\n",
@@ -594,7 +595,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 
 	TRACE("pfair: task new %d state:%d\n", t->pid, t->state);
 
-	spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(&pfair_lock, flags);
 	if (running)
 		t->rt_param.scheduled_on = task_cpu(t);
 	else
@@ -605,7 +606,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 	pfair_add_release(t);
 	check_preempt(t);
 
-	spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(&pfair_lock, flags);
 }
 
 static void pfair_task_wake_up(struct task_struct *t)
@@ -616,7 +617,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	TRACE_TASK(t, "wakes at %llu, release=%lu, pfair_time:%lu\n",
 		   litmus_clock(), cur_release(t), pfair_time);
 
-	spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(&pfair_lock, flags);
 
 	/* It is a little unclear how to deal with Pfair
 	 * tasks that block for a while and then wake. For now,
@@ -637,7 +638,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 
 	check_preempt(t);
 
-	spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(&pfair_lock, flags);
 	TRACE_TASK(t, "wake up done at %llu\n", litmus_clock());
 }
 
@@ -661,12 +662,12 @@ static void pfair_task_exit(struct task_struct * t)
 	 * might not be the same as the CPU that the PFAIR scheduler
 	 * has chosen for it.
 	 */
-	spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(&pfair_lock, flags);
 
 	TRACE_TASK(t, "RIP, state:%d\n", t->state);
 	drop_all_references(t);
 
-	spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(&pfair_lock, flags);
 
 	kfree(t->rt_param.pfair);
 	t->rt_param.pfair = NULL;
@@ -680,7 +681,7 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 
 	BUG_ON(!is_realtime(task));
 
-	spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(&pfair_lock, flags);
 	release_at(task, start);
 	release = time2quanta(start, CEIL);
 
@@ -698,7 +699,7 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 	 */
 	tsk_pfair(task)->sporadic_release = 0;
 
-	spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(&pfair_lock, flags);
 }
 
 static void init_subtask(struct subtask* sub, unsigned long i,

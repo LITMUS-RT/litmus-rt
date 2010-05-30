@@ -1,5 +1,6 @@
 #include <linux/sched.h>
 #include <linux/fs.h>
+#include <linux/slab.h>
 #include <linux/cdev.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>

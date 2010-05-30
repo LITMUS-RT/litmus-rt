@@ -23,7 +23,7 @@
 
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
-static DEFINE_SPINLOCK(task_transition_lock);
+static DEFINE_RAW_SPINLOCK(task_transition_lock);
 /* synchronize plugin switching */
 atomic_t cannot_use_plugin	= ATOMIC_INIT(0);
 
@@ -323,7 +323,7 @@ long litmus_admit_task(struct task_struct* tsk)
 	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
 
 	/* avoid scheduler plugin changing underneath us */
-	spin_lock_irqsave(&task_transition_lock, flags);
+	raw_spin_lock_irqsave(&task_transition_lock, flags);
 
 	/* allocate heap node for this task */
 	tsk_rt(tsk)->heap_node = bheap_node_alloc(GFP_ATOMIC);
@@ -350,7 +350,7 @@ long litmus_admit_task(struct task_struct* tsk)
 	}
 
 out_unlock:
-	spin_unlock_irqrestore(&task_transition_lock, flags);
+	raw_spin_unlock_irqrestore(&task_transition_lock, flags);
 out:
 	return retval;
 }
@@ -396,7 +396,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	smp_call_function(synch_on_plugin_switch, NULL, 0);
 
 	/* stop task transitions */
-	spin_lock_irqsave(&task_transition_lock, flags);
+	raw_spin_lock_irqsave(&task_transition_lock, flags);
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
@@ -414,7 +414,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	} else
 		ret = -EBUSY;
 out:
-	spin_unlock_irqrestore(&task_transition_lock, flags);
+	raw_spin_unlock_irqrestore(&task_transition_lock, flags);
 	atomic_set(&cannot_use_plugin, 0);
 	return ret;
 }

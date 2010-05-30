@@ -131,7 +131,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	int 			out_of_time, sleep, preempt,
 				np, exists, blocks, resched;
 
-	spin_lock(&pedf->slock);
+	raw_spin_lock(&pedf->slock);
 
 	/* sanity checking
 	 * differently from gedf, when a task exits (dead)
@@ -201,7 +201,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	}
 
 	pedf->scheduled = next;
-	spin_unlock(&pedf->slock);
+	raw_spin_unlock(&pedf->slock);
 
 	return next;
 }
@@ -224,7 +224,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 	/* The task should be running in the queue, otherwise signal
 	 * code will try to wake it up with fatal consequences.
 	 */
-	spin_lock_irqsave(&pedf->slock, flags);
+	raw_spin_lock_irqsave(&pedf->slock, flags);
 	if (running) {
 		/* there shouldn't be anything else running at the time */
 		BUG_ON(pedf->scheduled);
@@ -234,7 +234,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 		/* maybe we have to reschedule */
 		preempt(pedf);
 	}
-	spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static void psnedf_task_wake_up(struct task_struct *task)
@@ -245,7 +245,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	lt_t			now;
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
-	spin_lock_irqsave(&pedf->slock, flags);
+	raw_spin_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(is_queued(task));
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
@@ -270,7 +270,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	if (pedf->scheduled != task)
 		requeue(task, edf);
 
-	spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 	TRACE_TASK(task, "wake up done\n");
 }
 
@@ -289,7 +289,7 @@ static void psnedf_task_exit(struct task_struct * t)
 	psnedf_domain_t* 	pedf = task_pedf(t);
 	rt_domain_t*		edf;
 
-	spin_lock_irqsave(&pedf->slock, flags);
+	raw_spin_lock_irqsave(&pedf->slock, flags);
 	if (is_queued(t)) {
 		/* dequeue */
 		edf  = task_edf(t);
@@ -301,7 +301,7 @@ static void psnedf_task_exit(struct task_struct * t)
 	TRACE_TASK(t, "RIP, now reschedule\n");
 
 	preempt(pedf);
-	spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 }
 
 #ifdef CONFIG_FMLP
@@ -321,7 +321,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 		edf  = task_edf(new_waiter);
 
 		/* interrupts already disabled */
-		spin_lock(&pedf->slock);
+		raw_spin_lock(&pedf->slock);
 
 		/* store new highest-priority task */
 		sem->hp.cpu_task[cpu] = new_waiter;
@@ -346,7 +346,7 @@ static long psnedf_pi_block(struct pi_semaphore *sem,
 		if (edf_preemption_needed(edf, current))
 			preempt(pedf);
 
-		spin_unlock(&pedf->slock);
+		raw_spin_unlock(&pedf->slock);
 	}
 
 	return 0;
@@ -413,7 +413,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 	/* Always check for delayed preemptions that might have become
 	 * necessary due to non-preemptive execution.
 	 */
-	spin_lock(&pedf->slock);
+	raw_spin_lock(&pedf->slock);
 
 	/* Reset inh_task to NULL. */
 	current->rt_param.inh_task = NULL;
@@ -422,7 +422,7 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 	if (edf_preemption_needed(edf, current))
 		preempt(pedf);
 
-	spin_unlock(&pedf->slock);
+	raw_spin_unlock(&pedf->slock);
 
 
 	return ret;

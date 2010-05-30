@@ -1052,9 +1052,9 @@ void hrtimer_pull(void)
 	struct hrtimer_start_on_info *info;
 	struct list_head *pos, *safe, list;
 
-	spin_lock(&base->lock);
+	raw_spin_lock(&base->lock);
 	list_replace_init(&base->to_pull, &list);
-	spin_unlock(&base->lock);
+	raw_spin_unlock(&base->lock);
 
 	list_for_each_safe(pos, safe, &list) {
 		info = list_entry(pos, struct hrtimer_start_on_info, list);
@@ -1108,10 +1108,10 @@ int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
 		} else {
 			TRACE("hrtimer_start_on: pulling to remote CPU\n");
 			base = &per_cpu(hrtimer_bases, cpu);
-			spin_lock_irqsave(&base->lock, flags);
+			raw_spin_lock_irqsave(&base->lock, flags);
 			was_empty = list_empty(&base->to_pull);
 			list_add(&info->list, &base->to_pull);
-			spin_unlock_irqrestore(&base->lock, flags);
+			raw_spin_unlock_irqrestore(&base->lock, flags);
 			if (was_empty)
 				/* only send IPI if other no else
 				 * has done so already
