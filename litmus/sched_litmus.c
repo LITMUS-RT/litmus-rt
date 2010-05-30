@@ -60,7 +60,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 */
 		was_running = is_running(prev);
 		mb();
-		spin_unlock(&rq->lock);
+		raw_spin_unlock(&rq->lock);
 
 		/* Don't race with a concurrent switch.  This could deadlock in
 		 * the case of cross or circular migrations.  It's the job of
@@ -91,7 +91,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				next = NULL;
 
 				/* bail out */
-				spin_lock(&rq->lock);
+				raw_spin_lock(&rq->lock);
 				return next;
 			}
 		}
@@ -139,7 +139,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			next = NULL;
 		}
 		/* release the other CPU's runqueue, but keep ours */
-		spin_unlock(&other_rq->lock);
+		raw_spin_unlock(&other_rq->lock);
 	}
 	if (next) {
 		next->rt_param.stack_in_use = rq->cpu;
@@ -150,7 +150,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 }
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
-				int wakeup)
+				int wakeup, bool head)
 {
 	if (wakeup) {
 		sched_trace_task_resume(p);
@@ -243,7 +243,7 @@ static void prio_changed_litmus(struct rq *rq, struct task_struct *p,
 {
 }
 
-unsigned int get_rr_interval_litmus(struct task_struct *p)
+unsigned int get_rr_interval_litmus(struct rq *rq, struct task_struct *p)
 {
 	/* return infinity */
 	return 0;
@@ -261,31 +261,16 @@ static void set_curr_task_litmus(struct rq *rq)
 
 
 #ifdef CONFIG_SMP
-/* execve tries to rebalance task in this scheduling domain */
+/* execve tries to rebalance task in this scheduling domain.
+ * We don't care about the scheduling domain; can gets called from
+ * exec, fork, wakeup.
+ */
 static int select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
 {
 	/* preemption is already disabled.
 	 * We don't want to change cpu here
 	 */
-	return smp_processor_id();
-}
-
-/* we don't repartition at runtime */
-
-static unsigned long
-load_balance_litmus(struct rq *this_rq, int this_cpu, struct rq *busiest,
-		unsigned long max_load_move,
-		struct sched_domain *sd, enum cpu_idle_type idle,
-		int *all_pinned, int *this_best_prio)
-{
-	return 0;
-}
-
-static int
-move_one_task_litmus(struct rq *this_rq, int this_cpu, struct rq *busiest,
-		 struct sched_domain *sd, enum cpu_idle_type idle)
-{
-	return 0;
+	return task_cpu(p);
 }
 #endif
 
@@ -303,8 +288,6 @@ const struct sched_class litmus_sched_class = {
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_litmus,
 
-	.load_balance		= load_balance_litmus,
-	.move_one_task		= move_one_task_litmus,
 	.pre_schedule		= pre_schedule_litmus,
 #endif
 
