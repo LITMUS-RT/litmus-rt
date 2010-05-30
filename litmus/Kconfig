@@ -1,5 +1,18 @@
 menu "LITMUS^RT"
 
+menu "Plugins"
+
+config PLUGIN_CEDF
+        bool "Clustered-EDF"
+        default y
+        help
+          Include the Clustered EDF (C-EDF) plugin in the kernel.
+          This is appropriate for large platforms with shared caches.
+          On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
+          makes little sense since there aren't any shared caches.
+
+endmenu
+
 menu "Real-Time Synchronization"
 
 config NP_SECTION
