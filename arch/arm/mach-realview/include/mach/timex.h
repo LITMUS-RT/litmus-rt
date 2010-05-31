@@ -21,3 +21,30 @@
  */
 
 #define CLOCK_TICK_RATE		(50000000 / 16)
+
+#if defined(CONFIG_MACH_REALVIEW_PB11MP) || defined(CONFIG_MACH_REALVIEW_PB1176)
+
+static inline unsigned long realview_get_arm11_cp15_ccnt(void)
+{
+	unsigned long cycles;
+	/* Read CP15 CCNT register. */
+	asm volatile ("mrc p15, 0, %0, c15, c12, 1" : "=r" (cycles));
+	return cycles;
+}
+
+#define get_cycles realview_get_arm11_cp15_ccnt
+
+#elif defined(CONFIG_MACH_REALVIEW_PBA8)
+
+
+static inline unsigned long realview_get_a8_cp15_ccnt(void)
+{
+	unsigned long cycles;
+	/* Read CP15 CCNT register. */
+	asm volatile ("mrc p15, 0, %0, c9, c13, 0" : "=r" (cycles));
+	return cycles;
+}
+
+#define get_cycles realview_get_a8_cp15_ccnt
+
+#endif
