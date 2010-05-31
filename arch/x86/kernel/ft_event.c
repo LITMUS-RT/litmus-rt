@@ -6,6 +6,7 @@
  * exclusive access to the event table
  */
 
+#ifndef CONFIG_DEBUG_RODATA
 
 #define BYTE_JUMP      0xeb
 #define BYTE_JUMP_LEN  0x02
@@ -106,3 +107,5 @@ int ft_is_event_enabled(unsigned long id)
 	}
 	return 0;
 }
+
+#endif

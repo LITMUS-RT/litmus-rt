@@ -19,13 +19,25 @@ static inline int fetch_and_dec(int *val)
 	return atomic_sub_return(1, (atomic_t*) val) + 1;
 }
 
-#ifdef CONFIG_ARCH_HAS_FEATHER_TRACE
+/* Don't use rewriting implementation if kernel text pages are read-only.
+ * Ftrace gets around this by using the identity mapping, but that's more
+ * effort that is warrented right now for Feather-Trace.
+ * Eventually, it may make sense to replace Feather-Trace with ftrace.
+ */
+#if defined(CONFIG_ARCH_HAS_FEATHER_TRACE) && !defined(CONFIG_DEBUG_RODATA)
 
 #include <asm/feather_trace.h>
 
 #else /* !__ARCH_HAS_FEATHER_TRACE */
 
 /* provide default implementation */
+
+#include <asm/timex.h> /* for get_cycles() */
+
+static inline unsigned long long ft_timestamp(void)
+{
+	return get_cycles();
+}
 
 #define feather_callback
 
