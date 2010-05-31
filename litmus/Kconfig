@@ -4,6 +4,7 @@ menu "Scheduling"
 
 config PLUGIN_CEDF
         bool "Clustered-EDF"
+	depends on X86 && SYSFS
         default y
         help
           Include the Clustered EDF (C-EDF) plugin in the kernel.
