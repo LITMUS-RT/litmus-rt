@@ -276,7 +276,7 @@ static int select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
 }
 #endif
 
-const struct sched_class litmus_sched_class = {
+static const struct sched_class litmus_sched_class = {
 	.next			= &rt_sched_class,
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
