@@ -158,7 +158,7 @@ static void reinit_release_heap(struct task_struct* t)
 
 	/* initialize */
 	bheap_init(&rh->heap);
-#ifdef __ARCH_HAS_SEND_PULL_TIMERS
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
 	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
 #endif
 }
