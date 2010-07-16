@@ -90,6 +90,10 @@ config FEATHER_TRACE
 
 	  Bottom line: to avoid increased overheads, choose DEBUG_RODATA=n.
 
+	  Note that this option only enables the basic Feather-Trace infrastructure;
+	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
+	  actually enable any events.
+
 config SCHED_TASK_TRACE
 	bool "Trace real-time tasks"
 	depends on FEATHER_TRACE

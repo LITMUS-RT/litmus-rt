@@ -22,6 +22,13 @@ struct trace_event {
 extern struct trace_event  __start___event_table[];
 extern struct trace_event  __stop___event_table[];
 
+/* Workaround: if no events are defined, then the event_table section does not
+ * exist and the above references cause linker errors. This could probably be
+ * fixed by adjusting the linker script, but it is easier to maintain for us if
+ * we simply create a dummy symbol in the event table section.
+ */
+int __event_table_dummy[0] __attribute__ ((section("__event_table")));
+
 int ft_enable_event(unsigned long id)
 {
 	struct trace_event* te = __start___event_table;
