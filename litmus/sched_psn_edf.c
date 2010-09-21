@@ -182,8 +182,10 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	 */
 	next = NULL;
 	if ((!np || blocks) && (resched || !exists)) {
-		/* Take care of a previously scheduled
-		 * job by taking it out of the Linux runqueue.
+		/* When preempting a task that does not block, then
+		 * re-insert it into either the ready queue or the
+		 * release queue (if it completed). requeue() picks
+		 * the appropriate queue.
 		 */
 		if (pedf->scheduled && !blocks)
 			requeue(pedf->scheduled, edf);
