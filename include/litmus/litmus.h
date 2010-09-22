@@ -96,6 +96,8 @@ inline static lt_t budget_remaining(struct task_struct* t)
 
 #define budget_enforced(t) (tsk_rt(t)->task_params.budget_policy != NO_ENFORCEMENT)
 
+#define budget_precisely_enforced(t) (tsk_rt(t)->task_params.budget_policy \
+				      == PRECISE_ENFORCEMENT)
 
 #define is_hrt(t)     		\
 	(tsk_rt(t)->task_params.class == RT_CLASS_HARD)
