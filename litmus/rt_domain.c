@@ -169,7 +169,12 @@ static void reinit_release_heap(struct task_struct* t)
  * - tobe_lock taken
  * - IRQ disabled
  */
-static void arm_release_timer(rt_domain_t *_rt)
+#ifdef CONFIG_RELEASE_MASTER
+#define arm_release_timer(t) arm_release_timer_on((t), NO_CPU)
+static void arm_release_timer_on(rt_domain_t *_rt , int target_cpu)
+#else
+static void arm_release_master(rt_domain_t *_rt)
+#endif
 {
 	rt_domain_t *rt = _rt;
 	struct list_head list;
@@ -224,17 +229,21 @@ static void arm_release_timer(rt_domain_t *_rt)
 			 * PINNED mode is ok on both local and remote CPU
 			 */
 #ifdef CONFIG_RELEASE_MASTER
-			if (rt->release_master == NO_CPU)
+			if (rt->release_master == NO_CPU &&
+			    target_cpu == NO_CPU)
 #endif
 				__hrtimer_start_range_ns(&rh->timer,
 						ns_to_ktime(rh->release_time),
 						0, HRTIMER_MODE_ABS_PINNED, 0);
 #ifdef CONFIG_RELEASE_MASTER
 			else
-				hrtimer_start_on(rt->release_master,
-						&rh->info, &rh->timer,
-						ns_to_ktime(rh->release_time),
-						HRTIMER_MODE_ABS_PINNED);
+				hrtimer_start_on(
+					/* target_cpu overrides release master */
+					(target_cpu != NO_CPU ?
+					 target_cpu : rt->release_master),
+					&rh->info, &rh->timer,
+					ns_to_ktime(rh->release_time),
+					HRTIMER_MODE_ABS_PINNED);
 #endif
 		} else
 			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
@@ -298,6 +307,25 @@ void __merge_ready(rt_domain_t* rt, struct bheap* tasks)
 	bheap_union(rt->order, &rt->ready_queue, tasks);
 	rt->check_resched(rt);
 }
+
+
+#ifdef CONFIG_RELEASE_MASTER
+void __add_release_on(rt_domain_t* rt, struct task_struct *task,
+		      int target_cpu)
+{
+	TRACE_TASK(task, "add_release_on(), rel=%llu, target=%d\n",
+		   get_release(task), target_cpu);
+	list_add(&tsk_rt(task)->list, &rt->tobe_released);
+	task->rt_param.domain = rt;
+
+	/* start release timer */
+	TS_SCHED2_START(task);
+
+	arm_release_timer_on(rt, target_cpu);
+
+	TS_SCHED2_END(task);
+}
+#endif
 
 /* add_release - add a real-time task to the rt release queue.
  * @task:        the sleeping task

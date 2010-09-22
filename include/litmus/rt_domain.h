@@ -143,11 +143,25 @@ static inline struct task_struct* take_ready(rt_domain_t* rt)
 static inline void add_release(rt_domain_t* rt, struct task_struct *task)
 {
 	unsigned long flags;
-	/* first we need the write lock for rt_ready_queue */
 	raw_spin_lock_irqsave(&rt->tobe_lock, flags);
 	__add_release(rt, task);
 	raw_spin_unlock_irqrestore(&rt->tobe_lock, flags);
 }
+
+#ifdef CONFIG_RELEASE_MASTER
+void __add_release_on(rt_domain_t* rt, struct task_struct *task,
+		      int target_cpu);
+
+static inline void add_release_on(rt_domain_t* rt,
+				  struct task_struct *task,
+				  int target_cpu)
+{
+	unsigned long flags;
+	raw_spin_lock_irqsave(&rt->tobe_lock, flags);
+	__add_release_on(rt, task, target_cpu);
+	raw_spin_unlock_irqrestore(&rt->tobe_lock, flags);
+}
+#endif
 
 static inline int __jobs_pending(rt_domain_t* rt)
 {
