@@ -21,6 +21,15 @@
 
 #include <litmus/bheap.h>
 
+/* Uncomment when debugging timer races... */
+#if 0
+#define VTRACE_TASK TRACE_TASK
+#define VTRACE TRACE
+#else
+#define VTRACE_TASK(t, fmt, args...) /* shut up */
+#define VTRACE(fmt, args...) /* be quiet already */
+#endif
+
 static int dummy_resched(rt_domain_t *rt)
 {
 	return 0;
@@ -47,18 +56,18 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 	unsigned long flags;
 	struct release_heap* rh;
 
-	TRACE("on_release_timer(0x%p) starts.\n", timer);
+	VTRACE("on_release_timer(0x%p) starts.\n", timer);
 
 	TS_RELEASE_START;
 
 	rh = container_of(timer, struct release_heap, timer);
 
 	raw_spin_lock_irqsave(&rh->dom->release_lock, flags);
-	TRACE("CB has the release_lock 0x%p\n", &rh->dom->release_lock);
+	VTRACE("CB has the release_lock 0x%p\n", &rh->dom->release_lock);
 	/* remove from release queue */
 	list_del(&rh->list);
 	raw_spin_unlock_irqrestore(&rh->dom->release_lock, flags);
-	TRACE("CB returned release_lock 0x%p\n", &rh->dom->release_lock);
+	VTRACE("CB returned release_lock 0x%p\n", &rh->dom->release_lock);
 
 	/* call release callback */
 	rh->dom->release_jobs(rh->dom, &rh->heap);
@@ -66,7 +75,7 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 
 	TS_RELEASE_END;
 
-	TRACE("on_release_timer(0x%p) ends.\n", timer);
+	VTRACE("on_release_timer(0x%p) ends.\n", timer);
 
 	return  HRTIMER_NORESTART;
 }
@@ -173,7 +182,7 @@ static void reinit_release_heap(struct task_struct* t)
 #define arm_release_timer(t) arm_release_timer_on((t), NO_CPU)
 static void arm_release_timer_on(rt_domain_t *_rt , int target_cpu)
 #else
-static void arm_release_master(rt_domain_t *_rt)
+static void arm_release_timer(rt_domain_t *_rt)
 #endif
 {
 	rt_domain_t *rt = _rt;
@@ -182,7 +191,7 @@ static void arm_release_master(rt_domain_t *_rt)
 	struct task_struct* t;
 	struct release_heap* rh;
 
-	TRACE("arm_release_timer() at %llu\n", litmus_clock());
+	VTRACE("arm_release_timer() at %llu\n", litmus_clock());
 	list_replace_init(&rt->tobe_released, &list);
 
 	list_for_each_safe(pos, safe, &list) {
@@ -193,36 +202,36 @@ static void arm_release_master(rt_domain_t *_rt)
 
 		/* put into release heap while holding release_lock */
 		raw_spin_lock(&rt->release_lock);
-		TRACE_TASK(t, "I have the release_lock 0x%p\n", &rt->release_lock);
+		VTRACE_TASK(t, "I have the release_lock 0x%p\n", &rt->release_lock);
 
 		rh = get_release_heap(rt, t, 0);
 		if (!rh) {
 			/* need to use our own, but drop lock first */
 			raw_spin_unlock(&rt->release_lock);
-			TRACE_TASK(t, "Dropped release_lock 0x%p\n",
-				   &rt->release_lock);
+			VTRACE_TASK(t, "Dropped release_lock 0x%p\n",
+				    &rt->release_lock);
 
 			reinit_release_heap(t);
-			TRACE_TASK(t, "release_heap ready\n");
+			VTRACE_TASK(t, "release_heap ready\n");
 
 			raw_spin_lock(&rt->release_lock);
-			TRACE_TASK(t, "Re-acquired release_lock 0x%p\n",
-				   &rt->release_lock);
+			VTRACE_TASK(t, "Re-acquired release_lock 0x%p\n",
+				    &rt->release_lock);
 
 			rh = get_release_heap(rt, t, 1);
 		}
 		bheap_insert(rt->order, &rh->heap, tsk_rt(t)->heap_node);
-		TRACE_TASK(t, "arm_release_timer(): added to release heap\n");
+		VTRACE_TASK(t, "arm_release_timer(): added to release heap\n");
 
 		raw_spin_unlock(&rt->release_lock);
-		TRACE_TASK(t, "Returned the release_lock 0x%p\n", &rt->release_lock);
+		VTRACE_TASK(t, "Returned the release_lock 0x%p\n", &rt->release_lock);
 
 		/* To avoid arming the timer multiple times, we only let the
 		 * owner do the arming (which is the "first" task to reference
 		 * this release_heap anyway).
 		 */
 		if (rh == tsk_rt(t)->rel_heap) {
-			TRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
+			VTRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
 			/* we cannot arm the timer using hrtimer_start()
 			 * as it may deadlock on rq->lock
 			 *
@@ -246,7 +255,7 @@ static void arm_release_master(rt_domain_t *_rt)
 					HRTIMER_MODE_ABS_PINNED);
 #endif
 		} else
-			TRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
+			VTRACE_TASK(t, "0x%p is not my timer\n", &rh->timer);
 	}
 }
 
