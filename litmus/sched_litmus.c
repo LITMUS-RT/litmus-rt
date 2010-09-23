@@ -157,6 +157,16 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 	if (wakeup) {
 		sched_trace_task_resume(p);
 		tsk_rt(p)->present = 1;
+		/* LITMUS^RT plugins need to update the state
+		 * _before_ making it available in global structures.
+		 * Linux gets away with being lazy about the task state
+		 * update. We can't do that, hence we update the task
+		 * state already here.
+		 *
+		 * WARNING: this needs to be re-evaluated when porting
+		 *          to newer kernel versions.
+		 */
+		p->state = TASK_RUNNING;
 		litmus->task_wake_up(p);
 
 		rq->litmus.nr_running++;
