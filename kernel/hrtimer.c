@@ -1046,6 +1046,15 @@ EXPORT_SYMBOL_GPL(hrtimer_start);
 #ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
 
 /**
+ * hrtimer_start_on_info_init - Initialize hrtimer_start_on_info
+ */
+void hrtimer_start_on_info_init(struct hrtimer_start_on_info *info)
+{
+	memset(info, 0, sizeof(struct hrtimer_start_on_info));
+	atomic_set(&info->state, HRTIMER_START_ON_INACTIVE);
+}
+
+/**
  *  hrtimer_pull - PULL_TIMERS_VECTOR callback on remote cpu
  */
 void hrtimer_pull(void)

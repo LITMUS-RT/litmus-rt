@@ -374,6 +374,7 @@ __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 			 const enum hrtimer_mode mode, int wakeup);
 
 #ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+extern void hrtimer_start_on_info_init(struct hrtimer_start_on_info *info);
 extern int hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
 			struct hrtimer *timer, ktime_t time,
 			const enum hrtimer_mode mode);
