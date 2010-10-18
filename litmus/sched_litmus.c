@@ -1,6 +1,7 @@
 /* This file is included from kernel/sched.c */
 
 #include <litmus/litmus.h>
+#include <litmus/budget.h>
 #include <litmus/sched_plugin.h>
 
 static void update_time_litmus(struct rq *rq, struct task_struct *p)
@@ -148,6 +149,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		next->se.exec_start = rq->clock;
 	}
 
+	update_enforcement_timer(next);
 	return next;
 }
 
