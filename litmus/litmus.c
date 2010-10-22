@@ -8,12 +8,10 @@
 #include <linux/sysrq.h>
 
 #include <linux/module.h>
-#include <linux/proc_fs.h>
 #include <linux/slab.h>
 
 #include <litmus/litmus.h>
 #include <linux/sched.h>
-#include <litmus/sched_plugin.h>
 
 #include <litmus/bheap.h>
 
@@ -687,6 +685,7 @@ static int proc_write_release_master(struct file *file,
 static struct proc_dir_entry *litmus_dir = NULL,
 	*curr_file = NULL,
 	*stat_file = NULL,
+	*plugs_dir = NULL,
 	*plugs_file = NULL,
 #ifdef CONFIG_RELEASE_MASTER
 	*release_master_file = NULL,
@@ -736,7 +735,14 @@ static int __init init_litmus_proc(void)
 	stat_file = create_proc_read_entry("stats", 0444, litmus_dir,
 					   proc_read_stats, NULL);
 
-	plugs_file = create_proc_read_entry("plugins", 0444, litmus_dir,
+	plugs_dir = proc_mkdir("plugins", litmus_dir);
+	if (!plugs_dir){
+		printk(KERN_ERR "Could not allocate plugins directory "
+				"procfs entry.\n");
+		return -ENOMEM;
+	}
+
+	plugs_file = create_proc_read_entry("loaded", 0444, plugs_dir,
 					   proc_read_plugins, NULL);
 
 	return 0;
@@ -745,6 +751,8 @@ static int __init init_litmus_proc(void)
 static void exit_litmus_proc(void)
 {
 	if (plugs_file)
+		remove_proc_entry("loaded", plugs_dir);
+	if (plugs_dir)
 		remove_proc_entry("plugins", litmus_dir);
 	if (stat_file)
 		remove_proc_entry("stats", litmus_dir);
@@ -758,6 +766,54 @@ static void exit_litmus_proc(void)
 #endif
 	if (litmus_dir)
 		remove_proc_entry("litmus", NULL);
+}
+
+long make_plugin_proc_dir(struct sched_plugin* plugin,
+		struct proc_dir_entry** pde_in)
+{
+	struct proc_dir_entry *pde_new = NULL;
+	long rv;
+
+	if (!plugin || !plugin->plugin_name){
+		printk(KERN_ERR "Invalid plugin struct passed to %s.\n",
+				__func__);
+		rv = -EINVAL;
+		goto out_no_pde;
+	}
+
+	if (!plugs_dir){
+		printk(KERN_ERR "Could not make plugin sub-directory, because "
+				"/proc/litmus/plugins does not exist.\n");
+		rv = -ENOENT;
+		goto out_no_pde;
+	}
+
+	pde_new = proc_mkdir(plugin->plugin_name, plugs_dir);
+	if (!pde_new){
+		printk(KERN_ERR "Could not make plugin sub-directory: "
+				"out of memory?.\n");
+		rv = -ENOMEM;
+		goto out_no_pde;
+	}
+
+	rv = 0;
+	*pde_in = pde_new;
+	goto out_ok;
+
+out_no_pde:
+	*pde_in = NULL;
+out_ok:
+	return rv;
+}
+
+void remove_plugin_proc_dir(struct sched_plugin* plugin)
+{
+	if (!plugin || !plugin->plugin_name){
+		printk(KERN_ERR "Invalid plugin struct passed to %s.\n",
+				__func__);
+		return;
+	}
+	remove_proc_entry(plugin->plugin_name, plugs_dir);
 }
 
 extern struct sched_plugin linux_sched_plugin;
