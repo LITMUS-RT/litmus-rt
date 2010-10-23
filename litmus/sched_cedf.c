@@ -30,6 +30,8 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 
+#include <linux/module.h>
+
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
@@ -38,7 +40,16 @@
 
 #include <litmus/bheap.h>
 
-#include <linux/module.h>
+/* to configure the cluster size */
+#include <litmus/litmus_proc.h>
+#include <linux/uaccess.h>
+
+/*
+ * It makes sense only to cluster around L2 or L3, so if cluster_index = 2
+ * (default) we cluster all the CPUs that shares a L2 cache, while
+ * cluster_cache_index = 3 we cluster all CPs that shares a L3 cache
+ */
+int cluster_index = 2;
 
 /* forward declaration... a funny thing with C ;) */
 struct clusterdomain;
@@ -641,25 +652,25 @@ static long cedf_activate_plugin(void)
 	cleanup_cedf();
 
 	printk(KERN_INFO "C-EDF: Activate Plugin, cache index = %d\n",
-			cluster_cache_index);
+			cluster_index);
 
 	/* need to get cluster_size first */
 	if(!zalloc_cpumask_var(&mask, GFP_ATOMIC))
 		return -ENOMEM;
 
-	if (unlikely(cluster_cache_index == num_online_cpus())) {
+	if (unlikely(cluster_index == num_online_cpus())) {
 
 		cluster_size = num_online_cpus();
 	} else {
 
-		chk = get_shared_cpu_map(mask, 0, cluster_cache_index);
+		chk = get_shared_cpu_map(mask, 0, cluster_index);
 		if (chk) {
 			/* if chk != 0 then it is the max allowed index */
 			printk(KERN_INFO "C-EDF: Cannot support cache index = %d\n",
-					cluster_cache_index);
+					cluster_index);
 			printk(KERN_INFO "C-EDF: Using cache index = %d\n",
 					chk);
-			cluster_cache_index = chk;
+			cluster_index = chk;
 		}
 
 		cluster_size = cpumask_weight(mask);
@@ -706,10 +717,10 @@ static long cedf_activate_plugin(void)
 
 			/* this cpu isn't in any cluster */
 			/* get the shared cpus */
-			if (unlikely(cluster_cache_index == num_online_cpus()))
+			if (unlikely(cluster_index == num_online_cpus()))
 				cpumask_copy(mask, cpu_online_mask);
 			else
-				get_shared_cpu_map(mask, cpu, cluster_cache_index);
+				get_shared_cpu_map(mask, cpu, cluster_index);
 
 			cpumask_copy(cedf[i].cpu_map, mask);
 #ifdef VERBOSE_INIT
@@ -759,14 +770,92 @@ static struct sched_plugin cedf_plugin __cacheline_aligned_in_smp = {
 };
 
 
+/* proc file interface to configure the cluster size */
+
+static int proc_read_cluster_size(char *page, char **start,
+				  off_t off, int count,
+				  int *eof, void *data)
+{
+	int len;
+	if (cluster_index >= 1 && cluster_index <= 3)
+		len = snprintf(page, PAGE_SIZE, "L%d\n", cluster_index);
+	else
+		len = snprintf(page, PAGE_SIZE, "ALL\n");
+
+	return len;
+}
+
+static int proc_write_cluster_size(struct file *file,
+				   const char *buffer,
+				   unsigned long count,
+				   void *data)
+{
+	int len;
+	/* L2, L3 */
+	char cache_name[33];
+
+	if(count > 32)
+		len = 32;
+	else
+		len = count;
+
+	if(copy_from_user(cache_name, buffer, len))
+		return -EFAULT;
+
+	cache_name[len] = '\0';
+	/* chomp name */
+	if (len > 1 && cache_name[len - 1] == '\n')
+		cache_name[len - 1] = '\0';
+
+	/* do a quick and dirty comparison to find the cluster size */
+	if (!strcmp(cache_name, "L2"))
+		cluster_index = 2;
+	else if (!strcmp(cache_name, "L3"))
+		cluster_index = 3;
+	else if (!strcmp(cache_name, "L1"))
+		cluster_index = 1;
+	else if (!strcmp(cache_name, "ALL"))
+		cluster_index = num_online_cpus();
+	else
+		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
+
+	return len;
+}
+
+
+static struct proc_dir_entry *cluster_file = NULL, *cedf_dir = NULL;
+
+
 static int __init init_cedf(void)
 {
-	return register_sched_plugin(&cedf_plugin);
+	int err, fs;
+
+	err = register_sched_plugin(&cedf_plugin);
+	if (!err) {
+		fs = make_plugin_proc_dir(&cedf_plugin, &cedf_dir);
+		if (!fs) {
+			cluster_file = create_proc_entry("cluster", 0644, cedf_dir);
+			if (!cluster_file) {
+				printk(KERN_ERR "Could not allocate C-EDF/cluster "
+				       "procfs entry.\n");
+			} else {
+				cluster_file->read_proc = proc_read_cluster_size;
+				cluster_file->write_proc = proc_write_cluster_size;
+			}
+		} else {
+			printk(KERN_ERR "Could not allocate C-EDF procfs dir.\n");
+		}
+	}
+	return err;
 }
 
 static void clean_cedf(void)
 {
 	cleanup_cedf();
+	if (cluster_file)
+		remove_proc_entry("cluster", cedf_dir);
+	if (cedf_dir)
+		remove_plugin_proc_dir(&cedf_plugin);
 }
 
 module_init(init_cedf);
