@@ -28,7 +28,11 @@
 static int s5pv210_serial_setsource(struct uart_port *port,
 					struct s3c24xx_uart_clksrc *clk)
 {
+	struct s3c2410_uartcfg *cfg = port->dev->platform_data;
 	unsigned long ucon = rd_regl(port, S3C2410_UCON);
+
+	if ((cfg->clocks_size) == 1)
+		return 0;
 
 	if (strcmp(clk->name, "pclk") == 0)
 		ucon &= ~S5PV210_UCON_CLKMASK;
@@ -47,9 +51,13 @@ static int s5pv210_serial_setsource(struct uart_port *port,
 static int s5pv210_serial_getsource(struct uart_port *port,
 					struct s3c24xx_uart_clksrc *clk)
 {
+	struct s3c2410_uartcfg *cfg = port->dev->platform_data;
 	u32 ucon = rd_regl(port, S3C2410_UCON);
 
 	clk->divisor = 1;
+
+	if ((cfg->clocks_size) == 1)
+		return 0;
 
 	switch (ucon & S5PV210_UCON_CLKMASK) {
 	case S5PV210_UCON_PCLK:
@@ -119,7 +127,7 @@ static int s5p_serial_probe(struct platform_device *pdev)
 	return s3c24xx_serial_probe(pdev, s5p_uart_inf[pdev->id]);
 }
 
-static struct platform_driver s5p_serial_drv = {
+static struct platform_driver s5p_serial_driver = {
 	.probe		= s5p_serial_probe,
 	.remove		= __devexit_p(s3c24xx_serial_remove),
 	.driver		= {
@@ -130,19 +138,19 @@ static struct platform_driver s5p_serial_drv = {
 
 static int __init s5pv210_serial_console_init(void)
 {
-	return s3c24xx_serial_initconsole(&s5p_serial_drv, s5p_uart_inf);
+	return s3c24xx_serial_initconsole(&s5p_serial_driver, s5p_uart_inf);
 }
 
 console_initcall(s5pv210_serial_console_init);
 
 static int __init s5p_serial_init(void)
 {
-	return s3c24xx_serial_init(&s5p_serial_drv, *s5p_uart_inf);
+	return s3c24xx_serial_init(&s5p_serial_driver, *s5p_uart_inf);
 }
 
 static void __exit s5p_serial_exit(void)
 {
-	platform_driver_unregister(&s5p_serial_drv);
+	platform_driver_unregister(&s5p_serial_driver);
 }
 
 module_init(s5p_serial_init);

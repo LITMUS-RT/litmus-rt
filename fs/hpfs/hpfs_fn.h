@@ -268,7 +268,7 @@ void hpfs_set_ea(struct inode *, struct fnode *, const char *,
 
 /* file.c */
 
-int hpfs_file_fsync(struct file *, struct dentry *, int);
+int hpfs_file_fsync(struct file *, int);
 extern const struct file_operations hpfs_file_ops;
 extern const struct inode_operations hpfs_file_iops;
 extern const struct address_space_operations hpfs_aops;
@@ -281,7 +281,7 @@ void hpfs_write_inode(struct inode *);
 void hpfs_write_inode_nolock(struct inode *);
 int hpfs_setattr(struct dentry *, struct iattr *);
 void hpfs_write_if_changed(struct inode *);
-void hpfs_delete_inode(struct inode *);
+void hpfs_evict_inode(struct inode *);
 
 /* map.c */
 

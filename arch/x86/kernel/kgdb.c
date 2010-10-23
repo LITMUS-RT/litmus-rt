@@ -47,69 +47,96 @@
 #include <asm/debugreg.h>
 #include <asm/apicdef.h>
 #include <asm/system.h>
-
 #include <asm/apic.h>
 
-/*
- * Put the error code here just in case the user cares:
- */
-static int gdb_x86errcode;
-
-/*
- * Likewise, the vector number here (since GDB only gets the signal
- * number through the usual means, and that's not very specific):
- */
-static int gdb_x86vector = -1;
-
-/**
- *	pt_regs_to_gdb_regs - Convert ptrace regs to GDB regs
- *	@gdb_regs: A pointer to hold the registers in the order GDB wants.
- *	@regs: The &struct pt_regs of the current process.
- *
- *	Convert the pt_regs in @regs into the format for registers that
- *	GDB expects, stored in @gdb_regs.
- */
-void pt_regs_to_gdb_regs(unsigned long *gdb_regs, struct pt_regs *regs)
+struct dbg_reg_def_t dbg_reg_def[DBG_MAX_REG_NUM] =
 {
-#ifndef CONFIG_X86_32
-	u32 *gdb_regs32 = (u32 *)gdb_regs;
-#endif
-	gdb_regs[GDB_AX]	= regs->ax;
-	gdb_regs[GDB_BX]	= regs->bx;
-	gdb_regs[GDB_CX]	= regs->cx;
-	gdb_regs[GDB_DX]	= regs->dx;
-	gdb_regs[GDB_SI]	= regs->si;
-	gdb_regs[GDB_DI]	= regs->di;
-	gdb_regs[GDB_BP]	= regs->bp;
-	gdb_regs[GDB_PC]	= regs->ip;
 #ifdef CONFIG_X86_32
-	gdb_regs[GDB_PS]	= regs->flags;
-	gdb_regs[GDB_DS]	= regs->ds;
-	gdb_regs[GDB_ES]	= regs->es;
-	gdb_regs[GDB_CS]	= regs->cs;
-	gdb_regs[GDB_FS]	= 0xFFFF;
-	gdb_regs[GDB_GS]	= 0xFFFF;
-	if (user_mode_vm(regs)) {
-		gdb_regs[GDB_SS] = regs->ss;
-		gdb_regs[GDB_SP] = regs->sp;
-	} else {
-		gdb_regs[GDB_SS] = __KERNEL_DS;
-		gdb_regs[GDB_SP] = kernel_stack_pointer(regs);
-	}
+	{ "ax", 4, offsetof(struct pt_regs, ax) },
+	{ "cx", 4, offsetof(struct pt_regs, cx) },
+	{ "dx", 4, offsetof(struct pt_regs, dx) },
+	{ "bx", 4, offsetof(struct pt_regs, bx) },
+	{ "sp", 4, offsetof(struct pt_regs, sp) },
+	{ "bp", 4, offsetof(struct pt_regs, bp) },
+	{ "si", 4, offsetof(struct pt_regs, si) },
+	{ "di", 4, offsetof(struct pt_regs, di) },
+	{ "ip", 4, offsetof(struct pt_regs, ip) },
+	{ "flags", 4, offsetof(struct pt_regs, flags) },
+	{ "cs", 4, offsetof(struct pt_regs, cs) },
+	{ "ss", 4, offsetof(struct pt_regs, ss) },
+	{ "ds", 4, offsetof(struct pt_regs, ds) },
+	{ "es", 4, offsetof(struct pt_regs, es) },
+	{ "fs", 4, -1 },
+	{ "gs", 4, -1 },
 #else
-	gdb_regs[GDB_R8]	= regs->r8;
-	gdb_regs[GDB_R9]	= regs->r9;
-	gdb_regs[GDB_R10]	= regs->r10;
-	gdb_regs[GDB_R11]	= regs->r11;
-	gdb_regs[GDB_R12]	= regs->r12;
-	gdb_regs[GDB_R13]	= regs->r13;
-	gdb_regs[GDB_R14]	= regs->r14;
-	gdb_regs[GDB_R15]	= regs->r15;
-	gdb_regs32[GDB_PS]	= regs->flags;
-	gdb_regs32[GDB_CS]	= regs->cs;
-	gdb_regs32[GDB_SS]	= regs->ss;
-	gdb_regs[GDB_SP]	= kernel_stack_pointer(regs);
+	{ "ax", 8, offsetof(struct pt_regs, ax) },
+	{ "bx", 8, offsetof(struct pt_regs, bx) },
+	{ "cx", 8, offsetof(struct pt_regs, cx) },
+	{ "dx", 8, offsetof(struct pt_regs, dx) },
+	{ "si", 8, offsetof(struct pt_regs, dx) },
+	{ "di", 8, offsetof(struct pt_regs, di) },
+	{ "bp", 8, offsetof(struct pt_regs, bp) },
+	{ "sp", 8, offsetof(struct pt_regs, sp) },
+	{ "r8", 8, offsetof(struct pt_regs, r8) },
+	{ "r9", 8, offsetof(struct pt_regs, r9) },
+	{ "r10", 8, offsetof(struct pt_regs, r10) },
+	{ "r11", 8, offsetof(struct pt_regs, r11) },
+	{ "r12", 8, offsetof(struct pt_regs, r12) },
+	{ "r13", 8, offsetof(struct pt_regs, r13) },
+	{ "r14", 8, offsetof(struct pt_regs, r14) },
+	{ "r15", 8, offsetof(struct pt_regs, r15) },
+	{ "ip", 8, offsetof(struct pt_regs, ip) },
+	{ "flags", 4, offsetof(struct pt_regs, flags) },
+	{ "cs", 4, offsetof(struct pt_regs, cs) },
+	{ "ss", 4, offsetof(struct pt_regs, ss) },
 #endif
+};
+
+int dbg_set_reg(int regno, void *mem, struct pt_regs *regs)
+{
+	if (
+#ifdef CONFIG_X86_32
+	    regno == GDB_SS || regno == GDB_FS || regno == GDB_GS ||
+#endif
+	    regno == GDB_SP || regno == GDB_ORIG_AX)
+		return 0;
+
+	if (dbg_reg_def[regno].offset != -1)
+		memcpy((void *)regs + dbg_reg_def[regno].offset, mem,
+		       dbg_reg_def[regno].size);
+	return 0;
+}
+
+char *dbg_get_reg(int regno, void *mem, struct pt_regs *regs)
+{
+	if (regno == GDB_ORIG_AX) {
+		memcpy(mem, &regs->orig_ax, sizeof(regs->orig_ax));
+		return "orig_ax";
+	}
+	if (regno >= DBG_MAX_REG_NUM || regno < 0)
+		return NULL;
+
+	if (dbg_reg_def[regno].offset != -1)
+		memcpy(mem, (void *)regs + dbg_reg_def[regno].offset,
+		       dbg_reg_def[regno].size);
+
+	switch (regno) {
+#ifdef CONFIG_X86_32
+	case GDB_SS:
+		if (!user_mode_vm(regs))
+			*(unsigned long *)mem = __KERNEL_DS;
+		break;
+	case GDB_SP:
+		if (!user_mode_vm(regs))
+			*(unsigned long *)mem = kernel_stack_pointer(regs);
+		break;
+	case GDB_GS:
+	case GDB_FS:
+		*(unsigned long *)mem = 0xFFFF;
+		break;
+#endif
+	}
+	return dbg_reg_def[regno].name;
 }
 
 /**
@@ -162,66 +189,35 @@ void sleeping_thread_to_gdb_regs(unsigned long *gdb_regs, struct task_struct *p)
 	gdb_regs[GDB_SP]	= p->thread.sp;
 }
 
-/**
- *	gdb_regs_to_pt_regs - Convert GDB regs to ptrace regs.
- *	@gdb_regs: A pointer to hold the registers we've received from GDB.
- *	@regs: A pointer to a &struct pt_regs to hold these values in.
- *
- *	Convert the GDB regs in @gdb_regs into the pt_regs, and store them
- *	in @regs.
- */
-void gdb_regs_to_pt_regs(unsigned long *gdb_regs, struct pt_regs *regs)
-{
-#ifndef CONFIG_X86_32
-	u32 *gdb_regs32 = (u32 *)gdb_regs;
-#endif
-	regs->ax		= gdb_regs[GDB_AX];
-	regs->bx		= gdb_regs[GDB_BX];
-	regs->cx		= gdb_regs[GDB_CX];
-	regs->dx		= gdb_regs[GDB_DX];
-	regs->si		= gdb_regs[GDB_SI];
-	regs->di		= gdb_regs[GDB_DI];
-	regs->bp		= gdb_regs[GDB_BP];
-	regs->ip		= gdb_regs[GDB_PC];
-#ifdef CONFIG_X86_32
-	regs->flags		= gdb_regs[GDB_PS];
-	regs->ds		= gdb_regs[GDB_DS];
-	regs->es		= gdb_regs[GDB_ES];
-	regs->cs		= gdb_regs[GDB_CS];
-#else
-	regs->r8		= gdb_regs[GDB_R8];
-	regs->r9		= gdb_regs[GDB_R9];
-	regs->r10		= gdb_regs[GDB_R10];
-	regs->r11		= gdb_regs[GDB_R11];
-	regs->r12		= gdb_regs[GDB_R12];
-	regs->r13		= gdb_regs[GDB_R13];
-	regs->r14		= gdb_regs[GDB_R14];
-	regs->r15		= gdb_regs[GDB_R15];
-	regs->flags		= gdb_regs32[GDB_PS];
-	regs->cs		= gdb_regs32[GDB_CS];
-	regs->ss		= gdb_regs32[GDB_SS];
-#endif
-}
-
 static struct hw_breakpoint {
 	unsigned		enabled;
 	unsigned long		addr;
 	int			len;
 	int			type;
-	struct perf_event	**pev;
-} breakinfo[4];
+	struct perf_event	* __percpu *pev;
+} breakinfo[HBP_NUM];
+
+static unsigned long early_dr7;
 
 static void kgdb_correct_hw_break(void)
 {
 	int breakno;
 
-	for (breakno = 0; breakno < 4; breakno++) {
+	for (breakno = 0; breakno < HBP_NUM; breakno++) {
 		struct perf_event *bp;
 		struct arch_hw_breakpoint *info;
 		int val;
 		int cpu = raw_smp_processor_id();
 		if (!breakinfo[breakno].enabled)
 			continue;
+		if (dbg_is_early) {
+			set_debugreg(breakinfo[breakno].addr, breakno);
+			early_dr7 |= encode_dr7(breakno,
+						breakinfo[breakno].len,
+						breakinfo[breakno].type);
+			set_debugreg(early_dr7, 7);
+			continue;
+		}
 		bp = *per_cpu_ptr(breakinfo[breakno].pev, cpu);
 		info = counter_arch_bp(bp);
 		if (bp->attr.disabled != 1)
@@ -236,7 +232,8 @@ static void kgdb_correct_hw_break(void)
 		if (!val)
 			bp->attr.disabled = 0;
 	}
-	hw_breakpoint_restore();
+	if (!dbg_is_early)
+		hw_breakpoint_restore();
 }
 
 static int hw_break_reserve_slot(int breakno)
@@ -244,6 +241,9 @@ static int hw_break_reserve_slot(int breakno)
 	int cpu;
 	int cnt = 0;
 	struct perf_event **pevent;
+
+	if (dbg_is_early)
+		return 0;
 
 	for_each_online_cpu(cpu) {
 		cnt++;
@@ -270,6 +270,9 @@ static int hw_break_release_slot(int breakno)
 	struct perf_event **pevent;
 	int cpu;
 
+	if (dbg_is_early)
+		return 0;
+
 	for_each_online_cpu(cpu) {
 		pevent = per_cpu_ptr(breakinfo[breakno].pev, cpu);
 		if (dbg_release_bp_slot(*pevent))
@@ -287,10 +290,10 @@ kgdb_remove_hw_break(unsigned long addr, int len, enum kgdb_bptype bptype)
 {
 	int i;
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < HBP_NUM; i++)
 		if (breakinfo[i].addr == addr && breakinfo[i].enabled)
 			break;
-	if (i == 4)
+	if (i == HBP_NUM)
 		return -1;
 
 	if (hw_break_release_slot(i)) {
@@ -308,13 +311,17 @@ static void kgdb_remove_all_hw_break(void)
 	int cpu = raw_smp_processor_id();
 	struct perf_event *bp;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < HBP_NUM; i++) {
 		if (!breakinfo[i].enabled)
 			continue;
 		bp = *per_cpu_ptr(breakinfo[i].pev, cpu);
 		if (bp->attr.disabled == 1)
 			continue;
-		arch_uninstall_hw_breakpoint(bp);
+		if (dbg_is_early)
+			early_dr7 &= ~encode_dr7(i, breakinfo[i].len,
+						 breakinfo[i].type);
+		else
+			arch_uninstall_hw_breakpoint(bp);
 		bp->attr.disabled = 1;
 	}
 }
@@ -324,10 +331,10 @@ kgdb_set_hw_break(unsigned long addr, int len, enum kgdb_bptype bptype)
 {
 	int i;
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < HBP_NUM; i++)
 		if (!breakinfo[i].enabled)
 			break;
-	if (i == 4)
+	if (i == HBP_NUM)
 		return -1;
 
 	switch (bptype) {
@@ -388,32 +395,20 @@ void kgdb_disable_hw_debug(struct pt_regs *regs)
 
 	/* Disable hardware debugging while we are in kgdb: */
 	set_debugreg(0UL, 7);
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < HBP_NUM; i++) {
 		if (!breakinfo[i].enabled)
 			continue;
+		if (dbg_is_early) {
+			early_dr7 &= ~encode_dr7(i, breakinfo[i].len,
+						 breakinfo[i].type);
+			continue;
+		}
 		bp = *per_cpu_ptr(breakinfo[i].pev, cpu);
 		if (bp->attr.disabled == 1)
 			continue;
 		arch_uninstall_hw_breakpoint(bp);
 		bp->attr.disabled = 1;
 	}
-}
-
-/**
- *	kgdb_post_primary_code - Save error vector/code numbers.
- *	@regs: Original pt_regs.
- *	@e_vector: Original error vector.
- *	@err_code: Original error code.
- *
- *	This is needed on architectures which support SMP and KGDB.
- *	This function is called after all the slave cpus have been put
- *	to a know spin state and the primary CPU has control over KGDB.
- */
-void kgdb_post_primary_code(struct pt_regs *regs, int e_vector, int err_code)
-{
-	/* primary processor is completely in the debugger */
-	gdb_x86vector = e_vector;
-	gdb_x86errcode = err_code;
 }
 
 #ifdef CONFIG_SMP
@@ -461,7 +456,6 @@ int kgdb_arch_handle_exception(int e_vector, int signo, int err_code,
 {
 	unsigned long addr;
 	char *ptr;
-	int newPC;
 
 	switch (remcomInBuffer[0]) {
 	case 'c':
@@ -472,8 +466,6 @@ int kgdb_arch_handle_exception(int e_vector, int signo, int err_code,
 			linux_regs->ip = addr;
 	case 'D':
 	case 'k':
-		newPC = linux_regs->ip;
-
 		/* clear the trace bit */
 		linux_regs->flags &= ~X86_EFLAGS_TF;
 		atomic_set(&kgdb_cpu_doing_single_step, -1);
@@ -567,12 +559,30 @@ static int __kgdb_notify(struct die_args *args, unsigned long cmd)
 			return NOTIFY_DONE;
 	}
 
-	if (kgdb_handle_exception(args->trapnr, args->signr, args->err, regs))
+	if (kgdb_handle_exception(args->trapnr, args->signr, cmd, regs))
 		return NOTIFY_DONE;
 
 	/* Must touch watchdog before return to normal operation */
 	touch_nmi_watchdog();
 	return NOTIFY_STOP;
+}
+
+int kgdb_ll_trap(int cmd, const char *str,
+		 struct pt_regs *regs, long err, int trap, int sig)
+{
+	struct die_args args = {
+		.regs	= regs,
+		.str	= str,
+		.err	= err,
+		.trapnr	= trap,
+		.signr	= sig,
+
+	};
+
+	if (!kgdb_io_module_registered)
+		return NOTIFY_DONE;
+
+	return __kgdb_notify(&args, cmd);
 }
 
 static int
@@ -605,14 +615,21 @@ static struct notifier_block kgdb_notifier = {
  */
 int kgdb_arch_init(void)
 {
+	return register_die_notifier(&kgdb_notifier);
+}
+
+static void kgdb_hw_overflow_handler(struct perf_event *event, int nmi,
+		struct perf_sample_data *data, struct pt_regs *regs)
+{
+	kgdb_ll_trap(DIE_DEBUG, "debug", regs, 0, 0, SIGTRAP);
+}
+
+void kgdb_arch_late(void)
+{
 	int i, cpu;
-	int ret;
 	struct perf_event_attr attr;
 	struct perf_event **pevent;
 
-	ret = register_die_notifier(&kgdb_notifier);
-	if (ret != 0)
-		return ret;
 	/*
 	 * Pre-allocate the hw breakpoint structions in the non-atomic
 	 * portion of kgdb because this operation requires mutexs to
@@ -623,24 +640,27 @@ int kgdb_arch_init(void)
 	attr.bp_len = HW_BREAKPOINT_LEN_1;
 	attr.bp_type = HW_BREAKPOINT_W;
 	attr.disabled = 1;
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < HBP_NUM; i++) {
+		if (breakinfo[i].pev)
+			continue;
 		breakinfo[i].pev = register_wide_hw_breakpoint(&attr, NULL);
 		if (IS_ERR(breakinfo[i].pev)) {
-			printk(KERN_ERR "kgdb: Could not allocate hw breakpoints\n");
+			printk(KERN_ERR "kgdb: Could not allocate hw"
+			       "breakpoints\nDisabling the kernel debugger\n");
 			breakinfo[i].pev = NULL;
 			kgdb_arch_exit();
-			return -1;
+			return;
 		}
 		for_each_online_cpu(cpu) {
 			pevent = per_cpu_ptr(breakinfo[i].pev, cpu);
 			pevent[0]->hw.sample_period = 1;
+			pevent[0]->overflow_handler = kgdb_hw_overflow_handler;
 			if (pevent[0]->destroy != NULL) {
 				pevent[0]->destroy = NULL;
 				release_bp_slot(*pevent);
 			}
 		}
 	}
-	return ret;
 }
 
 /**
@@ -688,6 +708,11 @@ unsigned long kgdb_arch_pc(int exception, struct pt_regs *regs)
 	if (exception == 3)
 		return instruction_pointer(regs) - 1;
 	return instruction_pointer(regs);
+}
+
+void kgdb_arch_set_pc(struct pt_regs *regs, unsigned long ip)
+{
+	regs->ip = ip;
 }
 
 struct kgdb_arch arch_kgdb_ops = {

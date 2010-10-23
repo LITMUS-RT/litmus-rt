@@ -27,6 +27,17 @@ static int ceph_x_is_authenticated(struct ceph_auth_client *ac)
 	return (ac->want_keys & xi->have_keys) == ac->want_keys;
 }
 
+static int ceph_x_should_authenticate(struct ceph_auth_client *ac)
+{
+	struct ceph_x_info *xi = ac->private;
+	int need;
+
+	ceph_x_validate_tickets(ac, &need);
+	dout("ceph_x_should_authenticate want=%d need=%d have=%d\n",
+	     ac->want_keys, need, xi->have_keys);
+	return need != 0;
+}
+
 static int ceph_x_encrypt_buflen(int ilen)
 {
 	return sizeof(struct ceph_x_encrypt_header) + ilen + 16 +
@@ -76,8 +87,8 @@ static int ceph_x_decrypt(struct ceph_crypto_key *secret,
 /*
  * get existing (or insert new) ticket handler
  */
-struct ceph_x_ticket_handler *get_ticket_handler(struct ceph_auth_client *ac,
-						 int service)
+static struct ceph_x_ticket_handler *
+get_ticket_handler(struct ceph_auth_client *ac, int service)
 {
 	struct ceph_x_ticket_handler *th;
 	struct ceph_x_info *xi = ac->private;
@@ -127,7 +138,7 @@ static int ceph_x_proc_ticket_reply(struct ceph_auth_client *ac,
 	int ret;
 	char *dbuf;
 	char *ticket_buf;
-	u8 struct_v;
+	u8 reply_struct_v;
 
 	dbuf = kmalloc(TEMP_TICKET_BUF_LEN, GFP_NOFS);
 	if (!dbuf)
@@ -139,14 +150,14 @@ static int ceph_x_proc_ticket_reply(struct ceph_auth_client *ac,
 		goto out_dbuf;
 
 	ceph_decode_need(&p, end, 1 + sizeof(u32), bad);
-	struct_v = ceph_decode_8(&p);
-	if (struct_v != 1)
+	reply_struct_v = ceph_decode_8(&p);
+	if (reply_struct_v != 1)
 		goto bad;
 	num = ceph_decode_32(&p);
 	dout("%d tickets\n", num);
 	while (num--) {
 		int type;
-		u8 struct_v;
+		u8 tkt_struct_v, blob_struct_v;
 		struct ceph_x_ticket_handler *th;
 		void *dp, *dend;
 		int dlen;
@@ -165,8 +176,8 @@ static int ceph_x_proc_ticket_reply(struct ceph_auth_client *ac,
 		type = ceph_decode_32(&p);
 		dout(" ticket type %d %s\n", type, ceph_entity_type_name(type));
 
-		struct_v = ceph_decode_8(&p);
-		if (struct_v != 1)
+		tkt_struct_v = ceph_decode_8(&p);
+		if (tkt_struct_v != 1)
 			goto bad;
 
 		th = get_ticket_handler(ac, type);
@@ -186,8 +197,8 @@ static int ceph_x_proc_ticket_reply(struct ceph_auth_client *ac,
 		dend = dbuf + dlen;
 		dp = dbuf;
 
-		struct_v = ceph_decode_8(&dp);
-		if (struct_v != 1)
+		tkt_struct_v = ceph_decode_8(&dp);
+		if (tkt_struct_v != 1)
 			goto bad;
 
 		memcpy(&old_key, &th->session_key, sizeof(old_key));
@@ -224,7 +235,7 @@ static int ceph_x_proc_ticket_reply(struct ceph_auth_client *ac,
 		tpend = tp + dlen;
 		dout(" ticket blob is %d bytes\n", dlen);
 		ceph_decode_need(&tp, tpend, 1 + sizeof(u64), bad);
-		struct_v = ceph_decode_8(&tp);
+		blob_struct_v = ceph_decode_8(&tp);
 		new_secret_id = ceph_decode_64(&tp);
 		ret = ceph_decode_buffer(&new_ticket_blob, &tp, tpend);
 		if (ret)
@@ -365,7 +376,7 @@ static void ceph_x_validate_tickets(struct ceph_auth_client *ac, int *pneed)
 
 		th = get_ticket_handler(ac, service);
 
-		if (!th) {
+		if (IS_ERR(th)) {
 			*pneed |= service;
 			continue;
 		}
@@ -387,6 +398,9 @@ static int ceph_x_build_request(struct ceph_auth_client *ac,
 	int ret;
 	struct ceph_x_ticket_handler *th =
 		get_ticket_handler(ac, CEPH_ENTITY_TYPE_AUTH);
+
+	if (IS_ERR(th))
+		return PTR_ERR(th);
 
 	ceph_x_validate_tickets(ac, &need);
 
@@ -418,7 +432,7 @@ static int ceph_x_build_request(struct ceph_auth_client *ac,
 		auth->struct_v = 1;
 		auth->key = 0;
 		for (u = (u64 *)tmp_enc; u + 1 <= (u64 *)(tmp_enc + ret); u++)
-			auth->key ^= *u;
+			auth->key ^= *(__le64 *)u;
 		dout(" server_challenge %llx client_challenge %llx key %llx\n",
 		     xi->server_challenge, le64_to_cpu(auth->client_challenge),
 		     le64_to_cpu(auth->key));
@@ -439,7 +453,6 @@ static int ceph_x_build_request(struct ceph_auth_client *ac,
 			return -ERANGE;
 		head->op = cpu_to_le16(CEPHX_GET_PRINCIPAL_SESSION_KEY);
 
-		BUG_ON(!th);
 		ret = ceph_x_build_authorizer(ac, th, &xi->auth_authorizer);
 		if (ret)
 			return ret;
@@ -482,7 +495,7 @@ static int ceph_x_handle_reply(struct ceph_auth_client *ac, int result,
 		return -EAGAIN;
 	}
 
-	op = le32_to_cpu(head->op);
+	op = le16_to_cpu(head->op);
 	result = le32_to_cpu(head->result);
 	dout("handle_reply op %d result %d\n", op, result);
 	switch (op) {
@@ -494,7 +507,8 @@ static int ceph_x_handle_reply(struct ceph_auth_client *ac, int result,
 
 	case CEPHX_GET_PRINCIPAL_SESSION_KEY:
 		th = get_ticket_handler(ac, CEPH_ENTITY_TYPE_AUTH);
-		BUG_ON(!th);
+		if (IS_ERR(th))
+			return PTR_ERR(th);
 		ret = ceph_x_proc_ticket_reply(ac, &th->session_key,
 					       buf + sizeof(*head), end);
 		break;
@@ -552,8 +566,8 @@ static int ceph_x_verify_authorizer_reply(struct ceph_auth_client *ac,
 	void *end = p + sizeof(au->reply_buf);
 
 	th = get_ticket_handler(ac, au->service);
-	if (!th)
-		return -EIO;  /* hrm! */
+	if (IS_ERR(th))
+		return PTR_ERR(th);
 	ret = ceph_x_decrypt(&th->session_key, &p, end, &reply, sizeof(reply));
 	if (ret < 0)
 		return ret;
@@ -602,6 +616,9 @@ static void ceph_x_destroy(struct ceph_auth_client *ac)
 		remove_ticket_handler(ac, th);
 	}
 
+	if (xi->auth_authorizer.buf)
+		ceph_buffer_put(xi->auth_authorizer.buf);
+
 	kfree(ac->private);
 	ac->private = NULL;
 }
@@ -612,13 +629,15 @@ static void ceph_x_invalidate_authorizer(struct ceph_auth_client *ac,
 	struct ceph_x_ticket_handler *th;
 
 	th = get_ticket_handler(ac, peer_type);
-	if (th && !IS_ERR(th))
+	if (!IS_ERR(th))
 		remove_ticket_handler(ac, th);
 }
 
 
 static const struct ceph_auth_client_ops ceph_x_ops = {
+	.name = "x",
 	.is_authenticated = ceph_x_is_authenticated,
+	.should_authenticate = ceph_x_should_authenticate,
 	.build_request = ceph_x_build_request,
 	.handle_reply = ceph_x_handle_reply,
 	.create_authorizer = ceph_x_create_authorizer,

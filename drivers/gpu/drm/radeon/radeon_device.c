@@ -199,7 +199,7 @@ void radeon_vram_location(struct radeon_device *rdev, struct radeon_mc *mc, u64 
 		mc->mc_vram_size = mc->aper_size;
 	}
 	mc->vram_end = mc->vram_start + mc->mc_vram_size - 1;
-	if (rdev->flags & RADEON_IS_AGP && mc->vram_end > mc->gtt_start && mc->vram_end <= mc->gtt_end) {
+	if (rdev->flags & RADEON_IS_AGP && mc->vram_end > mc->gtt_start && mc->vram_start <= mc->gtt_end) {
 		dev_warn(rdev->dev, "limiting VRAM to PCI aperture size\n");
 		mc->real_vram_size = mc->aper_size;
 		mc->mc_vram_size = mc->aper_size;
@@ -226,20 +226,20 @@ void radeon_gtt_location(struct radeon_device *rdev, struct radeon_mc *mc)
 {
 	u64 size_af, size_bf;
 
-	size_af = 0xFFFFFFFF - mc->vram_end;
-	size_bf = mc->vram_start;
+	size_af = ((0xFFFFFFFF - mc->vram_end) + mc->gtt_base_align) & ~mc->gtt_base_align;
+	size_bf = mc->vram_start & ~mc->gtt_base_align;
 	if (size_bf > size_af) {
 		if (mc->gtt_size > size_bf) {
 			dev_warn(rdev->dev, "limiting GTT\n");
 			mc->gtt_size = size_bf;
 		}
-		mc->gtt_start = mc->vram_start - mc->gtt_size;
+		mc->gtt_start = (mc->vram_start & ~mc->gtt_base_align) - mc->gtt_size;
 	} else {
 		if (mc->gtt_size > size_af) {
 			dev_warn(rdev->dev, "limiting GTT\n");
 			mc->gtt_size = size_af;
 		}
-		mc->gtt_start = mc->vram_end + 1;
+		mc->gtt_start = (mc->vram_end + 1 + mc->gtt_base_align) & ~mc->gtt_base_align;
 	}
 	mc->gtt_end = mc->gtt_start + mc->gtt_size - 1;
 	dev_info(rdev->dev, "GTT: %lluM 0x%08llX - 0x%08llX\n",
@@ -293,30 +293,20 @@ bool radeon_card_posted(struct radeon_device *rdev)
 void radeon_update_bandwidth_info(struct radeon_device *rdev)
 {
 	fixed20_12 a;
-	u32 sclk, mclk;
+	u32 sclk = rdev->pm.current_sclk;
+	u32 mclk = rdev->pm.current_mclk;
+
+	/* sclk/mclk in Mhz */
+	a.full = dfixed_const(100);
+	rdev->pm.sclk.full = dfixed_const(sclk);
+	rdev->pm.sclk.full = dfixed_div(rdev->pm.sclk, a);
+	rdev->pm.mclk.full = dfixed_const(mclk);
+	rdev->pm.mclk.full = dfixed_div(rdev->pm.mclk, a);
 
 	if (rdev->flags & RADEON_IS_IGP) {
-		sclk = radeon_get_engine_clock(rdev);
-		mclk = rdev->clock.default_mclk;
-
-		a.full = rfixed_const(100);
-		rdev->pm.sclk.full = rfixed_const(sclk);
-		rdev->pm.sclk.full = rfixed_div(rdev->pm.sclk, a);
-		rdev->pm.mclk.full = rfixed_const(mclk);
-		rdev->pm.mclk.full = rfixed_div(rdev->pm.mclk, a);
-
-		a.full = rfixed_const(16);
+		a.full = dfixed_const(16);
 		/* core_bandwidth = sclk(Mhz) * 16 */
-		rdev->pm.core_bandwidth.full = rfixed_div(rdev->pm.sclk, a);
-	} else {
-		sclk = radeon_get_engine_clock(rdev);
-		mclk = radeon_get_memory_clock(rdev);
-
-		a.full = rfixed_const(100);
-		rdev->pm.sclk.full = rfixed_const(sclk);
-		rdev->pm.sclk.full = rfixed_div(rdev->pm.sclk, a);
-		rdev->pm.mclk.full = rfixed_const(mclk);
-		rdev->pm.mclk.full = rfixed_div(rdev->pm.mclk, a);
+		rdev->pm.core_bandwidth.full = dfixed_div(rdev->pm.sclk, a);
 	}
 }
 
@@ -347,7 +337,8 @@ int radeon_dummy_page_init(struct radeon_device *rdev)
 		return -ENOMEM;
 	rdev->dummy_page.addr = pci_map_page(rdev->pdev, rdev->dummy_page.page,
 					0, PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
-	if (!rdev->dummy_page.addr) {
+	if (pci_dma_mapping_error(rdev->pdev, rdev->dummy_page.addr)) {
+		dev_err(&rdev->pdev->dev, "Failed to DMA MAP the dummy page\n");
 		__free_page(rdev->dummy_page.page);
 		rdev->dummy_page.page = NULL;
 		return -ENOMEM;
@@ -415,6 +406,22 @@ static uint32_t cail_reg_read(struct card_info *info, uint32_t reg)
 	return r;
 }
 
+static void cail_ioreg_write(struct card_info *info, uint32_t reg, uint32_t val)
+{
+	struct radeon_device *rdev = info->dev->dev_private;
+
+	WREG32_IO(reg*4, val);
+}
+
+static uint32_t cail_ioreg_read(struct card_info *info, uint32_t reg)
+{
+	struct radeon_device *rdev = info->dev->dev_private;
+	uint32_t r;
+
+	r = RREG32_IO(reg*4);
+	return r;
+}
+
 int radeon_atombios_init(struct radeon_device *rdev)
 {
 	struct card_info *atom_card_info =
@@ -427,6 +434,15 @@ int radeon_atombios_init(struct radeon_device *rdev)
 	atom_card_info->dev = rdev->ddev;
 	atom_card_info->reg_read = cail_reg_read;
 	atom_card_info->reg_write = cail_reg_write;
+	/* needed for iio ops */
+	if (rdev->rio_mem) {
+		atom_card_info->ioreg_read = cail_ioreg_read;
+		atom_card_info->ioreg_write = cail_ioreg_write;
+	} else {
+		DRM_ERROR("Unable to find PCI I/O BAR; using MMIO for ATOM IIO\n");
+		atom_card_info->ioreg_read = cail_reg_read;
+		atom_card_info->ioreg_write = cail_reg_write;
+	}
 	atom_card_info->mc_read = cail_mc_read;
 	atom_card_info->mc_write = cail_mc_write;
 	atom_card_info->pll_read = cail_pll_read;
@@ -546,8 +562,10 @@ static void radeon_switcheroo_set_state(struct pci_dev *pdev, enum vga_switchero
 		/* don't suspend or resume card normally */
 		rdev->powered_down = false;
 		radeon_resume_kms(dev);
+		drm_kms_helper_poll_enable(dev);
 	} else {
 		printk(KERN_INFO "radeon: switched off\n");
+		drm_kms_helper_poll_disable(dev);
 		radeon_suspend_kms(dev, pmm);
 		/* don't suspend or resume card normally */
 		rdev->powered_down = true;
@@ -571,7 +589,7 @@ int radeon_device_init(struct radeon_device *rdev,
 		       struct pci_dev *pdev,
 		       uint32_t flags)
 {
-	int r;
+	int r, i;
 	int dma_bits;
 
 	rdev->shutdown = false;
@@ -599,9 +617,11 @@ int radeon_device_init(struct radeon_device *rdev,
 		spin_lock_init(&rdev->ih.lock);
 	mutex_init(&rdev->gem.mutex);
 	mutex_init(&rdev->pm.mutex);
+	mutex_init(&rdev->vram_mutex);
 	rwlock_init(&rdev->fence_drv.lock);
 	INIT_LIST_HEAD(&rdev->gem.objects);
 	init_waitqueue_head(&rdev->irq.vblank_queue);
+	init_waitqueue_head(&rdev->irq.idle_queue);
 
 	/* setup workqueue */
 	rdev->wq = create_workqueue("radeon");
@@ -646,14 +666,25 @@ int radeon_device_init(struct radeon_device *rdev,
 
 	/* Registers mapping */
 	/* TODO: block userspace mapping of io register */
-	rdev->rmmio_base = drm_get_resource_start(rdev->ddev, 2);
-	rdev->rmmio_size = drm_get_resource_len(rdev->ddev, 2);
+	rdev->rmmio_base = pci_resource_start(rdev->pdev, 2);
+	rdev->rmmio_size = pci_resource_len(rdev->pdev, 2);
 	rdev->rmmio = ioremap(rdev->rmmio_base, rdev->rmmio_size);
 	if (rdev->rmmio == NULL) {
 		return -ENOMEM;
 	}
 	DRM_INFO("register mmio base: 0x%08X\n", (uint32_t)rdev->rmmio_base);
 	DRM_INFO("register mmio size: %u\n", (unsigned)rdev->rmmio_size);
+
+	/* io port mapping */
+	for (i = 0; i < DEVICE_COUNT_RESOURCE; i++) {
+		if (pci_resource_flags(rdev->pdev, i) & IORESOURCE_IO) {
+			rdev->rio_mem_size = pci_resource_len(rdev->pdev, i);
+			rdev->rio_mem = pci_iomap(rdev->pdev, i, rdev->rio_mem_size);
+			break;
+		}
+	}
+	if (rdev->rio_mem == NULL)
+		DRM_ERROR("Unable to find PCI I/O BAR\n");
 
 	/* if we have > 1 VGA cards, then disable the radeon VGA resources */
 	/* this will fail for cards that aren't VGA class devices, just
@@ -671,7 +702,7 @@ int radeon_device_init(struct radeon_device *rdev,
 		/* Acceleration not working on AGP card try again
 		 * with fallback to PCI or PCIE GART
 		 */
-		radeon_gpu_reset(rdev);
+		radeon_asic_reset(rdev);
 		radeon_fini(rdev);
 		radeon_agp_disable(rdev);
 		r = radeon_init(rdev);
@@ -691,10 +722,15 @@ void radeon_device_fini(struct radeon_device *rdev)
 {
 	DRM_INFO("radeon: finishing device.\n");
 	rdev->shutdown = true;
+	/* evict vram memory */
+	radeon_bo_evict_vram(rdev);
 	radeon_fini(rdev);
 	destroy_workqueue(rdev->wq);
 	vga_switcheroo_unregister_client(rdev->pdev);
 	vga_client_register(rdev->pdev, NULL, NULL, NULL);
+	if (rdev->rio_mem)
+		pci_iounmap(rdev->pdev, rdev->rio_mem);
+	rdev->rio_mem = NULL;
 	iounmap(rdev->rmmio);
 	rdev->rmmio = NULL;
 }
@@ -707,6 +743,7 @@ int radeon_suspend_kms(struct drm_device *dev, pm_message_t state)
 {
 	struct radeon_device *rdev;
 	struct drm_crtc *crtc;
+	struct drm_connector *connector;
 	int r;
 
 	if (dev == NULL || dev->dev_private == NULL) {
@@ -719,6 +756,12 @@ int radeon_suspend_kms(struct drm_device *dev, pm_message_t state)
 
 	if (rdev->powered_down)
 		return 0;
+
+	/* turn off display hw */
+	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+		drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
+	}
+
 	/* unpin the front buffers */
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		struct radeon_framebuffer *rfb = to_radeon_framebuffer(crtc->fb);
@@ -728,9 +771,10 @@ int radeon_suspend_kms(struct drm_device *dev, pm_message_t state)
 			continue;
 		}
 		robj = rfb->obj->driver_private;
-		if (robj != rdev->fbdev_rbo) {
+		/* don't unpin kernel fb objects */
+		if (!radeon_fbdev_robj_is_fb(rdev, robj)) {
 			r = radeon_bo_reserve(robj, false);
-			if (unlikely(r == 0)) {
+			if (r == 0) {
 				radeon_bo_unpin(robj);
 				radeon_bo_unreserve(robj);
 			}
@@ -743,10 +787,13 @@ int radeon_suspend_kms(struct drm_device *dev, pm_message_t state)
 
 	radeon_save_bios_scratch_regs(rdev);
 
+	radeon_pm_suspend(rdev);
 	radeon_suspend(rdev);
 	radeon_hpd_fini(rdev);
 	/* evict remaining vram memory */
 	radeon_bo_evict_vram(rdev);
+
+	radeon_agp_suspend(rdev);
 
 	pci_save_state(dev->pdev);
 	if (state.event == PM_EVENT_SUSPEND) {
@@ -755,13 +802,14 @@ int radeon_suspend_kms(struct drm_device *dev, pm_message_t state)
 		pci_set_power_state(dev->pdev, PCI_D3hot);
 	}
 	acquire_console_sem();
-	fb_set_suspend(rdev->fbdev_info, 1);
+	radeon_fbdev_set_suspend(rdev, 1);
 	release_console_sem();
 	return 0;
 }
 
 int radeon_resume_kms(struct drm_device *dev)
 {
+	struct drm_connector *connector;
 	struct radeon_device *rdev = dev->dev_private;
 
 	if (rdev->powered_down)
@@ -778,8 +826,15 @@ int radeon_resume_kms(struct drm_device *dev)
 	/* resume AGP if in use */
 	radeon_agp_resume(rdev);
 	radeon_resume(rdev);
+	radeon_pm_resume(rdev);
 	radeon_restore_bios_scratch_regs(rdev);
-	fb_set_suspend(rdev->fbdev_info, 0);
+
+	/* turn on display hw */
+	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+		drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
+	}
+
+	radeon_fbdev_set_suspend(rdev, 0);
 	release_console_sem();
 
 	/* reset hpd state */
@@ -787,6 +842,26 @@ int radeon_resume_kms(struct drm_device *dev)
 	/* blat the mode back in */
 	drm_helper_resume_force_mode(dev);
 	return 0;
+}
+
+int radeon_gpu_reset(struct radeon_device *rdev)
+{
+	int r;
+
+	radeon_save_bios_scratch_regs(rdev);
+	radeon_suspend(rdev);
+
+	r = radeon_asic_reset(rdev);
+	if (!r) {
+		dev_info(rdev->dev, "GPU reset succeed\n");
+		radeon_resume(rdev);
+		radeon_restore_bios_scratch_regs(rdev);
+		drm_helper_resume_force_mode(rdev->ddev);
+		return 0;
+	}
+	/* bad news, how to tell it to userspace ? */
+	dev_info(rdev->dev, "GPU reset failed\n");
+	return r;
 }
 
 

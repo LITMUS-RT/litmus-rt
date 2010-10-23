@@ -46,7 +46,7 @@ struct mpc8610_hpcd_data {
 };
 
 /**
- * mpc8610_hpcd_machine_probe: initalize the board
+ * mpc8610_hpcd_machine_probe: initialize the board
  *
  * This function is called when platform_device_add() is called.  It is used
  * to initialize the board-specific hardware.
@@ -200,10 +200,10 @@ static struct snd_soc_ops mpc8610_hpcd_ops = {
  * SSI devices.  We also probably aren't compatible with the generic Elo DMA
  * device driver.
  */
-static int mpc8610_hpcd_probe(struct of_device *ofdev,
+static int mpc8610_hpcd_probe(struct platform_device *ofdev,
 	const struct of_device_id *match)
 {
-	struct device_node *np = ofdev->node;
+	struct device_node *np = ofdev->dev.of_node;
 	struct device_node *codec_np = NULL;
 	struct device_node *guts_np = NULL;
 	struct device_node *dma_np = NULL;
@@ -534,7 +534,7 @@ error:
  *
  * This function is called when the OF device is removed.
  */
-static int mpc8610_hpcd_remove(struct of_device *ofdev)
+static int mpc8610_hpcd_remove(struct platform_device *ofdev)
 {
 	struct platform_device *sound_device = dev_get_drvdata(&ofdev->dev);
 	struct mpc8610_hpcd_data *machine_data =
@@ -580,9 +580,11 @@ static struct of_device_id mpc8610_hpcd_match[] = {
 MODULE_DEVICE_TABLE(of, mpc8610_hpcd_match);
 
 static struct of_platform_driver mpc8610_hpcd_of_driver = {
-	.owner  	= THIS_MODULE,
-	.name   	= "mpc8610_hpcd",
-	.match_table    = mpc8610_hpcd_match,
+	.driver = {
+		.name = "mpc8610_hpcd",
+		.owner = THIS_MODULE,
+		.of_match_table = mpc8610_hpcd_match,
+	},
 	.probe  	= mpc8610_hpcd_probe,
 	.remove 	= mpc8610_hpcd_remove,
 };

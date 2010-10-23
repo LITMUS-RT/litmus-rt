@@ -426,7 +426,7 @@ static void omap24xxcam_vbq_release(struct videobuf_queue *vbq,
 			     dma->direction);
 		dma->direction = DMA_NONE;
 	} else {
-		videobuf_dma_unmap(vbq, videobuf_to_dma(vb));
+		videobuf_dma_unmap(vbq->dev, videobuf_to_dma(vb));
 		videobuf_dma_free(videobuf_to_dma(vb));
 	}
 
@@ -452,8 +452,8 @@ static int omap24xxcam_vbq_setup(struct videobuf_queue *vbq, unsigned int *cnt,
 	*size = fh->pix.sizeimage;
 
 	/* accessing fh->cam->capture_mem is ok, it's constant */
-	while (*size * *cnt > fh->cam->capture_mem)
-		(*cnt)--;
+	if (*size * *cnt > fh->cam->capture_mem)
+		*cnt = fh->cam->capture_mem / *size;
 
 	return 0;
 }

@@ -1,6 +1,10 @@
 #ifndef _PERF_PERF_H
 #define _PERF_PERF_H
 
+struct winsize;
+
+void get_term_dimensions(struct winsize *ws);
+
 #if defined(__i386__)
 #include "../../arch/x86/include/asm/unistd.h"
 #define rmb()		asm volatile("lock; addl $0,0(%%esp)" ::: "memory")
@@ -69,6 +73,18 @@
 #define cpu_relax()	asm volatile("":::"memory")
 #endif
 
+#ifdef __mips__
+#include "../../arch/mips/include/asm/unistd.h"
+#define rmb()		asm volatile(					\
+				".set	mips2\n\t"			\
+				"sync\n\t"				\
+				".set	mips0"				\
+				: /* no output */			\
+				: /* no input */			\
+				: "memory")
+#define cpu_relax()	asm volatile("" ::: "memory")
+#endif
+
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -76,6 +92,7 @@
 
 #include "../../include/linux/perf_event.h"
 #include "util/types.h"
+#include <stdbool.h>
 
 /*
  * prctl(PR_TASK_PERF_EVENTS_DISABLE) will (cheaply) disable all
@@ -102,8 +119,6 @@ static inline unsigned long long rdclock(void)
 #define __user
 #define asmlinkage
 
-#define __used		__attribute__((__unused__))
-
 #define unlikely(x)	__builtin_expect(!!(x), 0)
 #define min(x, y) ({				\
 	typeof(x) _min1 = (x);			\
@@ -128,5 +143,7 @@ struct ip_callchain {
 	u64 nr;
 	u64 ips[0];
 };
+
+extern bool perf_host, perf_guest;
 
 #endif

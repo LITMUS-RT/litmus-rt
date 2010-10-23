@@ -9,25 +9,11 @@
  * LGPL2
  */
 
-#ifndef _FS_CEPH_CEPH_FS_H
-#define _FS_CEPH_CEPH_FS_H
+#ifndef CEPH_FS_H
+#define CEPH_FS_H
 
 #include "msgr.h"
 #include "rados.h"
-
-/*
- * Ceph release version
- */
-#define CEPH_VERSION_MAJOR 0
-#define CEPH_VERSION_MINOR 19
-#define CEPH_VERSION_PATCH 0
-
-#define _CEPH_STRINGIFY(x) #x
-#define CEPH_STRINGIFY(x) _CEPH_STRINGIFY(x)
-#define CEPH_MAKE_VERSION(x, y, z) CEPH_STRINGIFY(x) "." CEPH_STRINGIFY(y) \
-	"." CEPH_STRINGIFY(z)
-#define CEPH_VERSION CEPH_MAKE_VERSION(CEPH_VERSION_MAJOR, \
-				       CEPH_VERSION_MINOR, CEPH_VERSION_PATCH)
 
 /*
  * subprotocol versions.  when specific messages types or high-level
@@ -36,7 +22,7 @@
  * client-facing protocol.
  */
 #define CEPH_OSD_PROTOCOL     8 /* cluster internal */
-#define CEPH_MDS_PROTOCOL     9 /* cluster internal */
+#define CEPH_MDS_PROTOCOL    12 /* cluster internal */
 #define CEPH_MON_PROTOCOL     5 /* cluster internal */
 #define CEPH_OSDC_PROTOCOL   24 /* server/client */
 #define CEPH_MDSC_PROTOCOL   32 /* server/client */
@@ -53,8 +39,10 @@
 /*
  * feature bits
  */
-#define CEPH_FEATURE_SUPPORTED  0
-#define CEPH_FEATURE_REQUIRED   0
+#define CEPH_FEATURE_UID            (1<<0)
+#define CEPH_FEATURE_NOSRCADDR      (1<<1)
+#define CEPH_FEATURE_MONCLOCKCHECK  (1<<2)
+#define CEPH_FEATURE_FLOCK          (1<<3)
 
 
 /*
@@ -86,10 +74,14 @@ int ceph_file_layout_is_valid(const struct ceph_file_layout *layout);
 #define CEPH_CRYPTO_NONE 0x0
 #define CEPH_CRYPTO_AES  0x1
 
+#define CEPH_AES_IV "cephsageyudagreg"
+
 /* security/authentication protocols */
 #define CEPH_AUTH_UNKNOWN	0x0
 #define CEPH_AUTH_NONE	 	0x1
 #define CEPH_AUTH_CEPHX	 	0x2
+
+#define CEPH_AUTH_UID_DEFAULT ((__u64) -1)
 
 
 /*********************************************
@@ -128,10 +120,26 @@ int ceph_file_layout_is_valid(const struct ceph_file_layout *layout);
 #define CEPH_MSG_CLIENT_SNAP            0x312
 #define CEPH_MSG_CLIENT_CAPRELEASE      0x313
 
+/* pool ops */
+#define CEPH_MSG_POOLOP_REPLY           48
+#define CEPH_MSG_POOLOP                 49
+
+
 /* osd */
 #define CEPH_MSG_OSD_MAP          41
 #define CEPH_MSG_OSD_OP           42
 #define CEPH_MSG_OSD_OPREPLY      43
+
+/* pool operations */
+enum {
+  POOL_OP_CREATE			= 0x01,
+  POOL_OP_DELETE			= 0x02,
+  POOL_OP_AUID_CHANGE			= 0x03,
+  POOL_OP_CREATE_SNAP			= 0x11,
+  POOL_OP_DELETE_SNAP			= 0x12,
+  POOL_OP_CREATE_UNMANAGED_SNAP		= 0x21,
+  POOL_OP_DELETE_UNMANAGED_SNAP		= 0x22,
+};
 
 struct ceph_mon_request_header {
 	__le64 have_version;
@@ -153,6 +161,31 @@ struct ceph_mon_statfs_reply {
 	struct ceph_fsid fsid;
 	__le64 version;
 	struct ceph_statfs st;
+} __attribute__ ((packed));
+
+const char *ceph_pool_op_name(int op);
+
+struct ceph_mon_poolop {
+	struct ceph_mon_request_header monhdr;
+	struct ceph_fsid fsid;
+	__le32 pool;
+	__le32 op;
+	__le64 auid;
+	__le64 snapid;
+	__le32 name_len;
+} __attribute__ ((packed));
+
+struct ceph_mon_poolop_reply {
+	struct ceph_mon_request_header monhdr;
+	struct ceph_fsid fsid;
+	__le32 reply_code;
+	__le32 epoch;
+	char has_data;
+	char data[0];
+} __attribute__ ((packed));
+
+struct ceph_mon_unmanaged_snap {
+	__le64 snapid;
 } __attribute__ ((packed));
 
 struct ceph_osd_getmap {
@@ -212,16 +245,18 @@ extern const char *ceph_mds_state_name(int s);
  *  - they also define the lock ordering by the MDS
  *  - a few of these are internal to the mds
  */
-#define CEPH_LOCK_DN          1
-#define CEPH_LOCK_ISNAP       2
-#define CEPH_LOCK_IVERSION    4     /* mds internal */
-#define CEPH_LOCK_IFILE       8     /* mds internal */
-#define CEPH_LOCK_IAUTH       32
-#define CEPH_LOCK_ILINK       64
-#define CEPH_LOCK_IDFT        128   /* dir frag tree */
-#define CEPH_LOCK_INEST       256   /* mds internal */
-#define CEPH_LOCK_IXATTR      512
-#define CEPH_LOCK_INO         2048  /* immutable inode bits; not a lock */
+#define CEPH_LOCK_DVERSION    1
+#define CEPH_LOCK_DN          2
+#define CEPH_LOCK_ISNAP       16
+#define CEPH_LOCK_IVERSION    32    /* mds internal */
+#define CEPH_LOCK_IFILE       64
+#define CEPH_LOCK_IAUTH       128
+#define CEPH_LOCK_ILINK       256
+#define CEPH_LOCK_IDFT        512   /* dir frag tree */
+#define CEPH_LOCK_INEST       1024  /* mds internal */
+#define CEPH_LOCK_IXATTR      2048
+#define CEPH_LOCK_IFLOCK      4096  /* advisory file locks */
+#define CEPH_LOCK_INO         8192  /* immutable inode bits; not a lock */
 
 /* client_session ops */
 enum {
@@ -262,6 +297,8 @@ enum {
 	CEPH_MDS_OP_RMXATTR    = 0x01106,
 	CEPH_MDS_OP_SETLAYOUT  = 0x01107,
 	CEPH_MDS_OP_SETATTR    = 0x01108,
+	CEPH_MDS_OP_SETFILELOCK= 0x01109,
+	CEPH_MDS_OP_GETFILELOCK= 0x00110,
 
 	CEPH_MDS_OP_MKNOD      = 0x01201,
 	CEPH_MDS_OP_LINK       = 0x01202,
@@ -308,6 +345,7 @@ union ceph_mds_request_args {
 	struct {
 		__le32 frag;                 /* which dir fragment */
 		__le32 max_entries;          /* how many dentries to grab */
+		__le32 max_bytes;
 	} __attribute__ ((packed)) readdir;
 	struct {
 		__le32 mode;
@@ -331,6 +369,15 @@ union ceph_mds_request_args {
 	struct {
 		struct ceph_file_layout layout;
 	} __attribute__ ((packed)) setlayout;
+	struct {
+		__u8 rule; /* currently fcntl or flock */
+		__u8 type; /* shared, exclusive, remove*/
+		__le64 pid; /* process id requesting the lock */
+		__le64 pid_namespace;
+		__le64 start; /* initial location to lock */
+		__le64 length; /* num bytes to lock from start */
+		__u8 wait; /* will caller wait for lock to become available? */
+	} __attribute__ ((packed)) filelock_change;
 } __attribute__ ((packed));
 
 #define CEPH_MDS_FLAG_REPLAY        1  /* this is a replayed op */
@@ -425,6 +472,23 @@ struct ceph_mds_reply_dirfrag {
 	__le32 dist[];
 } __attribute__ ((packed));
 
+#define CEPH_LOCK_FCNTL    1
+#define CEPH_LOCK_FLOCK    2
+
+#define CEPH_LOCK_SHARED   1
+#define CEPH_LOCK_EXCL     2
+#define CEPH_LOCK_UNLOCK   4
+
+struct ceph_filelock {
+	__le64 start;/* file offset to start lock at */
+	__le64 length; /* num bytes to lock; 0 for all following start */
+	__le64 client; /* which client holds the lock */
+	__le64 pid; /* process id holding the lock on the client */
+	__le64 pid_namespace;
+	__u8 type; /* shared lock, exclusive lock, or unlock */
+} __attribute__ ((packed));
+
+
 /* file access modes */
 #define CEPH_FILE_MODE_PIN        0
 #define CEPH_FILE_MODE_RD         1
@@ -453,9 +517,10 @@ int ceph_flags_to_mode(int flags);
 #define CEPH_CAP_SAUTH      2
 #define CEPH_CAP_SLINK      4
 #define CEPH_CAP_SXATTR     6
-#define CEPH_CAP_SFILE      8   /* goes at the end (uses >2 cap bits) */
+#define CEPH_CAP_SFILE      8
+#define CEPH_CAP_SFLOCK    20 
 
-#define CEPH_CAP_BITS       16
+#define CEPH_CAP_BITS       22
 
 /* composed values */
 #define CEPH_CAP_AUTH_SHARED  (CEPH_CAP_GSHARED  << CEPH_CAP_SAUTH)
@@ -473,6 +538,9 @@ int ceph_flags_to_mode(int flags);
 #define CEPH_CAP_FILE_BUFFER   (CEPH_CAP_GBUFFER   << CEPH_CAP_SFILE)
 #define CEPH_CAP_FILE_WREXTEND (CEPH_CAP_GWREXTEND << CEPH_CAP_SFILE)
 #define CEPH_CAP_FILE_LAZYIO   (CEPH_CAP_GLAZYIO   << CEPH_CAP_SFILE)
+#define CEPH_CAP_FLOCK_SHARED  (CEPH_CAP_GSHARED   << CEPH_CAP_SFLOCK)
+#define CEPH_CAP_FLOCK_EXCL    (CEPH_CAP_GEXCL     << CEPH_CAP_SFLOCK)
+
 
 /* cap masks (for getattr) */
 #define CEPH_STAT_CAP_INODE    CEPH_CAP_PIN
@@ -508,7 +576,8 @@ int ceph_flags_to_mode(int flags);
 			      CEPH_CAP_FILE_EXCL)
 #define CEPH_CAP_ANY_WR   (CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_FILE_WR)
 #define CEPH_CAP_ANY      (CEPH_CAP_ANY_RD | CEPH_CAP_ANY_EXCL | \
-			   CEPH_CAP_ANY_FILE_WR | CEPH_CAP_PIN)
+			   CEPH_CAP_ANY_FILE_WR | CEPH_CAP_FILE_LAZYIO | \
+			   CEPH_CAP_PIN)
 
 #define CEPH_CAP_LOCKS (CEPH_LOCK_IFILE | CEPH_LOCK_IAUTH | CEPH_LOCK_ILINK | \
 			CEPH_LOCK_IXATTR)
@@ -598,12 +667,21 @@ struct ceph_mds_cap_reconnect {
 	__le64 cap_id;
 	__le32 wanted;
 	__le32 issued;
+	__le64 snaprealm;
+	__le64 pathbase;        /* base ino for our path to this ino */
+	__le32 flock_len;       /* size of flock state blob, if any */
+} __attribute__ ((packed));
+/* followed by flock blob */
+
+struct ceph_mds_cap_reconnect_v1 {
+	__le64 cap_id;
+	__le32 wanted;
+	__le32 issued;
 	__le64 size;
 	struct ceph_timespec mtime, atime;
 	__le64 snaprealm;
 	__le64 pathbase;        /* base ino for our path to this ino */
 } __attribute__ ((packed));
-/* followed by encoded string */
 
 struct ceph_mds_snaprealm_reconnect {
 	__le64 ino;     /* snap realm base */

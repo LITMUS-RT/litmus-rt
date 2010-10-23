@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2009 B.A.T.M.A.N. contributors:
+ * Copyright (C) 2007-2010 B.A.T.M.A.N. contributors:
  *
  * Marek Lindner, Simon Wunderlich
  *
@@ -20,12 +20,13 @@
  */
 
 #include "main.h"
-#include "proc.h"
+#include "bat_sysfs.h"
+#include "bat_debugfs.h"
 #include "routing.h"
 #include "send.h"
 #include "originator.h"
 #include "soft-interface.h"
-#include "device.h"
+#include "icmp_socket.h"
 #include "translation-table.h"
 #include "hard-interface.h"
 #include "types.h"
@@ -41,16 +42,14 @@ DEFINE_SPINLOCK(orig_hash_lock);
 DEFINE_SPINLOCK(forw_bat_list_lock);
 DEFINE_SPINLOCK(forw_bcast_list_lock);
 
-atomic_t originator_interval;
-atomic_t vis_interval;
-atomic_t vis_mode;
-atomic_t aggregation_enabled;
+atomic_t bcast_queue_left;
+atomic_t batman_queue_left;
+
 int16_t num_hna;
-int16_t num_ifs;
 
 struct net_device *soft_device;
 
-unsigned char broadcastAddr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+unsigned char broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 atomic_t module_state;
 
 static struct packet_type batman_adv_packet_type __read_mostly = {
@@ -60,18 +59,7 @@ static struct packet_type batman_adv_packet_type __read_mostly = {
 
 struct workqueue_struct *bat_event_workqueue;
 
-#ifdef CONFIG_BATMAN_ADV_DEBUG
-int debug;
-
-module_param(debug, int, 0644);
-
-int bat_debug_type(int type)
-{
-	return debug & type;
-}
-#endif
-
-int init_module(void)
+static int __init batman_init(void)
 {
 	int retval;
 
@@ -81,11 +69,8 @@ int init_module(void)
 
 	atomic_set(&module_state, MODULE_INACTIVE);
 
-	atomic_set(&originator_interval, 1000);
-	atomic_set(&vis_interval, 1000);/* TODO: raise this later, this is only
-					 * for debugging now. */
-	atomic_set(&vis_mode, VIS_TYPE_CLIENT_UPDATE);
-	atomic_set(&aggregation_enabled, 1);
+	atomic_set(&bcast_queue_left, BCAST_QUEUE_LEN);
+	atomic_set(&batman_queue_left, BATMAN_QUEUE_LEN);
 
 	/* the name should not be longer than 10 chars - see
 	 * http://lwn.net/Articles/23634/ */
@@ -94,35 +79,50 @@ int init_module(void)
 	if (!bat_event_workqueue)
 		return -ENOMEM;
 
-	retval = setup_procfs();
-	if (retval < 0)
-		return retval;
-
-	bat_device_init();
+	bat_socket_init();
+	debugfs_init();
 
 	/* initialize layer 2 interface */
 	soft_device = alloc_netdev(sizeof(struct bat_priv) , "bat%d",
 				   interface_setup);
 
 	if (!soft_device) {
-		printk(KERN_ERR "batman-adv:Unable to allocate the batman interface\n");
+		pr_err("Unable to allocate the batman interface\n");
 		goto end;
 	}
 
 	retval = register_netdev(soft_device);
 
 	if (retval < 0) {
-		printk(KERN_ERR "batman-adv:Unable to register the batman interface: %i\n", retval);
+		pr_err("Unable to register the batman interface: %i\n", retval);
 		goto free_soft_device;
 	}
+
+	retval = sysfs_add_meshif(soft_device);
+
+	if (retval < 0)
+		goto unreg_soft_device;
+
+	retval = debugfs_add_meshif(soft_device);
+
+	if (retval < 0)
+		goto unreg_sysfs;
 
 	register_netdevice_notifier(&hard_if_notifier);
 	dev_add_pack(&batman_adv_packet_type);
 
-	printk(KERN_INFO "batman-adv:B.A.T.M.A.N. advanced %s%s (compatibility version %i) loaded \n",
-		  SOURCE_VERSION, REVISION_VERSION_STR, COMPAT_VERSION);
+	pr_info("B.A.T.M.A.N. advanced %s%s (compatibility version %i) "
+		"loaded\n", SOURCE_VERSION, REVISION_VERSION_STR,
+		COMPAT_VERSION);
 
 	return 0;
+
+unreg_sysfs:
+	sysfs_del_meshif(soft_device);
+unreg_soft_device:
+	unregister_netdev(soft_device);
+	soft_device = NULL;
+	return -ENOMEM;
 
 free_soft_device:
 	free_netdev(soft_device);
@@ -131,25 +131,28 @@ end:
 	return -ENOMEM;
 }
 
-void cleanup_module(void)
+static void __exit batman_exit(void)
 {
-	shutdown_module();
+	deactivate_module();
+
+	debugfs_destroy();
+	unregister_netdevice_notifier(&hard_if_notifier);
+	hardif_remove_interfaces();
 
 	if (soft_device) {
+		debugfs_del_meshif(soft_device);
+		sysfs_del_meshif(soft_device);
 		unregister_netdev(soft_device);
 		soft_device = NULL;
 	}
 
 	dev_remove_pack(&batman_adv_packet_type);
 
-	unregister_netdevice_notifier(&hard_if_notifier);
-	cleanup_procfs();
-
 	destroy_workqueue(bat_event_workqueue);
 	bat_event_workqueue = NULL;
 }
 
-/* activates the module, creates bat device, starts timer ... */
+/* activates the module, starts timer ... */
 void activate_module(void)
 {
 	if (originator_init() < 1)
@@ -163,9 +166,6 @@ void activate_module(void)
 
 	hna_local_add(soft_device->dev_addr);
 
-	if (bat_device_setup() < 1)
-		goto end;
-
 	if (vis_init() < 1)
 		goto err;
 
@@ -174,18 +174,19 @@ void activate_module(void)
 	goto end;
 
 err:
-	printk(KERN_ERR "batman-adv:Unable to allocate memory for mesh information structures: out of mem ?\n");
-	shutdown_module();
+	pr_err("Unable to allocate memory for mesh information structures: "
+	       "out of mem ?\n");
+	deactivate_module();
 end:
 	return;
 }
 
 /* shuts down the whole module.*/
-void shutdown_module(void)
+void deactivate_module(void)
 {
 	atomic_set(&module_state, MODULE_DEACTIVATING);
 
-	purge_outstanding_packets();
+	purge_outstanding_packets(NULL);
 	flush_workqueue(bat_event_workqueue);
 
 	vis_quit();
@@ -198,9 +199,7 @@ void shutdown_module(void)
 	hna_global_free();
 
 	synchronize_net();
-	bat_device_destroy();
 
-	hardif_remove_interfaces();
 	synchronize_rcu();
 	atomic_set(&module_state, MODULE_INACTIVE);
 }
@@ -217,8 +216,7 @@ void dec_module_count(void)
 
 int addr_to_string(char *buff, uint8_t *addr)
 {
-	return sprintf(buff, "%02x:%02x:%02x:%02x:%02x:%02x",
-		       addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+	return sprintf(buff, "%pM", addr);
 }
 
 /* returns 1 if they are the same originator */
@@ -252,10 +250,13 @@ int choose_orig(void *data, int32_t size)
 int is_my_mac(uint8_t *addr)
 {
 	struct batman_if *batman_if;
+
 	rcu_read_lock();
 	list_for_each_entry_rcu(batman_if, &if_list, list) {
-		if ((batman_if->net_dev) &&
-		    (compare_orig(batman_if->net_dev->dev_addr, addr))) {
+		if (batman_if->if_status != IF_ACTIVE)
+			continue;
+
+		if (compare_orig(batman_if->net_dev->dev_addr, addr)) {
 			rcu_read_unlock();
 			return 1;
 		}
@@ -274,6 +275,9 @@ int is_mcast(uint8_t *addr)
 {
 	return *addr & 0x01;
 }
+
+module_init(batman_init);
+module_exit(batman_exit);
 
 MODULE_LICENSE("GPL");
 

@@ -148,7 +148,7 @@ static void mac_cache_card_flush(int writeback)
 void __init config_mac(void)
 {
 	if (!MACH_IS_MAC)
-		printk(KERN_ERR "ERROR: no Mac, but config_mac() called!! \n");
+		printk(KERN_ERR "ERROR: no Mac, but config_mac() called!!\n");
 
 	mach_sched_init = mac_sched_init;
 	mach_init_IRQ = mac_init_IRQ;
@@ -326,6 +326,15 @@ static struct mac_model mac_data_table[] = {
 	}, {
 		.ident		= MAC_MODEL_CCL,
 		.name		= "Color Classic",
+		.adb_type	= MAC_ADB_CUDA,
+		.via_type	= MAC_VIA_IIci,
+		.scsi_type	= MAC_SCSI_OLD,
+		.scc_type	= MAC_SCC_II,
+		.nubus_type	= MAC_NUBUS,
+		.floppy_type	= MAC_FLOPPY_SWIM_ADDR2,
+	}, {
+		.ident		= MAC_MODEL_CCLII,
+		.name		= "Color Classic II",
 		.adb_type	= MAC_ADB_CUDA,
 		.via_type	= MAC_VIA_IIci,
 		.scsi_type	= MAC_SCSI_OLD,
@@ -867,7 +876,7 @@ static void __init mac_identify(void)
 	 */
 	iop_preinit();
 
-	printk(KERN_INFO "Detected Macintosh model: %d \n", model);
+	printk(KERN_INFO "Detected Macintosh model: %d\n", model);
 
 	/*
 	 * Report booter data:
@@ -878,12 +887,12 @@ static void __init mac_identify(void)
 		mac_bi_data.videoaddr, mac_bi_data.videorow,
 		mac_bi_data.videodepth, mac_bi_data.dimensions & 0xFFFF,
 		mac_bi_data.dimensions >> 16);
-	printk(KERN_DEBUG " Videological 0x%lx phys. 0x%lx, SCC at 0x%lx \n",
+	printk(KERN_DEBUG " Videological 0x%lx phys. 0x%lx, SCC at 0x%lx\n",
 		mac_bi_data.videological, mac_orig_videoaddr,
 		mac_bi_data.sccbase);
-	printk(KERN_DEBUG " Boottime: 0x%lx GMTBias: 0x%lx \n",
+	printk(KERN_DEBUG " Boottime: 0x%lx GMTBias: 0x%lx\n",
 		mac_bi_data.boottime, mac_bi_data.gmtbias);
-	printk(KERN_DEBUG " Machine ID: %ld CPUid: 0x%lx memory size: 0x%lx \n",
+	printk(KERN_DEBUG " Machine ID: %ld CPUid: 0x%lx memory size: 0x%lx\n",
 		mac_bi_data.id, mac_bi_data.cpuid, mac_bi_data.memsize);
 
 	iop_init();

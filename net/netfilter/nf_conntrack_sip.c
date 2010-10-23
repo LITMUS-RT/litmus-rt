@@ -1376,7 +1376,7 @@ static int sip_help_tcp(struct sk_buff *skb, unsigned int protoff,
 	unsigned int msglen, origlen;
 	const char *dptr, *end;
 	s16 diff, tdiff = 0;
-	int ret;
+	int ret = NF_ACCEPT;
 	typeof(nf_nat_sip_seq_adjust_hook) nf_nat_sip_seq_adjust;
 
 	if (ctinfo != IP_CT_ESTABLISHED &&
@@ -1393,10 +1393,8 @@ static int sip_help_tcp(struct sk_buff *skb, unsigned int protoff,
 
 	nf_ct_refresh(ct, skb, sip_timeout * HZ);
 
-	if (skb_is_nonlinear(skb)) {
-		pr_debug("Copy of skbuff not supported yet.\n");
-		return NF_ACCEPT;
-	}
+	if (unlikely(skb_linearize(skb)))
+		return NF_DROP;
 
 	dptr = skb->data + dataoff;
 	datalen = skb->len - dataoff;
@@ -1455,10 +1453,8 @@ static int sip_help_udp(struct sk_buff *skb, unsigned int protoff,
 
 	nf_ct_refresh(ct, skb, sip_timeout * HZ);
 
-	if (skb_is_nonlinear(skb)) {
-		pr_debug("Copy of skbuff not supported yet.\n");
-		return NF_ACCEPT;
-	}
+	if (unlikely(skb_linearize(skb)))
+		return NF_DROP;
 
 	dptr = skb->data + dataoff;
 	datalen = skb->len - dataoff;
@@ -1549,8 +1545,8 @@ static int __init nf_conntrack_sip_init(void)
 
 			ret = nf_conntrack_helper_register(&sip[i][j]);
 			if (ret) {
-				printk("nf_ct_sip: failed to register helper "
-				       "for pf: %u port: %u\n",
+				printk(KERN_ERR "nf_ct_sip: failed to register"
+				       " helper for pf: %u port: %u\n",
 				       sip[i][j].tuple.src.l3num, ports[i]);
 				nf_conntrack_sip_fini();
 				return ret;

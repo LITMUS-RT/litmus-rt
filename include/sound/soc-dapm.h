@@ -273,6 +273,8 @@
 #define SND_SOC_DAPM_POST_PMD	0x8		/* after widget power down */
 #define SND_SOC_DAPM_PRE_REG	0x10	/* before audio path setup */
 #define SND_SOC_DAPM_POST_REG	0x20	/* after audio path setup */
+#define SND_SOC_DAPM_PRE_POST_PMD \
+				(SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD)
 
 /* convenience event type detection */
 #define SND_SOC_DAPM_EVENT_ON(e)	\
@@ -339,6 +341,9 @@ int snd_soc_dapm_disable_pin(struct snd_soc_codec *codec, const char *pin);
 int snd_soc_dapm_nc_pin(struct snd_soc_codec *codec, const char *pin);
 int snd_soc_dapm_get_pin_status(struct snd_soc_codec *codec, const char *pin);
 int snd_soc_dapm_sync(struct snd_soc_codec *codec);
+int snd_soc_dapm_force_enable_pin(struct snd_soc_codec *codec,
+				  const char *pin);
+int snd_soc_dapm_ignore_suspend(struct snd_soc_codec *codec, const char *pin);
 
 /* dapm widget types */
 enum snd_soc_dapm_type {
@@ -425,9 +430,8 @@ struct snd_soc_dapm_widget {
 	unsigned char connected:1;		/* connected codec pin */
 	unsigned char new:1;			/* cnew complete */
 	unsigned char ext:1;			/* has external widgets */
-	unsigned char muted:1;			/* muted for pop reduction */
-	unsigned char suspend:1;		/* was active before suspend */
-	unsigned char pmdown:1;			/* waiting for timeout */
+	unsigned char force:1;			/* force state */
+	unsigned char ignore_suspend:1;         /* kept enabled over suspend */
 
 	int (*power_check)(struct snd_soc_dapm_widget *w);
 

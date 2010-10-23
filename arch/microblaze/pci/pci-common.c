@@ -27,10 +27,11 @@
 #include <linux/irq.h>
 #include <linux/vmalloc.h>
 #include <linux/slab.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 
 #include <asm/processor.h>
 #include <asm/io.h>
-#include <asm/prom.h>
 #include <asm/pci-bridge.h>
 #include <asm/byteorder.h>
 
@@ -1077,7 +1078,7 @@ void __devinit pcibios_setup_bus_devices(struct pci_bus *bus)
 		struct dev_archdata *sd = &dev->dev.archdata;
 
 		/* Setup OF node pointer in archdata */
-		sd->of_node = pci_device_to_OF_node(dev);
+		dev->dev.of_node = pci_device_to_OF_node(dev);
 
 		/* Fixup NUMA node as it may not be setup yet by the generic
 		 * code and is needed by the DMA init
@@ -1277,6 +1278,7 @@ void pcibios_allocate_bus_resources(struct pci_bus *bus)
 		printk(KERN_WARNING "PCI: Cannot allocate resource region "
 		       "%d of PCI bridge %d, will remap\n", i, bus->number);
 clear_resource:
+		res->start = res->end = 0;
 		res->flags = 0;
 	}
 

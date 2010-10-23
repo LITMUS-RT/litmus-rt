@@ -48,7 +48,7 @@ static int mfd_add_device(struct device *parent, int id,
 		res[r].flags = cell->resources[r].flags;
 
 		/* Find out base to use */
-		if (cell->resources[r].flags & IORESOURCE_MEM) {
+		if ((cell->resources[r].flags & IORESOURCE_MEM) && mem_base) {
 			res[r].parent = mem_base;
 			res[r].start = mem_base->start +
 				cell->resources[r].start;
@@ -70,7 +70,9 @@ static int mfd_add_device(struct device *parent, int id,
 			goto fail_res;
 	}
 
-	platform_device_add_resources(pdev, res, cell->num_resources);
+	ret = platform_device_add_resources(pdev, res, cell->num_resources);
+	if (ret)
+		goto fail_res;
 
 	ret = platform_device_add(pdev);
 	if (ret)

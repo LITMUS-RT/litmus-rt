@@ -19,6 +19,7 @@
 #include <linux/io.h>
 #include <linux/sysdev.h>
 #include <linux/platform_device.h>
+#include <linux/sched.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -31,7 +32,15 @@
 #include <plat/cpu.h>
 #include <plat/devs.h>
 #include <plat/clock.h>
+#include <plat/fb-core.h>
 #include <plat/s5pv210.h>
+#include <plat/adc-core.h>
+#include <plat/ata-core.h>
+#include <plat/fimc-core.h>
+#include <plat/iic-core.h>
+#include <plat/keypad-core.h>
+#include <plat/sdhci.h>
+#include <plat/reset.h>
 
 /* Initial IO mappings */
 
@@ -39,7 +48,7 @@ static struct map_desc s5pv210_iodesc[] __initdata = {
 	{
 		.virtual	= (unsigned long)S5P_VA_SYSTIMER,
 		.pfn		= __phys_to_pfn(S5PV210_PA_SYSTIMER),
-		.length		= SZ_1M,
+		.length		= SZ_4K,
 		.type		= MT_DEVICE,
 	}, {
 		.virtual	= (unsigned long)VA_VIC2,
@@ -67,6 +76,11 @@ static void s5pv210_idle(void)
 	local_irq_enable();
 }
 
+static void s5pv210_sw_reset(void)
+{
+	__raw_writel(0x1, S5P_SWRESET);
+}
+
 /* s5pv210_map_io
  *
  * register the standard cpu IO areas
@@ -75,6 +89,30 @@ static void s5pv210_idle(void)
 void __init s5pv210_map_io(void)
 {
 	iotable_init(s5pv210_iodesc, ARRAY_SIZE(s5pv210_iodesc));
+
+	/* initialise device information early */
+	s5pv210_default_sdhci0();
+	s5pv210_default_sdhci1();
+	s5pv210_default_sdhci2();
+	s5pv210_default_sdhci3();
+
+	s3c_adc_setname("s3c64xx-adc");
+
+	s3c_cfcon_setname("s5pv210-pata");
+
+	s3c_fimc_setname(0, "s5pv210-fimc");
+	s3c_fimc_setname(1, "s5pv210-fimc");
+	s3c_fimc_setname(2, "s5pv210-fimc");
+
+	/* the i2c devices are directly compatible with s3c2440 */
+	s3c_i2c0_setname("s3c2440-i2c");
+	s3c_i2c1_setname("s3c2440-i2c");
+	s3c_i2c2_setname("s3c2440-i2c");
+
+	s3c_fb_setname("s5pv210-fb");
+
+	/* Use s5pv210-keypad instead of samsung-keypad */
+	samsung_keypad_setname("s5pv210-keypad");
 }
 
 void __init s5pv210_init_clocks(int xtal)
@@ -100,7 +138,7 @@ void __init s5pv210_init_irq(void)
 	s5p_init_irq(vic, ARRAY_SIZE(vic));
 }
 
-static struct sysdev_class s5pv210_sysclass = {
+struct sysdev_class s5pv210_sysclass = {
 	.name	= "s5pv210-core",
 };
 
@@ -121,6 +159,9 @@ int __init s5pv210_init(void)
 
 	/* set idle function */
 	pm_idle = s5pv210_idle;
+
+	/* set sw_reset function */
+	s5p_reset_hook = s5pv210_sw_reset;
 
 	return sysdev_register(&s5pv210_sysdev);
 }

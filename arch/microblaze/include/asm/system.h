@@ -12,6 +12,7 @@
 #include <asm/registers.h>
 #include <asm/setup.h>
 #include <asm/irqflags.h>
+#include <asm/cache.h>
 
 #include <asm-generic/cmpxchg.h>
 #include <asm-generic/cmpxchg-local.h>
@@ -44,7 +45,6 @@ extern struct task_struct *_switch_to(struct thread_info *prev,
 #define smp_rmb()		rmb()
 #define smp_wmb()		wmb()
 
-void show_trace(struct task_struct *task, unsigned long *stack);
 void __bad_xchg(volatile void *ptr, int size);
 
 static inline unsigned long __xchg(unsigned long x, volatile void *ptr,
@@ -95,5 +95,12 @@ extern struct dentry *of_debugfs_root;
 #endif
 
 #define arch_align_stack(x) (x)
+
+/*
+ * MicroBlaze doesn't handle unaligned accesses in hardware.
+ *
+ * Based on this we force the IP header alignment in network drivers.
+ */
+#define NET_IP_ALIGN	2
 
 #endif /* _ASM_MICROBLAZE_SYSTEM_H */

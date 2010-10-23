@@ -121,6 +121,8 @@ static const struct usb_device_id rtl8192_usb_id_tbl[] = {
 	{USB_DEVICE(0x2001, 0x3301)},
 	/* Zinwell */
 	{USB_DEVICE(0x5a57, 0x0290)},
+	/* LG */
+	{USB_DEVICE(0x043e, 0x7a01)},
 	{}
 };
 
@@ -408,14 +410,12 @@ u16 read_nic_word(struct net_device *dev, int indx)
 	struct usb_device *udev = priv->udev;
 
 	status = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
-			       RTL8187_REQ_GET_REGS, RTL8187_REQT_READ,
-			       (indx&0xff)|0xff00, (indx>>8)&0x0f, &data, 2, HZ / 2);
+				       RTL8187_REQ_GET_REGS, RTL8187_REQT_READ,
+				       (indx&0xff)|0xff00, (indx>>8)&0x0f,
+							&data, 2, HZ / 2);
 
 	if (status < 0)
-	{
 		printk("read_nic_word TimeOut! status:%d\n", status);
-	}
-
 
 	return data;
 }
@@ -429,13 +429,10 @@ u16 read_nic_word_E(struct net_device *dev, int indx)
 
 	status = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 			       RTL8187_REQ_GET_REGS, RTL8187_REQT_READ,
-			       indx|0xfe00, 0, &data, 2, HZ / 2);
+				       indx|0xfe00, 0, &data, 2, HZ / 2);
 
 	if (status < 0)
-	{
 		printk("read_nic_word TimeOut! status:%d\n", status);
-	}
-
 
 	return data;
 }
@@ -444,31 +441,29 @@ u32 read_nic_dword(struct net_device *dev, int indx)
 {
 	u32 data;
 	int status;
-//	int result;
+	/* int result; */
 
 	struct r8192_priv *priv = (struct r8192_priv *)ieee80211_priv(dev);
 	struct usb_device *udev = priv->udev;
 
 	status = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
-			       RTL8187_REQ_GET_REGS, RTL8187_REQT_READ,
-			       (indx&0xff)|0xff00, (indx>>8)&0x0f, &data, 4, HZ / 2);
-//	if(0 != result) {
-//	  printk(KERN_WARNING "read size of data = %d\, date = %d\n", result, data);
-//	}
+				       RTL8187_REQ_GET_REGS, RTL8187_REQT_READ,
+					(indx&0xff)|0xff00, (indx>>8)&0x0f,
+							&data, 4, HZ / 2);
+	/* if(0 != result) {
+	 *	printk(KERN_WARNING "read size of data = %d\, date = %d\n",
+	 *							 result, data);
+	 * }
+	 */
 
 	if (status < 0)
-	{
 		printk("read_nic_dword TimeOut! status:%d\n", status);
-	}
-
-
 
 	return data;
 }
 
-
-//u8 read_phy_cck(struct net_device *dev, u8 adr);
-//u8 read_phy_ofdm(struct net_device *dev, u8 adr);
+/* u8 read_phy_cck(struct net_device *dev, u8 adr); */
+/* u8 read_phy_ofdm(struct net_device *dev, u8 adr); */
 /* this might still called in what was the PHY rtl8185/rtl8192 common code
  * plans are to possibilty turn it again in one common code...
  */
@@ -476,26 +471,22 @@ inline void force_pci_posting(struct net_device *dev)
 {
 }
 
-
 static struct net_device_stats *rtl8192_stats(struct net_device *dev);
 void rtl8192_commit(struct net_device *dev);
-//void rtl8192_restart(struct net_device *dev);
+/* void rtl8192_restart(struct net_device *dev); */
 void rtl8192_restart(struct work_struct *work);
-//void rtl8192_rq_tx_ack(struct work_struct *work);
-
+/* void rtl8192_rq_tx_ack(struct work_struct *work); */
 void watch_dog_timer_callback(unsigned long data);
 
 /****************************************************************************
-   -----------------------------PROCFS STUFF-------------------------
-*****************************************************************************/
+ *   -----------------------------PROCFS STUFF-------------------------
+*****************************************************************************
+ */
 
-static struct proc_dir_entry *rtl8192_proc = NULL;
+static struct proc_dir_entry *rtl8192_proc;
 
-
-
-static int proc_get_stats_ap(char *page, char **start,
-			  off_t offset, int count,
-			  int *eof, void *data)
+static int proc_get_stats_ap(char *page, char **start, off_t offset, int count,
+							int *eof, void *data)
 {
 	struct net_device *dev = data;
 	struct r8192_priv *priv = (struct r8192_priv *)ieee80211_priv(dev);
@@ -506,18 +497,12 @@ static int proc_get_stats_ap(char *page, char **start,
 
 	list_for_each_entry(target, &ieee->network_list, list) {
 
-		len += snprintf(page + len, count - len,
-		"%s ", target->ssid);
+		len += snprintf(page + len, count - len, "%s ", target->ssid);
 
-		if(target->wpa_ie_len>0 || target->rsn_ie_len>0){
-			len += snprintf(page + len, count - len,
-			"WPA\n");
-		}
-		else{
-			len += snprintf(page + len, count - len,
-			"non_WPA\n");
-		}
-
+		if (target->wpa_ie_len > 0 || target->rsn_ie_len > 0)
+			len += snprintf(page + len, count - len, "WPA\n");
+		else
+			len += snprintf(page + len, count - len, "non_WPA\n");
 	}
 
 	*eof = 1;
@@ -2216,7 +2201,8 @@ short rtl8192_usb_initendpoints(struct net_device *dev)
 {
 	struct r8192_priv *priv = ieee80211_priv(dev);
 
-	priv->rx_urb = (struct urb**) kmalloc (sizeof(struct urb*) * (MAX_RX_URB+1), GFP_KERNEL);
+	priv->rx_urb = kmalloc(sizeof(struct urb *) * (MAX_RX_URB+1),
+				GFP_KERNEL);
 
 #ifndef JACKSON_NEW_RX
 	for(i=0;i<(MAX_RX_URB+1);i++){
@@ -2250,11 +2236,10 @@ short rtl8192_usb_initendpoints(struct net_device *dev)
 #endif
 
 	memset(priv->rx_urb, 0, sizeof(struct urb*) * MAX_RX_URB);
-	priv->pp_rxskb = (struct sk_buff **)kmalloc(sizeof(struct sk_buff *) * MAX_RX_URB, GFP_KERNEL);
+	priv->pp_rxskb = kcalloc(MAX_RX_URB, sizeof(struct sk_buff *),
+				 GFP_KERNEL);
 	if (priv->pp_rxskb == NULL)
 		goto destroy;
-
-	memset(priv->pp_rxskb, 0, sizeof(struct sk_buff*) * MAX_RX_URB);
 
 	goto _middle;
 
@@ -2839,7 +2824,7 @@ static void rtl8192_init_priv_variable(struct net_device* dev)
 		(priv->EarlyRxThreshold == 7 ? RCR_ONLYERLPKT:0);
 
 	priv->AcmControl = 0;
-	priv->pFirmware = (rt_firmware*)kmalloc(sizeof(rt_firmware), GFP_KERNEL);
+	priv->pFirmware = kmalloc(sizeof(rt_firmware), GFP_KERNEL);
 	if (priv->pFirmware)
 	memset(priv->pFirmware, 0, sizeof(rt_firmware));
 
@@ -4415,7 +4400,7 @@ int rtl8192_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	     goto out;
 	}
 
-     ipw = (struct ieee_param *)kmalloc(p->length, GFP_KERNEL);
+     ipw = kmalloc(p->length, GFP_KERNEL);
      if (ipw == NULL){
 	     ret = -ENOMEM;
 	     goto out;

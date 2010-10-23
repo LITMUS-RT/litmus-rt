@@ -124,11 +124,8 @@ static inline int radeon_bo_wait(struct radeon_bo *bo, u32 *mem_type,
 	int r;
 
 	r = ttm_bo_reserve(&bo->tbo, true, no_wait, false, 0);
-	if (unlikely(r != 0)) {
-		if (r != -ERESTARTSYS)
-			dev_err(bo->rdev->dev, "%p reserve failed for wait\n", bo);
+	if (unlikely(r != 0))
 		return r;
-	}
 	spin_lock(&bo->tbo.lock);
 	if (mem_type)
 		*mem_type = bo->tbo.mem.mem_type;
@@ -168,6 +165,6 @@ extern int radeon_bo_check_tiling(struct radeon_bo *bo, bool has_moved,
 				bool force_drop);
 extern void radeon_bo_move_notify(struct ttm_buffer_object *bo,
 					struct ttm_mem_reg *mem);
-extern void radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo);
+extern int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo);
 extern int radeon_bo_get_surface_reg(struct radeon_bo *bo);
 #endif

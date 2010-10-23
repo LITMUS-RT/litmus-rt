@@ -24,7 +24,8 @@ CHECKFLAGS	+= -D__s390__ -msize-long
 else
 LD_BFD		:= elf64-s390
 LDFLAGS		:= -m elf64_s390
-MODFLAGS	+= -fpic -D__PIC__
+KBUILD_AFLAGS_MODULE += -fpic -D__PIC__
+KBUILD_CFLAGS_MODULE += -fpic -D__PIC__
 KBUILD_CFLAGS	+= -m64
 KBUILD_AFLAGS	+= -m64
 UTS_MACHINE	:= s390x
@@ -115,6 +116,12 @@ image bzImage: vmlinux
 
 zfcpdump:
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+
+vdso_install:
+ifeq ($(CONFIG_64BIT),y)
+	$(Q)$(MAKE) $(build)=arch/$(ARCH)/kernel/vdso64 $@
+endif
+	$(Q)$(MAKE) $(build)=arch/$(ARCH)/kernel/vdso32 $@
 
 archclean:
 	$(Q)$(MAKE) $(clean)=$(boot)

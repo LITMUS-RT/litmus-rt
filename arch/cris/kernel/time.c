@@ -39,13 +39,16 @@ int have_rtc;  /* used to remember if we have an RTC or not */;
 extern unsigned long loops_per_jiffy; /* init/main.c */
 unsigned long loops_per_usec;
 
+
+#ifdef CONFIG_ARCH_USES_GETTIMEOFFSET
 extern unsigned long do_slow_gettimeoffset(void);
 static unsigned long (*do_gettimeoffset)(void) = do_slow_gettimeoffset;
 
 u32 arch_gettimeoffset(void)
 {
-	return do_gettimeoffset() * 1000;
+       return do_gettimeoffset() * 1000;
 }
+#endif
 
 /*
  * BUG: This routine does not handle hour overflow properly; it just
@@ -98,6 +101,8 @@ unsigned long
 get_cmos_time(void)
 {
 	unsigned int year, mon, day, hour, min, sec;
+	if(!have_rtc)
+		return 0;
 
 	sec = CMOS_READ(RTC_SECONDS);
 	min = CMOS_READ(RTC_MINUTES);
@@ -119,18 +124,18 @@ get_cmos_time(void)
 	return mktime(year, mon, day, hour, min, sec);
 }
 
-/* update xtime from the CMOS settings. used when /dev/rtc gets a SET_TIME.
- * TODO: this doesn't reset the fancy NTP phase stuff as do_settimeofday does.
- */
 
-void
-update_xtime_from_cmos(void)
+int update_persistent_clock(struct timespec now)
 {
-	if(have_rtc) {
-		xtime.tv_sec = get_cmos_time();
-		xtime.tv_nsec = 0;
-	}
+	return set_rtc_mmss(now.tv_sec);
 }
+
+void read_persistent_clock(struct timespec *ts)
+{
+	ts->tv_sec = get_cmos_time();
+	ts->tv_nsec = 0;
+}
+
 
 extern void cris_profile_sample(struct pt_regs* regs);
 
@@ -149,7 +154,7 @@ cris_do_profile(struct pt_regs* regs)
 
 unsigned long long sched_clock(void)
 {
-	return (unsigned long long)jiffies * (1000000000 / HZ) +
+	return (unsigned long long)jiffies * (NSEC_PER_SEC / HZ) +
 		get_ns_in_jiffie();
 }
 

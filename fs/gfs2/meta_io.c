@@ -34,11 +34,10 @@
 
 static int gfs2_aspace_writepage(struct page *page, struct writeback_control *wbc)
 {
-	int err;
 	struct buffer_head *bh, *head;
 	int nr_underway = 0;
-	int write_op = (1 << BIO_RW_META) | ((wbc->sync_mode == WB_SYNC_ALL ?
-			WRITE_SYNC_PLUG : WRITE));
+	int write_op = REQ_META |
+		(wbc->sync_mode == WB_SYNC_ALL ? WRITE_SYNC_PLUG : WRITE);
 
 	BUG_ON(!PageLocked(page));
 	BUG_ON(!page_has_buffers(page));
@@ -86,11 +85,10 @@ static int gfs2_aspace_writepage(struct page *page, struct writeback_control *wb
 	} while (bh != head);
 	unlock_page(page);
 
-	err = 0;
 	if (nr_underway == 0)
 		end_page_writeback(page);
 
-	return err;
+	return 0;
 }
 
 const struct address_space_operations gfs2_meta_aops = {
@@ -227,7 +225,7 @@ int gfs2_meta_read(struct gfs2_glock *gl, u64 blkno, int flags,
 	}
 	bh->b_end_io = end_buffer_read_sync;
 	get_bh(bh);
-	submit_bh(READ_SYNC | (1 << BIO_RW_META), bh);
+	submit_bh(READ_SYNC | REQ_META, bh);
 	if (!(flags & DIO_WAIT))
 		return 0;
 
@@ -313,6 +311,7 @@ void gfs2_remove_from_journal(struct buffer_head *bh, struct gfs2_trans *tr, int
 	struct gfs2_bufdata *bd = bh->b_private;
 
 	if (test_clear_buffer_pinned(bh)) {
+		atomic_dec(&sdp->sd_log_pinned);
 		list_del_init(&bd->bd_le.le_list);
 		if (meta) {
 			gfs2_assert_warn(sdp, sdp->sd_log_num_buf);
@@ -433,7 +432,7 @@ struct buffer_head *gfs2_meta_ra(struct gfs2_glock *gl, u64 dblock, u32 extlen)
 	if (buffer_uptodate(first_bh))
 		goto out;
 	if (!buffer_locked(first_bh))
-		ll_rw_block(READ_SYNC | (1 << BIO_RW_META), 1, &first_bh);
+		ll_rw_block(READ_SYNC | REQ_META, 1, &first_bh);
 
 	dblock++;
 	extlen--;

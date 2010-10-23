@@ -154,9 +154,9 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 }
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
-				int wakeup, bool head)
+				int flags)
 {
-	if (wakeup) {
+	if (flags & ENQUEUE_WAKEUP) {
 		sched_trace_task_resume(p);
 		tsk_rt(p)->present = 1;
 		/* LITMUS^RT plugins need to update the state
@@ -176,9 +176,10 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		TRACE_TASK(p, "ignoring an enqueue, not a wake up.\n");
 }
 
-static void dequeue_task_litmus(struct rq *rq, struct task_struct *p, int sleep)
+static void dequeue_task_litmus(struct rq *rq, struct task_struct *p,
+				int flags)
 {
-	if (sleep) {
+	if (flags & DEQUEUE_SLEEP) {
 		litmus->task_block(p);
 		tsk_rt(p)->present = 0;
 		sched_trace_task_block(p);
@@ -279,7 +280,8 @@ static void set_curr_task_litmus(struct rq *rq)
  * We don't care about the scheduling domain; can gets called from
  * exec, fork, wakeup.
  */
-static int select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
+static int select_task_rq_litmus(struct rq *rq, struct task_struct *p,
+		int sd_flag, int flags)
 {
 	/* preemption is already disabled.
 	 * We don't want to change cpu here

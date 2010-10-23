@@ -273,7 +273,6 @@ static enum power_supply_property energy_battery_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_POWER_NOW,
 	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
 	POWER_SUPPLY_PROP_ENERGY_FULL,
@@ -868,9 +867,15 @@ static void acpi_battery_remove_fs(struct acpi_device *device)
 static void acpi_battery_notify(struct acpi_device *device, u32 event)
 {
 	struct acpi_battery *battery = acpi_driver_data(device);
+#ifdef CONFIG_ACPI_SYSFS_POWER
+	struct device *old;
+#endif
 
 	if (!battery)
 		return;
+#ifdef CONFIG_ACPI_SYSFS_POWER
+	old = battery->bat.dev;
+#endif
 	acpi_battery_update(battery);
 	acpi_bus_generate_proc_event(device, event,
 				     acpi_battery_present(battery));
@@ -879,7 +884,7 @@ static void acpi_battery_notify(struct acpi_device *device, u32 event)
 					acpi_battery_present(battery));
 #ifdef CONFIG_ACPI_SYSFS_POWER
 	/* acpi_battery_update could remove power_supply object */
-	if (battery->bat.dev)
+	if (old && battery->bat.dev)
 		power_supply_changed(&battery->bat);
 #endif
 }

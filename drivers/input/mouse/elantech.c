@@ -10,6 +10,8 @@
  * Trademarks are the property of their respective owners.
  */
 
+#define pr_fmt(fmt) KBUILD_BASENAME ": " fmt
+
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/module.h>
@@ -19,10 +21,10 @@
 #include "psmouse.h"
 #include "elantech.h"
 
-#define elantech_debug(format, arg...)				\
-	do {							\
-		if (etd->debug)					\
-			printk(KERN_DEBUG format, ##arg);	\
+#define elantech_debug(fmt, ...)					\
+	do {								\
+		if (etd->debug)						\
+			printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__);	\
 	} while (0)
 
 static bool force_elantech;
@@ -37,7 +39,7 @@ static int synaptics_send_cmd(struct psmouse *psmouse, unsigned char c,
 {
 	if (psmouse_sliced_command(psmouse, c) ||
 	    ps2_command(&psmouse->ps2dev, param, PSMOUSE_CMD_GETINFO)) {
-		pr_err("elantech.c: synaptics_send_cmd query 0x%02x failed.\n", c);
+		pr_err("synaptics_send_cmd query 0x%02x failed.\n", c);
 		return -1;
 	}
 
@@ -60,13 +62,13 @@ static int elantech_ps2_command(struct psmouse *psmouse,
 		if (rc == 0)
 			break;
 		tries--;
-		elantech_debug("elantech.c: retrying ps2 command 0x%02x (%d).\n",
-			command, tries);
+		elantech_debug("retrying ps2 command 0x%02x (%d).\n",
+				command, tries);
 		msleep(ETP_PS2_COMMAND_DELAY);
 	} while (tries > 0);
 
 	if (rc)
-		pr_err("elantech.c: ps2 command 0x%02x failed.\n", command);
+		pr_err("ps2 command 0x%02x failed.\n", command);
 
 	return rc;
 }
@@ -108,7 +110,7 @@ static int elantech_read_reg(struct psmouse *psmouse, unsigned char reg,
 	}
 
 	if (rc)
-		pr_err("elantech.c: failed to read register 0x%02x.\n", reg);
+		pr_err("failed to read register 0x%02x.\n", reg);
 	else
 		*val = param[0];
 
@@ -154,7 +156,7 @@ static int elantech_write_reg(struct psmouse *psmouse, unsigned char reg,
 	}
 
 	if (rc)
-		pr_err("elantech.c: failed to write register 0x%02x with value 0x%02x.\n",
+		pr_err("failed to write register 0x%02x with value 0x%02x.\n",
 			reg, val);
 
 	return rc;
@@ -167,7 +169,7 @@ static void elantech_packet_dump(unsigned char *packet, int size)
 {
 	int	i;
 
-	printk(KERN_DEBUG "elantech.c: PS/2 packet [");
+	printk(KERN_DEBUG pr_fmt("PS/2 packet ["));
 	for (i = 0; i < size; i++)
 		printk("%s0x%02x ", (i) ? ", " : " ", packet[i]);
 	printk("]\n");
@@ -183,7 +185,6 @@ static void elantech_report_absolute_v1(struct psmouse *psmouse)
 	struct elantech_data *etd = psmouse->private;
 	unsigned char *packet = psmouse->packet;
 	int fingers;
-	static int old_fingers;
 
 	if (etd->fw_version < 0x020000) {
 		/*
@@ -201,10 +202,13 @@ static void elantech_report_absolute_v1(struct psmouse *psmouse)
 	}
 
 	if (etd->jumpy_cursor) {
-		/* Discard packets that are likely to have bogus coordinates */
-		if (fingers > old_fingers) {
-			elantech_debug("elantech.c: discarding packet\n");
-			goto discard_packet_v1;
+		if (fingers != 1) {
+			etd->single_finger_reports = 0;
+		} else if (etd->single_finger_reports < 2) {
+			/* Discard first 2 reports of one finger, bogus */
+			etd->single_finger_reports++;
+			elantech_debug("discarding packet\n");
+			return;
 		}
 	}
 
@@ -236,9 +240,6 @@ static void elantech_report_absolute_v1(struct psmouse *psmouse)
 	}
 
 	input_sync(dev);
-
- discard_packet_v1:
-	old_fingers = fingers;
 }
 
 /*
@@ -256,6 +257,14 @@ static void elantech_report_absolute_v2(struct psmouse *psmouse)
 	input_report_key(dev, BTN_TOUCH, fingers != 0);
 
 	switch (fingers) {
+	case 3:
+		/*
+		 * Same as one finger, except report of more than 3 fingers:
+		 * byte 3:  n4  .   w1  w0   .   .   .   .
+		 */
+		if (packet[3] & 0x80)
+			fingers = 4;
+		/* pass through... */
 	case 1:
 		/*
 		 * byte 1:  .   .   .   .   .  x10 x9  x8
@@ -308,6 +317,7 @@ static void elantech_report_absolute_v2(struct psmouse *psmouse)
 	input_report_key(dev, BTN_TOOL_FINGER, fingers == 1);
 	input_report_key(dev, BTN_TOOL_DOUBLETAP, fingers == 2);
 	input_report_key(dev, BTN_TOOL_TRIPLETAP, fingers == 3);
+	input_report_key(dev, BTN_TOOL_QUADTAP, fingers == 4);
 	input_report_key(dev, BTN_LEFT, packet[0] & 0x01);
 	input_report_key(dev, BTN_RIGHT, packet[0] & 0x02);
 
@@ -413,23 +423,21 @@ static int elantech_set_absolute_mode(struct psmouse *psmouse)
 			if (rc == 0)
 				break;
 			tries--;
-			elantech_debug("elantech.c: retrying read (%d).\n",
-					tries);
+			elantech_debug("retrying read (%d).\n", tries);
 			msleep(ETP_READ_BACK_DELAY);
 		} while (tries > 0);
 
 		if (rc) {
-			pr_err("elantech.c: failed to read back register 0x10.\n");
+			pr_err("failed to read back register 0x10.\n");
 		} else if (etd->hw_version == 1 &&
 			   !(val & ETP_R10_ABSOLUTE_MODE)) {
-			pr_err("elantech.c: touchpad refuses "
-				"to switch to absolute mode.\n");
+			pr_err("touchpad refuses to switch to absolute mode.\n");
 			rc = -1;
 		}
 	}
 
 	if (rc)
-		pr_err("elantech.c: failed to initialise registers.\n");
+		pr_err("failed to initialise registers.\n");
 
 	return rc;
 }
@@ -467,6 +475,7 @@ static void elantech_set_input_params(struct psmouse *psmouse)
 		break;
 
 	case 2:
+		__set_bit(BTN_TOOL_QUADTAP, dev->keybit);
 		input_set_abs_params(dev, ABS_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
 		input_set_abs_params(dev, ABS_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
 		input_set_abs_params(dev, ABS_HAT0X, ETP_2FT_XMIN, ETP_2FT_XMAX, 0, 0);
@@ -575,6 +584,24 @@ static struct attribute_group elantech_attr_group = {
 	.attrs = elantech_attrs,
 };
 
+static bool elantech_is_signature_valid(const unsigned char *param)
+{
+	static const unsigned char rates[] = { 200, 100, 80, 60, 40, 20, 10 };
+	int i;
+
+	if (param[0] == 0)
+		return false;
+
+	if (param[1] == 0)
+		return true;
+
+	for (i = 0; i < ARRAY_SIZE(rates); i++)
+		if (param[2] == rates[i])
+			return false;
+
+	return true;
+}
+
 /*
  * Use magic knock to detect Elantech touchpad
  */
@@ -590,7 +617,7 @@ int elantech_detect(struct psmouse *psmouse, bool set_properties)
 	    ps2_command(ps2dev,  NULL, PSMOUSE_CMD_SETSCALE11) ||
 	    ps2_command(ps2dev,  NULL, PSMOUSE_CMD_SETSCALE11) ||
 	    ps2_command(ps2dev, param, PSMOUSE_CMD_GETINFO)) {
-		pr_debug("elantech.c: sending Elantech magic knock failed.\n");
+		pr_debug("sending Elantech magic knock failed.\n");
 		return -1;
 	}
 
@@ -599,8 +626,7 @@ int elantech_detect(struct psmouse *psmouse, bool set_properties)
 	 * set of magic numbers
 	 */
 	if (param[0] != 0x3c || param[1] != 0x03 || param[2] != 0xc8) {
-		pr_debug("elantech.c: "
-			 "unexpected magic knock result 0x%02x, 0x%02x, 0x%02x.\n",
+		pr_debug("unexpected magic knock result 0x%02x, 0x%02x, 0x%02x.\n",
 			 param[0], param[1], param[2]);
 		return -1;
 	}
@@ -611,20 +637,20 @@ int elantech_detect(struct psmouse *psmouse, bool set_properties)
 	 * to Elantech magic knock and there might be more.
 	 */
 	if (synaptics_send_cmd(psmouse, ETP_FW_VERSION_QUERY, param)) {
-		pr_debug("elantech.c: failed to query firmware version.\n");
+		pr_debug("failed to query firmware version.\n");
 		return -1;
 	}
 
-	pr_debug("elantech.c: Elantech version query result 0x%02x, 0x%02x, 0x%02x.\n",
+	pr_debug("Elantech version query result 0x%02x, 0x%02x, 0x%02x.\n",
 		 param[0], param[1], param[2]);
 
-	if (param[0] == 0 || param[1] != 0) {
+	if (!elantech_is_signature_valid(param)) {
 		if (!force_elantech) {
-			pr_debug("elantech.c: Probably not a real Elantech touchpad. Aborting.\n");
+			pr_debug("Probably not a real Elantech touchpad. Aborting.\n");
 			return -1;
 		}
 
-		pr_debug("elantech.c: Probably not a real Elantech touchpad. Enabling anyway due to force_elantech.\n");
+		pr_debug("Probably not a real Elantech touchpad. Enabling anyway due to force_elantech.\n");
 	}
 
 	if (set_properties) {
@@ -655,7 +681,7 @@ static int elantech_reconnect(struct psmouse *psmouse)
 		return -1;
 
 	if (elantech_set_absolute_mode(psmouse)) {
-		pr_err("elantech.c: failed to put touchpad back into absolute mode.\n");
+		pr_err("failed to put touchpad back into absolute mode.\n");
 		return -1;
 	}
 
@@ -683,7 +709,7 @@ int elantech_init(struct psmouse *psmouse)
 	 * Do the version query again so we can store the result
 	 */
 	if (synaptics_send_cmd(psmouse, ETP_FW_VERSION_QUERY, param)) {
-		pr_err("elantech.c: failed to query firmware version.\n");
+		pr_err("failed to query firmware version.\n");
 		goto init_fail;
 	}
 
@@ -704,30 +730,29 @@ int elantech_init(struct psmouse *psmouse)
 		etd->paritycheck = 1;
 	}
 
-	pr_info("elantech.c: assuming hardware version %d, firmware version %d.%d.%d\n",
+	pr_info("assuming hardware version %d, firmware version %d.%d.%d\n",
 		etd->hw_version, param[0], param[1], param[2]);
 
 	if (synaptics_send_cmd(psmouse, ETP_CAPABILITIES_QUERY, param)) {
-		pr_err("elantech.c: failed to query capabilities.\n");
+		pr_err("failed to query capabilities.\n");
 		goto init_fail;
 	}
-	pr_info("elantech.c: Synaptics capabilities query result 0x%02x, 0x%02x, 0x%02x.\n",
+	pr_info("Synaptics capabilities query result 0x%02x, 0x%02x, 0x%02x.\n",
 		param[0], param[1], param[2]);
 	etd->capabilities = param[0];
 
 	/*
-	 * This firmware seems to suffer from misreporting coordinates when
+	 * This firmware suffers from misreporting coordinates when
 	 * a touch action starts causing the mouse cursor or scrolled page
 	 * to jump. Enable a workaround.
 	 */
-	if (etd->fw_version == 0x020022) {
-		pr_info("elantech.c: firmware version 2.0.34 detected, "
-			"enabling jumpy cursor workaround\n");
-		etd->jumpy_cursor = 1;
+	if (etd->fw_version == 0x020022 || etd->fw_version == 0x020600) {
+		pr_info("firmware version 2.0.34/2.6.0 detected, enabling jumpy cursor workaround\n");
+		etd->jumpy_cursor = true;
 	}
 
 	if (elantech_set_absolute_mode(psmouse)) {
-		pr_err("elantech.c: failed to put touchpad into absolute mode.\n");
+		pr_err("failed to put touchpad into absolute mode.\n");
 		goto init_fail;
 	}
 
@@ -736,8 +761,7 @@ int elantech_init(struct psmouse *psmouse)
 	error = sysfs_create_group(&psmouse->ps2dev.serio->dev.kobj,
 				   &elantech_attr_group);
 	if (error) {
-		pr_err("elantech.c: failed to create sysfs attributes, error: %d.\n",
-			error);
+		pr_err("failed to create sysfs attributes, error: %d.\n", error);
 		goto init_fail;
 	}
 

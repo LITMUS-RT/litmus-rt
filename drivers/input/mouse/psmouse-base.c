@@ -39,11 +39,13 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
 static unsigned int psmouse_max_proto = PSMOUSE_AUTO;
-static int psmouse_set_maxproto(const char *val, struct kernel_param *kp);
-static int psmouse_get_maxproto(char *buffer, struct kernel_param *kp);
+static int psmouse_set_maxproto(const char *val, const struct kernel_param *);
+static int psmouse_get_maxproto(char *buffer, const struct kernel_param *kp);
+static struct kernel_param_ops param_ops_proto_abbrev = {
+	.set = psmouse_set_maxproto,
+	.get = psmouse_get_maxproto,
+};
 #define param_check_proto_abbrev(name, p)	__param_check(name, p, unsigned int)
-#define param_set_proto_abbrev			psmouse_set_maxproto
-#define param_get_proto_abbrev			psmouse_get_maxproto
 module_param_named(proto, psmouse_max_proto, proto_abbrev, 0644);
 MODULE_PARM_DESC(proto, "Highest protocol extension to probe (bare, imps, exps, any). Useful for KVM switches.");
 
@@ -147,18 +149,18 @@ static psmouse_ret_t psmouse_process_byte(struct psmouse *psmouse)
 
 	if (psmouse->type == PSMOUSE_IMEX) {
 		switch (packet[3] & 0xC0) {
-			case 0x80: /* vertical scroll on IntelliMouse Explorer 4.0 */
-				input_report_rel(dev, REL_WHEEL, (int) (packet[3] & 32) - (int) (packet[3] & 31));
-				break;
-			case 0x40: /* horizontal scroll on IntelliMouse Explorer 4.0 */
-				input_report_rel(dev, REL_HWHEEL, (int) (packet[3] & 32) - (int) (packet[3] & 31));
-				break;
-			case 0x00:
-			case 0xC0:
-				input_report_rel(dev, REL_WHEEL, (int) (packet[3] & 8) - (int) (packet[3] & 7));
-				input_report_key(dev, BTN_SIDE, (packet[3] >> 4) & 1);
-				input_report_key(dev, BTN_EXTRA, (packet[3] >> 5) & 1);
-				break;
+		case 0x80: /* vertical scroll on IntelliMouse Explorer 4.0 */
+			input_report_rel(dev, REL_WHEEL, (int) (packet[3] & 32) - (int) (packet[3] & 31));
+			break;
+		case 0x40: /* horizontal scroll on IntelliMouse Explorer 4.0 */
+			input_report_rel(dev, REL_HWHEEL, (int) (packet[3] & 32) - (int) (packet[3] & 31));
+			break;
+		case 0x00:
+		case 0xC0:
+			input_report_rel(dev, REL_WHEEL, (int) (packet[3] & 8) - (int) (packet[3] & 7));
+			input_report_key(dev, BTN_SIDE, (packet[3] >> 4) & 1);
+			input_report_key(dev, BTN_EXTRA, (packet[3] >> 5) & 1);
+			break;
 		}
 	}
 
@@ -247,31 +249,31 @@ static int psmouse_handle_byte(struct psmouse *psmouse)
 	psmouse_ret_t rc = psmouse->protocol_handler(psmouse);
 
 	switch (rc) {
-		case PSMOUSE_BAD_DATA:
-			if (psmouse->state == PSMOUSE_ACTIVATED) {
-				printk(KERN_WARNING "psmouse.c: %s at %s lost sync at byte %d\n",
-					psmouse->name, psmouse->phys, psmouse->pktcnt);
-				if (++psmouse->out_of_sync_cnt == psmouse->resetafter) {
-					__psmouse_set_state(psmouse, PSMOUSE_IGNORE);
-					printk(KERN_NOTICE "psmouse.c: issuing reconnect request\n");
-					serio_reconnect(psmouse->ps2dev.serio);
-					return -1;
-				}
+	case PSMOUSE_BAD_DATA:
+		if (psmouse->state == PSMOUSE_ACTIVATED) {
+			printk(KERN_WARNING "psmouse.c: %s at %s lost sync at byte %d\n",
+				psmouse->name, psmouse->phys, psmouse->pktcnt);
+			if (++psmouse->out_of_sync_cnt == psmouse->resetafter) {
+				__psmouse_set_state(psmouse, PSMOUSE_IGNORE);
+				printk(KERN_NOTICE "psmouse.c: issuing reconnect request\n");
+				serio_reconnect(psmouse->ps2dev.serio);
+				return -1;
 			}
-			psmouse->pktcnt = 0;
-			break;
+		}
+		psmouse->pktcnt = 0;
+		break;
 
-		case PSMOUSE_FULL_PACKET:
-			psmouse->pktcnt = 0;
-			if (psmouse->out_of_sync_cnt) {
-				psmouse->out_of_sync_cnt = 0;
-				printk(KERN_NOTICE "psmouse.c: %s at %s - driver resynched.\n",
-					psmouse->name, psmouse->phys);
-			}
-			break;
+	case PSMOUSE_FULL_PACKET:
+		psmouse->pktcnt = 0;
+		if (psmouse->out_of_sync_cnt) {
+			psmouse->out_of_sync_cnt = 0;
+			printk(KERN_NOTICE "psmouse.c: %s at %s - driver resynched.\n",
+				psmouse->name, psmouse->phys);
+		}
+		break;
 
-		case PSMOUSE_GOOD_DATA:
-			break;
+	case PSMOUSE_GOOD_DATA:
+		break;
 	}
 	return 0;
 }
@@ -1245,7 +1247,7 @@ static int psmouse_switch_protocol(struct psmouse *psmouse,
 	psmouse->pktsize = 3;
 
 	if (proto && (proto->detect || proto->init)) {
-		if (proto->detect && proto->detect(psmouse, 1) < 0)
+		if (proto->detect && proto->detect(psmouse, true) < 0)
 			return -1;
 
 		if (proto->init && proto->init(psmouse) < 0)
@@ -1679,7 +1681,7 @@ static ssize_t psmouse_attr_set_resolution(struct psmouse *psmouse, void *data, 
 }
 
 
-static int psmouse_set_maxproto(const char *val, struct kernel_param *kp)
+static int psmouse_set_maxproto(const char *val, const struct kernel_param *kp)
 {
 	const struct psmouse_protocol *proto;
 
@@ -1696,7 +1698,7 @@ static int psmouse_set_maxproto(const char *val, struct kernel_param *kp)
 	return 0;
 }
 
-static int psmouse_get_maxproto(char *buffer, struct kernel_param *kp)
+static int psmouse_get_maxproto(char *buffer, const struct kernel_param *kp)
 {
 	int type = *((unsigned int *)kp->arg);
 

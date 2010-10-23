@@ -22,6 +22,7 @@
 #include <linux/compiler.h>
 #include <linux/spinlock.h>
 #include <linux/kref.h>
+#include <linux/kobject_ns.h>
 #include <linux/kernel.h>
 #include <linux/wait.h>
 #include <asm/atomic.h>
@@ -108,6 +109,8 @@ struct kobj_type {
 	void (*release)(struct kobject *kobj);
 	const struct sysfs_ops *sysfs_ops;
 	struct attribute **default_attrs;
+	const struct kobj_ns_type_operations *(*child_ns_type)(struct kobject *kobj);
+	const void *(*namespace)(struct kobject *kobj);
 };
 
 struct kobj_uevent_env {
@@ -133,6 +136,8 @@ struct kobj_attribute {
 };
 
 extern const struct sysfs_ops kobj_sysfs_ops;
+
+struct sock;
 
 /**
  * struct kset - a set of kobjects of a specific type, belonging to a specific subsystem.

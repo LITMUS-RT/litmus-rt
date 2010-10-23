@@ -571,7 +571,7 @@ do_more:
 error_return:
 	brelse(bitmap_bh);
 	release_blocks(sb, freed);
-	dquot_free_block(inode, freed);
+	dquot_free_block_nodirty(inode, freed);
 }
 
 /**
@@ -1332,6 +1332,12 @@ retry_alloc:
 
 		free_blocks = le16_to_cpu(gdp->bg_free_blocks_count);
 		/*
+		 * skip this group (and avoid loading bitmap) if there
+		 * are no free blocks
+		 */
+		if (!free_blocks)
+			continue;
+		/*
 		 * skip this group if the number of
 		 * free blocks is less than half of the reservation
 		 * window size.
@@ -1412,7 +1418,8 @@ allocated:
 
 	*errp = 0;
 	brelse(bitmap_bh);
-	dquot_free_block(inode, *count-num);
+	dquot_free_block_nodirty(inode, *count-num);
+	mark_inode_dirty(inode);
 	*count = num;
 	return ret_block;
 
@@ -1422,8 +1429,10 @@ out:
 	/*
 	 * Undo the block allocation
 	 */
-	if (!performed_allocation)
-		dquot_free_block(inode, *count);
+	if (!performed_allocation) {
+		dquot_free_block_nodirty(inode, *count);
+		mark_inode_dirty(inode);
+	}
 	brelse(bitmap_bh);
 	return 0;
 }

@@ -337,7 +337,10 @@ ENTRY(sys_call_table)
 	.long sys_rt_tgsigqueueinfo	/* 335 */
 	.long sys_perf_event_open
 	.long sys_recvmmsg
-	.long sys_set_rt_task_param	/* LITMUS^RT 338 */
+	.long sys_fanotify_init
+	.long sys_fanotify_mark
+	.long sys_prlimit64		/* 340 */
+	.long sys_set_rt_task_param	/* LITMUS^RT 341 */
 	.long sys_get_rt_task_param
 	.long sys_complete_job
 	.long sys_od_open

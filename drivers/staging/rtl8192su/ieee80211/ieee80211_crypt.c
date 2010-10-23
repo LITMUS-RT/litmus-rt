@@ -11,7 +11,6 @@
  *
  */
 
-//#include <linux/config.h>
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -109,11 +108,10 @@ int ieee80211_register_crypto_ops(struct ieee80211_crypto_ops *ops)
 	if (hcrypt == NULL)
 		return -1;
 
-	alg = kmalloc(sizeof(*alg), GFP_KERNEL);
+	alg = kzalloc(sizeof(*alg), GFP_KERNEL);
 	if (alg == NULL)
 		return -ENOMEM;
 
-	memset(alg, 0, sizeof(*alg));
 	alg->ops = ops;
 
 	spin_lock_irqsave(&hcrypt->lock, flags);
@@ -202,15 +200,14 @@ static struct ieee80211_crypto_ops ieee80211_crypt_null = {
 	.owner			= THIS_MODULE,
 };
 
-int __init ieee80211_crypto_init(void)
+int ieee80211_crypto_init(void)
 {
 	int ret = -ENOMEM;
 
-	hcrypt = kmalloc(sizeof(*hcrypt), GFP_KERNEL);
+	hcrypt = kzalloc(sizeof(*hcrypt), GFP_KERNEL);
 	if (!hcrypt)
 		goto out;
 
-	memset(hcrypt, 0, sizeof(*hcrypt));
 	INIT_LIST_HEAD(&hcrypt->algs);
 	spin_lock_init(&hcrypt->lock);
 
@@ -223,7 +220,7 @@ out:
 	return ret;
 }
 
-void __exit ieee80211_crypto_deinit(void)
+void ieee80211_crypto_deinit(void)
 {
 	struct list_head *ptr, *n;
 	struct ieee80211_crypto_alg *alg = NULL;

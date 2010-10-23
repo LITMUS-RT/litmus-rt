@@ -1071,6 +1071,9 @@ int gfs2_permission(struct inode *inode, int mask)
 	return error;
 }
 
+/*
+ * XXX(truncate): the truncate_setsize calls should be moved to the end.
+ */
 static int setattr_size(struct inode *inode, struct iattr *attr)
 {
 	struct gfs2_inode *ip = GFS2_I(inode);
@@ -1081,10 +1084,8 @@ static int setattr_size(struct inode *inode, struct iattr *attr)
 		error = gfs2_trans_begin(sdp, 0, sdp->sd_jdesc->jd_blocks);
 		if (error)
 			return error;
-		error = vmtruncate(inode, attr->ia_size);
+		truncate_setsize(inode, attr->ia_size);
 		gfs2_trans_end(sdp);
-		if (error) 
-			return error;
 	}
 
 	error = gfs2_truncatei(ip, attr->ia_size);
@@ -1133,8 +1134,16 @@ static int setattr_chown(struct inode *inode, struct iattr *attr)
 	if (error)
 		goto out_end_trans;
 
-	error = inode_setattr(inode, attr);
-	gfs2_assert_warn(sdp, !error);
+	if ((attr->ia_valid & ATTR_SIZE) &&
+	    attr->ia_size != i_size_read(inode)) {
+		int error;
+
+		error = vmtruncate(inode, attr->ia_size);
+		gfs2_assert_warn(sdp, !error);
+	}
+
+	setattr_copy(inode, attr);
+	mark_inode_dirty(inode);
 
 	gfs2_trans_add_bh(ip->i_gl, dibh, 1);
 	gfs2_dinode_out(ip, dibh->b_data);

@@ -1193,7 +1193,7 @@ void pci_disable_enabled_device(struct pci_dev *dev)
  * anymore.  This only involves disabling PCI bus-mastering, if active.
  *
  * Note we don't actually disable the device until all callers of
- * pci_device_enable() have called pci_device_disable().
+ * pci_enable_device() have called pci_disable_device().
  */
 void
 pci_disable_device(struct pci_dev *dev)
@@ -1275,6 +1275,22 @@ bool pci_check_pme_status(struct pci_dev *dev)
 	return ret;
 }
 
+/*
+ * Time to wait before the system can be put into a sleep state after reporting
+ * a wakeup event signaled by a PCI device.
+ */
+#define PCI_WAKEUP_COOLDOWN	100
+
+/**
+ * pci_wakeup_event - Report a wakeup event related to a given PCI device.
+ * @dev: Device to report the wakeup event for.
+ */
+void pci_wakeup_event(struct pci_dev *dev)
+{
+	if (device_may_wakeup(&dev->dev))
+		pm_wakeup_event(&dev->dev, PCI_WAKEUP_COOLDOWN);
+}
+
 /**
  * pci_pme_wakeup - Wake up a PCI device if its PME Status bit is set.
  * @dev: Device to handle.
@@ -1285,8 +1301,10 @@ bool pci_check_pme_status(struct pci_dev *dev)
  */
 static int pci_pme_wakeup(struct pci_dev *dev, void *ign)
 {
-	if (pci_check_pme_status(dev))
+	if (pci_check_pme_status(dev)) {
 		pm_request_resume(&dev->dev);
+		pci_wakeup_event(dev);
+	}
 	return 0;
 }
 
@@ -1503,7 +1521,7 @@ int pci_prepare_to_sleep(struct pci_dev *dev)
  * pci_back_from_sleep - turn PCI device on during system-wide transition into working state
  * @dev: Device to handle.
  *
- * Disable device's sytem wake-up capability and put it into D0.
+ * Disable device's system wake-up capability and put it into D0.
  */
 int pci_back_from_sleep(struct pci_dev *dev)
 {
@@ -1631,7 +1649,6 @@ void pci_pm_init(struct pci_dev *dev)
 		 * let the user space enable it to wake up the system as needed.
 		 */
 		device_set_wakeup_capable(&dev->dev, true);
-		device_set_wakeup_enable(&dev->dev, false);
 		/* Disable the PME# generation functionality */
 		pci_pme_active(dev, false);
 	} else {
@@ -1655,7 +1672,6 @@ void platform_pci_wakeup_init(struct pci_dev *dev)
 		return;
 
 	device_set_wakeup_capable(&dev->dev, true);
-	device_set_wakeup_enable(&dev->dev, false);
 	platform_pci_sleep_wake(dev, false);
 }
 
@@ -2294,22 +2310,19 @@ void pci_msi_off(struct pci_dev *dev)
 		pci_write_config_word(dev, pos + PCI_MSIX_FLAGS, control);
 	}
 }
+EXPORT_SYMBOL_GPL(pci_msi_off);
 
-#ifndef HAVE_ARCH_PCI_SET_DMA_MAX_SEGMENT_SIZE
 int pci_set_dma_max_seg_size(struct pci_dev *dev, unsigned int size)
 {
 	return dma_set_max_seg_size(&dev->dev, size);
 }
 EXPORT_SYMBOL(pci_set_dma_max_seg_size);
-#endif
 
-#ifndef HAVE_ARCH_PCI_SET_DMA_SEGMENT_BOUNDARY
 int pci_set_dma_seg_boundary(struct pci_dev *dev, unsigned long mask)
 {
 	return dma_set_seg_boundary(&dev->dev, mask);
 }
 EXPORT_SYMBOL(pci_set_dma_seg_boundary);
-#endif
 
 static int pcie_flr(struct pci_dev *dev, int probe)
 {

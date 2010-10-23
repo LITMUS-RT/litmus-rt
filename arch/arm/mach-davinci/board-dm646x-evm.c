@@ -80,17 +80,14 @@ static struct davinci_nand_pdata davinci_nand_data = {
 	.options		= 0,
 };
 
-#define DAVINCI_ASYNC_EMIF_CONTROL_BASE		0x20008000
-#define DAVINCI_ASYNC_EMIF_DATA_CE0_BASE	0x42000000
-
 static struct resource davinci_nand_resources[] = {
 	{
-		.start		= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE,
-		.end		= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE + SZ_32M - 1,
+		.start		= DM646X_ASYNC_EMIF_CS2_SPACE_BASE,
+		.end		= DM646X_ASYNC_EMIF_CS2_SPACE_BASE + SZ_32M - 1,
 		.flags		= IORESOURCE_MEM,
 	}, {
-		.start		= DAVINCI_ASYNC_EMIF_CONTROL_BASE,
-		.end		= DAVINCI_ASYNC_EMIF_CONTROL_BASE + SZ_4K - 1,
+		.start		= DM646X_ASYNC_EMIF_CONTROL_BASE,
+		.end		= DM646X_ASYNC_EMIF_CONTROL_BASE + SZ_4K - 1,
 		.flags		= IORESOURCE_MEM,
 	},
 };
@@ -326,7 +323,7 @@ static struct snd_platform_data dm646x_evm_snd_data[] = {
 		.num_serializer = ARRAY_SIZE(dm646x_iis_serializer_direction),
 		.tdm_slots      = 2,
 		.serial_dir     = dm646x_iis_serializer_direction,
-		.eventq_no      = EVENTQ_0,
+		.asp_chan_q     = EVENTQ_0,
 	},
 	{
 		.tx_dma_offset  = 0x400,
@@ -335,7 +332,7 @@ static struct snd_platform_data dm646x_evm_snd_data[] = {
 		.num_serializer = ARRAY_SIZE(dm646x_dit_serializer_direction),
 		.tdm_slots      = 32,
 		.serial_dir     = dm646x_dit_serializer_direction,
-		.eventq_no      = EVENTQ_0,
+		.asp_chan_q     = EVENTQ_0,
 	},
 };
 
@@ -724,6 +721,39 @@ static struct davinci_uart_config uart_config __initdata = {
 #define DM646X_EVM_PHY_MASK		(0x2)
 #define DM646X_EVM_MDIO_FREQUENCY	(2200000) /* PHY bus frequency */
 
+/*
+ * The following EDMA channels/slots are not being used by drivers (for
+ * example: Timer, GPIO, UART events etc) on dm646x, hence they are being
+ * reserved for codecs on the DSP side.
+ */
+static const s16 dm646x_dma_rsv_chans[][2] = {
+	/* (offset, number) */
+	{ 0,  4},
+	{13,  3},
+	{24,  4},
+	{30,  2},
+	{54,  3},
+	{-1, -1}
+};
+
+static const s16 dm646x_dma_rsv_slots[][2] = {
+	/* (offset, number) */
+	{ 0,  4},
+	{13,  3},
+	{24,  4},
+	{30,  2},
+	{54,  3},
+	{128, 384},
+	{-1, -1}
+};
+
+static struct edma_rsv_info dm646x_edma_rsv[] = {
+	{
+		.rsv_chans	= dm646x_dma_rsv_chans,
+		.rsv_slots	= dm646x_dma_rsv_slots,
+	},
+};
+
 static __init void evm_init(void)
 {
 	struct davinci_soc_info *soc_info = &davinci_soc_info;
@@ -735,16 +765,13 @@ static __init void evm_init(void)
 
 	platform_device_register(&davinci_nand_device);
 
+	dm646x_init_edma(dm646x_edma_rsv);
+
 	if (HAS_ATA)
-		dm646x_init_ide();
+		davinci_init_ide();
 
 	soc_info->emac_pdata->phy_mask = DM646X_EVM_PHY_MASK;
 	soc_info->emac_pdata->mdio_max_freq = DM646X_EVM_MDIO_FREQUENCY;
-}
-
-static __init void davinci_dm646x_evm_irq_init(void)
-{
-	davinci_irq_init();
 }
 
 #define DM646X_EVM_REF_FREQ		27000000
@@ -763,7 +790,7 @@ MACHINE_START(DAVINCI_DM6467_EVM, "DaVinci DM646x EVM")
 	.io_pg_offst  = (__IO_ADDRESS(IO_PHYS) >> 18) & 0xfffc,
 	.boot_params  = (0x80000100),
 	.map_io       = davinci_map_io,
-	.init_irq     = davinci_dm646x_evm_irq_init,
+	.init_irq     = davinci_irq_init,
 	.timer        = &davinci_timer,
 	.init_machine = evm_init,
 MACHINE_END
@@ -773,7 +800,7 @@ MACHINE_START(DAVINCI_DM6467TEVM, "DaVinci DM6467T EVM")
 	.io_pg_offst  = (__IO_ADDRESS(IO_PHYS) >> 18) & 0xfffc,
 	.boot_params  = (0x80000100),
 	.map_io       = davinci_map_io,
-	.init_irq     = davinci_dm646x_evm_irq_init,
+	.init_irq     = davinci_irq_init,
 	.timer        = &davinci_timer,
 	.init_machine = evm_init,
 MACHINE_END

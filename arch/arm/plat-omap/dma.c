@@ -290,7 +290,7 @@ void omap_set_dma_transfer_params(int lch, int data_type, int elem_count,
 		val = dma_read(CCR(lch));
 
 		/* DMA_SYNCHRO_CONTROL_UPPER depends on the channel number */
-		val &= ~((3 << 19) | 0x1f);
+		val &= ~((1 << 23) | (3 << 19) | 0x1f);
 		val |= (dma_trigger & ~0x1f) << 14;
 		val |= dma_trigger & 0x1f;
 
@@ -304,11 +304,14 @@ void omap_set_dma_transfer_params(int lch, int data_type, int elem_count,
 		else
 			val &= ~(1 << 18);
 
-		if (src_or_dst_synch)
-			val |= 1 << 24;		/* source synch */
-		else
+		if (src_or_dst_synch == OMAP_DMA_DST_SYNC_PREFETCH) {
 			val &= ~(1 << 24);	/* dest synch */
-
+			val |= (1 << 23);	/* Prefetch */
+		} else if (src_or_dst_synch) {
+			val |= 1 << 24;		/* source synch */
+		} else {
+			val &= ~(1 << 24);	/* dest synch */
+		}
 		dma_write(val, CCR(lch));
 	}
 
@@ -501,7 +504,8 @@ void omap_set_dma_src_burst_mode(int lch, enum omap_dma_burst_mode burst_mode)
 			burst = 0x2;
 			break;
 		}
-		/* not supported by current hardware on OMAP1
+		/*
+		 * not supported by current hardware on OMAP1
 		 * w |= (0x03 << 7);
 		 * fall through
 		 */
@@ -510,7 +514,8 @@ void omap_set_dma_src_burst_mode(int lch, enum omap_dma_burst_mode burst_mode)
 			burst = 0x3;
 			break;
 		}
-		/* OMAP1 don't support burst 16
+		/*
+		 * OMAP1 don't support burst 16
 		 * fall through
 		 */
 	default:
@@ -604,7 +609,8 @@ void omap_set_dma_dest_burst_mode(int lch, enum omap_dma_burst_mode burst_mode)
 			burst = 0x3;
 			break;
 		}
-		/* OMAP1 don't support burst 16
+		/*
+		 * OMAP1 don't support burst 16
 		 * fall through
 		 */
 	default:
@@ -709,6 +715,21 @@ static inline void omap2_enable_irq_lch(int lch)
 	spin_unlock_irqrestore(&dma_chan_lock, flags);
 }
 
+static inline void omap2_disable_irq_lch(int lch)
+{
+	u32 val;
+	unsigned long flags;
+
+	if (!cpu_class_is_omap2())
+		return;
+
+	spin_lock_irqsave(&dma_chan_lock, flags);
+	val = dma_read(IRQENABLE_L0);
+	val &= ~(1 << lch);
+	dma_write(val, IRQENABLE_L0);
+	spin_unlock_irqrestore(&dma_chan_lock, flags);
+}
+
 int omap_request_dma(int dev_id, const char *dev_name,
 		     void (*callback)(int lch, u16 ch_status, void *data),
 		     void *data, int *dma_ch_out)
@@ -807,14 +828,7 @@ void omap_free_dma(int lch)
 	}
 
 	if (cpu_class_is_omap2()) {
-		u32 val;
-
-		spin_lock_irqsave(&dma_chan_lock, flags);
-		/* Disable interrupts */
-		val = dma_read(IRQENABLE_L0);
-		val &= ~(1 << lch);
-		dma_write(val, IRQENABLE_L0);
-		spin_unlock_irqrestore(&dma_chan_lock, flags);
+		omap2_disable_irq_lch(lch);
 
 		/* Clear the CSR register and IRQ status register */
 		dma_write(OMAP2_DMA_CSR_CLEAR_MASK, CSR(lch));
@@ -1277,8 +1291,10 @@ int omap_request_dma_chain(int dev_id, const char *dev_name,
 		return -EINVAL;
 	}
 
-	/* Allocate a queue to maintain the status of the channels
-	 * in the chain */
+	/*
+	 * Allocate a queue to maintain the status of the channels
+	 * in the chain
+	 */
 	channels = kmalloc(sizeof(*channels) * no_of_chans, GFP_KERNEL);
 	if (channels == NULL) {
 		printk(KERN_ERR "omap_dma: No memory for channel queue\n");
@@ -1907,7 +1923,8 @@ static int omap2_dma_handle_ch(int ch)
 		printk(KERN_INFO "DMA transaction error with device %d\n",
 		       dma_chan[ch].dev_id);
 		if (cpu_class_is_omap2()) {
-			/* Errata: sDMA Channel is not disabled
+			/*
+			 * Errata: sDMA Channel is not disabled
 			 * after a transaction error. So we explicitely
 			 * disable the channel
 			 */
@@ -2107,6 +2124,9 @@ static int __init omap_init_dma(void)
 
 	for (ch = 0; ch < dma_chan_count; ch++) {
 		omap_clear_dma(ch);
+		if (cpu_class_is_omap2())
+			omap2_disable_irq_lch(ch);
+
 		dma_chan[ch].dev_id = -1;
 		dma_chan[ch].next_lch = -1;
 

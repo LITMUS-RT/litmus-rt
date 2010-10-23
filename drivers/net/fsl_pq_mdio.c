@@ -35,6 +35,7 @@
 #include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/of_mdio.h>
 #include <linux/of_platform.h>
 
@@ -264,10 +265,10 @@ static int get_ucc_id_for_range(u64 start, u64 end, u32 *ucc_id)
 #endif
 
 
-static int fsl_pq_mdio_probe(struct of_device *ofdev,
+static int fsl_pq_mdio_probe(struct platform_device *ofdev,
 		const struct of_device_id *match)
 {
-	struct device_node *np = ofdev->node;
+	struct device_node *np = ofdev->dev.of_node;
 	struct device_node *tbi;
 	struct fsl_pq_mdio_priv *priv;
 	struct fsl_pq_mdio __iomem *regs = NULL;
@@ -277,15 +278,17 @@ static int fsl_pq_mdio_probe(struct of_device *ofdev,
 	int tbiaddr = -1;
 	const u32 *addrp;
 	u64 addr = 0, size = 0;
-	int err = 0;
+	int err;
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
 	new_bus = mdiobus_alloc();
-	if (NULL == new_bus)
+	if (!new_bus) {
+		err = -ENOMEM;
 		goto err_free_priv;
+	}
 
 	new_bus->name = "Freescale PowerQUICC MII Bus",
 	new_bus->read = &fsl_pq_mdio_read,
@@ -422,7 +425,7 @@ err_free_priv:
 }
 
 
-static int fsl_pq_mdio_remove(struct of_device *ofdev)
+static int fsl_pq_mdio_remove(struct platform_device *ofdev)
 {
 	struct device *device = &ofdev->dev;
 	struct mii_bus *bus = dev_get_drvdata(device);
@@ -469,10 +472,13 @@ static struct of_device_id fsl_pq_mdio_match[] = {
 MODULE_DEVICE_TABLE(of, fsl_pq_mdio_match);
 
 static struct of_platform_driver fsl_pq_mdio_driver = {
-	.name = "fsl-pq_mdio",
+	.driver = {
+		.name = "fsl-pq_mdio",
+		.owner = THIS_MODULE,
+		.of_match_table = fsl_pq_mdio_match,
+	},
 	.probe = fsl_pq_mdio_probe,
 	.remove = fsl_pq_mdio_remove,
-	.match_table = fsl_pq_mdio_match,
 };
 
 int __init fsl_pq_mdio_init(void)

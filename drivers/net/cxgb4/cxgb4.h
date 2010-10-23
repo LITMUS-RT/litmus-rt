@@ -53,7 +53,7 @@
 
 enum {
 	MAX_NPORTS = 4,     /* max # of ports */
-	SERNUM_LEN = 16,    /* Serial # length */
+	SERNUM_LEN = 24,    /* Serial # length */
 	EC_LEN     = 16,    /* E/C length */
 	ID_LEN     = 16,    /* ID length */
 };
@@ -219,6 +219,10 @@ struct adapter_params {
 	struct vpd_params vpd;
 	struct pci_params pci;
 
+	unsigned int sf_size;             /* serial flash size in bytes */
+	unsigned int sf_nsec;             /* # of flash sectors */
+	unsigned int sf_fw_start;         /* start of FW image in flash */
+
 	unsigned int fw_vers;
 	unsigned int tp_vers;
 	u8 api_vers[7];
@@ -290,7 +294,9 @@ struct port_info {
 	u8     rx_offload;            /* CSO, etc */
 	u8     nqsets;                /* # of qsets */
 	u8     first_qset;            /* index of first qset */
+	u8     rss_mode;
 	struct link_config link_cfg;
+	u16   *rss;
 };
 
 /* port_info.rx_offload flags */
@@ -305,7 +311,6 @@ enum {                                 /* adapter flags */
 	FULL_INIT_DONE     = (1 << 0),
 	USING_MSI          = (1 << 1),
 	USING_MSIX         = (1 << 2),
-	QUEUES_BOUND       = (1 << 3),
 	FW_OK              = (1 << 4),
 };
 
@@ -477,8 +482,8 @@ struct adapter {
 	struct pci_dev *pdev;
 	struct device *pdev_dev;
 	unsigned long registered_device_map;
-	unsigned long open_device_map;
-	unsigned long flags;
+	unsigned int fn;
+	unsigned int flags;
 
 	const char *name;
 	int msg_enable;
@@ -647,18 +652,16 @@ void t4_intr_disable(struct adapter *adapter);
 void t4_intr_clear(struct adapter *adapter);
 int t4_slow_intr_handler(struct adapter *adapter);
 
+int t4_wait_dev_ready(struct adapter *adap);
 int t4_link_start(struct adapter *adap, unsigned int mbox, unsigned int port,
 		  struct link_config *lc);
 int t4_restart_aneg(struct adapter *adap, unsigned int mbox, unsigned int port);
 int t4_seeprom_wp(struct adapter *adapter, bool enable);
-int t4_read_flash(struct adapter *adapter, unsigned int addr,
-		  unsigned int nwords, u32 *data, int byte_oriented);
 int t4_load_fw(struct adapter *adapter, const u8 *fw_data, unsigned int size);
 int t4_check_fw_version(struct adapter *adapter);
 int t4_prep_adapter(struct adapter *adapter);
 int t4_port_init(struct adapter *adap, int mbox, int pf, int vf);
 void t4_fatal_err(struct adapter *adapter);
-void t4_set_vlan_accel(struct adapter *adapter, unsigned int ports, int on);
 int t4_set_trace_filter(struct adapter *adapter, const struct trace_params *tp,
 			int filter_index, int enable);
 void t4_get_trace_filter(struct adapter *adapter, struct trace_params *tp,
@@ -709,7 +712,8 @@ int t4_alloc_vi(struct adapter *adap, unsigned int mbox, unsigned int port,
 int t4_free_vi(struct adapter *adap, unsigned int mbox, unsigned int pf,
 	       unsigned int vf, unsigned int viid);
 int t4_set_rxmode(struct adapter *adap, unsigned int mbox, unsigned int viid,
-		int mtu, int promisc, int all_multi, int bcast, bool sleep_ok);
+		int mtu, int promisc, int all_multi, int bcast, int vlanex,
+		bool sleep_ok);
 int t4_alloc_mac_filt(struct adapter *adap, unsigned int mbox,
 		      unsigned int viid, bool free, unsigned int naddr,
 		      const u8 **addr, u16 *idx, u64 *hash, bool sleep_ok);

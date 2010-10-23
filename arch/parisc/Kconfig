@@ -66,10 +66,6 @@ config GENERIC_CALIBRATE_DELAY
 	bool
 	default y
 
-config GENERIC_TIME
-	bool
-	default y
-
 config TIME_LOW_RES
 	bool
 	depends on SMP
@@ -96,6 +92,9 @@ config STACKTRACE_SUPPORT
 	def_bool y
 
 config NEED_DMA_MAP_STATE
+	def_bool y
+
+config NEED_SG_DMA_LENGTH
 	def_bool y
 
 config ISA_DMA_API

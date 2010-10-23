@@ -13,7 +13,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_L3
 	select SND_SOC_AC97_CODEC if SND_SOC_AC97_BUS
 	select SND_SOC_AD1836 if SPI_MASTER
-	select SND_SOC_AD1938 if SPI_MASTER
+	select SND_SOC_AD193X if SND_SOC_I2C_AND_SPI
 	select SND_SOC_AD1980 if SND_SOC_AC97_BUS
 	select SND_SOC_ADS117X
 	select SND_SOC_AD73311 if I2C
@@ -21,9 +21,12 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_AK4535 if I2C
 	select SND_SOC_AK4642 if I2C
 	select SND_SOC_AK4671 if I2C
+	select SND_SOC_CQ0093VC if MFD_DAVINCI_VOICECODEC
+	select SND_SOC_CS42L51 if I2C
 	select SND_SOC_CS4270 if I2C
-	select SND_SOC_MAX9877 if I2C
 	select SND_SOC_DA7210 if I2C
+	select SND_SOC_JZ4740 if SOC_JZ4740
+	select SND_SOC_MAX9877 if I2C
 	select SND_SOC_PCM3008
 	select SND_SOC_SPDIF
 	select SND_SOC_SSM2602 if I2C
@@ -34,6 +37,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_TPA6130A2 if I2C
 	select SND_SOC_TLV320DAC33 if I2C
 	select SND_SOC_TWL4030 if TWL4030_CORE
+	select SND_SOC_TWL6040 if TWL4030_CORE
 	select SND_SOC_UDA134X
 	select SND_SOC_UDA1380 if I2C
 	select SND_SOC_WM2000 if I2C
@@ -46,6 +50,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM8727
 	select SND_SOC_WM8728 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_WM8731 if SND_SOC_I2C_AND_SPI
+	select SND_SOC_WM8741 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_WM8750 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_WM8753 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_WM8776 if SND_SOC_I2C_AND_SPI
@@ -64,6 +69,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM8993 if I2C
 	select SND_SOC_WM8994 if MFD_WM8994
 	select SND_SOC_WM9081 if I2C
+	select SND_SOC_WM9090 if I2C
 	select SND_SOC_WM9705 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9712 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9713 if SND_SOC_AC97_BUS
@@ -80,8 +86,8 @@ config SND_SOC_ALL_CODECS
 
 config SND_SOC_WM_HUBS
 	tristate
-	default y if SND_SOC_WM8993=y
-	default m if SND_SOC_WM8993=m
+	default y if SND_SOC_WM8993=y || SND_SOC_WM8994=y
+	default m if SND_SOC_WM8993=m || SND_SOC_WM8994=m
 
 config SND_SOC_AC97_CODEC
 	tristate
@@ -90,7 +96,7 @@ config SND_SOC_AC97_CODEC
 config SND_SOC_AD1836
 	tristate
 
-config SND_SOC_AD1938
+config SND_SOC_AD193X
 	tristate
 
 config SND_SOC_AD1980
@@ -114,12 +120,15 @@ config SND_SOC_AK4642
 config SND_SOC_AK4671
 	tristate
 
+config SND_SOC_CQ0093VC
+	tristate
+
+config SND_SOC_CS42L51
+	tristate
+
 # Cirrus Logic CS4270 Codec
 config SND_SOC_CS4270
 	tristate
-
-config SND_SOC_DA7210
-        tristate
 
 # Cirrus Logic CS4270 Codec VD = 3.3V Errata
 # Select if you are affected by the errata where the part will not function
@@ -132,8 +141,14 @@ config SND_SOC_CS4270_VD33_ERRATA
 config SND_SOC_CX20442
 	tristate
 
+config SND_SOC_JZ4740_CODEC
+	tristate
+
 config SND_SOC_L3
        tristate
+
+config SND_SOC_DA7210
+        tristate
 
 config SND_SOC_PCM3008
        tristate
@@ -162,6 +177,9 @@ config SND_SOC_TLV320DAC33
 
 config SND_SOC_TWL4030
 	select TWL4030_CODEC
+	tristate
+
+config SND_SOC_TWL6040
 	tristate
 
 config SND_SOC_UDA134X
@@ -195,6 +213,9 @@ config SND_SOC_WM8728
 	tristate
 
 config SND_SOC_WM8731
+	tristate
+
+config SND_SOC_WM8741
 	tristate
 
 config SND_SOC_WM8750
@@ -268,4 +289,7 @@ config SND_SOC_TPA6130A2
 	tristate
 
 config SND_SOC_WM2000
+	tristate
+
+config SND_SOC_WM9090
 	tristate

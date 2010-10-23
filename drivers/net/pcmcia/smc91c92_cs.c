@@ -44,7 +44,6 @@
 #include <linux/jiffies.h>
 #include <linux/firmware.h>
 
-#include <pcmcia/cs_types.h>
 #include <pcmcia/cs.h>
 #include <pcmcia/cistpl.h>
 #include <pcmcia/cisreg.h>
@@ -103,7 +102,6 @@ struct smc_private {
     u_short			manfid;
     u_short			cardid;
 
-    dev_node_t			node;
     struct sk_buff		*saved_skb;
     int				packets_waiting;
     void			__iomem *base;
@@ -326,11 +324,8 @@ static int smc91c92_probe(struct pcmcia_device *link)
     link->priv = dev;
 
     spin_lock_init(&smc->lock);
-    link->io.NumPorts1 = 16;
-    link->io.Attributes1 = IO_DATA_PATH_WIDTH_AUTO;
-    link->io.IOAddrLines = 4;
-    link->irq.Attributes = IRQ_TYPE_DYNAMIC_SHARING;
-    link->irq.Handler = &smc_interrupt;
+    link->resource[0]->end = 16;
+    link->resource[0]->flags |= IO_DATA_PATH_WIDTH_AUTO;
     link->conf.Attributes = CONF_ENABLE_IRQ;
     link->conf.IntType = INT_MEMORY_AND_IO;
 
@@ -363,8 +358,7 @@ static void smc91c92_detach(struct pcmcia_device *link)
 
     dev_dbg(&link->dev, "smc91c92_detach\n");
 
-    if (link->dev_node)
-	unregister_netdev(dev);
+    unregister_netdev(dev);
 
     smc91c92_release(link);
 
@@ -432,12 +426,13 @@ static int mhz_mfc_config_check(struct pcmcia_device *p_dev,
 				void *priv_data)
 {
 	int k;
-	p_dev->io.BasePort2 = cf->io.win[0].base;
+	p_dev->resource[1]->start = cf->io.win[0].base;
 	for (k = 0; k < 0x400; k += 0x10) {
 		if (k & 0x80)
 			continue;
-		p_dev->io.BasePort1 = k ^ 0x300;
-		if (!pcmcia_request_io(p_dev, &p_dev->io))
+		p_dev->resource[0]->start = k ^ 0x300;
+		p_dev->io_lines = 16;
+		if (!pcmcia_request_io(p_dev))
 			return 0;
 	}
 	return -ENODEV;
@@ -448,22 +443,20 @@ static int mhz_mfc_config(struct pcmcia_device *link)
     struct net_device *dev = link->priv;
     struct smc_private *smc = netdev_priv(dev);
     win_req_t req;
-    memreq_t mem;
+    unsigned int offset;
     int i;
 
     link->conf.Attributes |= CONF_ENABLE_SPKR;
     link->conf.Status = CCSR_AUDIO_ENA;
-    link->irq.Attributes = IRQ_TYPE_DYNAMIC_SHARING;
-    link->io.IOAddrLines = 16;
-    link->io.Attributes2 = IO_DATA_PATH_WIDTH_8;
-    link->io.NumPorts2 = 8;
+    link->resource[1]->flags |= IO_DATA_PATH_WIDTH_8;
+    link->resource[1]->end = 8;
 
     /* The Megahertz combo cards have modem-like CIS entries, so
        we have to explicitly try a bunch of port combinations. */
     if (pcmcia_loop_config(link, mhz_mfc_config_check, NULL))
 	    return -ENODEV;
 
-    dev->base_addr = link->io.BasePort1;
+    dev->base_addr = link->resource[0]->start;
 
     /* Allocate a memory window, for accessing the ISR */
     req.Attributes = WIN_DATA_WIDTH_8|WIN_MEMORY_TYPE_AM|WIN_ENABLE;
@@ -474,11 +467,8 @@ static int mhz_mfc_config(struct pcmcia_device *link)
 	    return -ENODEV;
 
     smc->base = ioremap(req.Base, req.Size);
-    mem.CardOffset = mem.Page = 0;
-    if (smc->manfid == MANFID_MOTOROLA)
-	mem.CardOffset = link->conf.ConfigBase;
-    i = pcmcia_map_mem_page(link, link->win, &mem);
-
+    offset = (smc->manfid == MANFID_MOTOROLA) ? link->conf.ConfigBase : 0;
+    i = pcmcia_map_mem_page(link, link->win, offset);
     if ((i == 0) &&
 	(smc->manfid == MANFID_MEGAHERTZ) &&
 	(smc->cardid == PRODID_MEGAHERTZ_EM3288))
@@ -551,7 +541,7 @@ static void mot_config(struct pcmcia_device *link)
     struct net_device *dev = link->priv;
     struct smc_private *smc = netdev_priv(dev);
     unsigned int ioaddr = dev->base_addr;
-    unsigned int iouart = link->io.BasePort2;
+    unsigned int iouart = link->resource[1]->start;
 
     /* Set UART base address and force map with COR bit 1 */
     writeb(iouart & 0xff,        smc->base + MOT_UART + CISREG_IOBASE_0);
@@ -607,9 +597,9 @@ static int smc_configcheck(struct pcmcia_device *p_dev,
 			   unsigned int vcc,
 			   void *priv_data)
 {
-	p_dev->io.BasePort1 = cf->io.win[0].base;
-	p_dev->io.IOAddrLines = cf->io.flags & CISTPL_IO_LINES_MASK;
-	return pcmcia_request_io(p_dev, &p_dev->io);
+	p_dev->resource[0]->start = cf->io.win[0].base;
+	p_dev->io_lines = cf->io.flags & CISTPL_IO_LINES_MASK;
+	return pcmcia_request_io(p_dev);
 }
 
 static int smc_config(struct pcmcia_device *link)
@@ -617,10 +607,10 @@ static int smc_config(struct pcmcia_device *link)
     struct net_device *dev = link->priv;
     int i;
 
-    link->io.NumPorts1 = 16;
+    link->resource[0]->end = 16;
     i = pcmcia_loop_config(link, smc_configcheck, NULL);
     if (!i)
-	    dev->base_addr = link->io.BasePort1;
+	    dev->base_addr = link->resource[0]->start;
 
     return i;
 }
@@ -652,28 +642,27 @@ static int osi_config(struct pcmcia_device *link)
 
     link->conf.Attributes |= CONF_ENABLE_SPKR;
     link->conf.Status = CCSR_AUDIO_ENA;
-    link->irq.Attributes = IRQ_TYPE_DYNAMIC_SHARING;
-    link->io.NumPorts1 = 64;
-    link->io.Attributes2 = IO_DATA_PATH_WIDTH_8;
-    link->io.NumPorts2 = 8;
-    link->io.IOAddrLines = 16;
+    link->resource[0]->end = 64;
+    link->resource[1]->flags |= IO_DATA_PATH_WIDTH_8;
+    link->resource[1]->end = 8;
 
     /* Enable Hard Decode, LAN, Modem */
     link->conf.ConfigIndex = 0x23;
+    link->io_lines = 16;
 
     for (i = j = 0; j < 4; j++) {
-	link->io.BasePort2 = com[j];
-	i = pcmcia_request_io(link, &link->io);
+	link->resource[1]->start = com[j];
+	i = pcmcia_request_io(link);
 	if (i == 0)
 		break;
     }
     if (i != 0) {
 	/* Fallback: turn off hard decode */
 	link->conf.ConfigIndex = 0x03;
-	link->io.NumPorts2 = 0;
-	i = pcmcia_request_io(link, &link->io);
+	link->resource[1]->end = 0;
+	i = pcmcia_request_io(link);
     }
-    dev->base_addr = link->io.BasePort1 + 0x10;
+    dev->base_addr = link->resource[0]->start + 0x10;
     return i;
 }
 
@@ -690,7 +679,7 @@ static int osi_load_firmware(struct pcmcia_device *link)
 
 	/* Download the Seven of Diamonds firmware */
 	for (i = 0; i < fw->size; i++) {
-	    outb(fw->data[i], link->io.BasePort1 + 2);
+	    outb(fw->data[i], link->resource[0]->start + 2);
 	    udelay(50);
 	}
 	release_firmware(fw);
@@ -732,12 +721,12 @@ static int osi_setup(struct pcmcia_device *link, u_short manfid, u_short cardid)
 		return rc;
     } else if (manfid == MANFID_OSITECH) {
 	/* Make sure both functions are powered up */
-	set_bits(0x300, link->io.BasePort1 + OSITECH_AUI_PWR);
+	set_bits(0x300, link->resource[0]->start + OSITECH_AUI_PWR);
 	/* Now, turn on the interrupt for both card functions */
-	set_bits(0x300, link->io.BasePort1 + OSITECH_RESET_ISR);
+	set_bits(0x300, link->resource[0]->start + OSITECH_RESET_ISR);
 	dev_dbg(&link->dev, "AUI/PWR: %4.4x RESET/ISR: %4.4x\n",
-	      inw(link->io.BasePort1 + OSITECH_AUI_PWR),
-	      inw(link->io.BasePort1 + OSITECH_RESET_ISR));
+	      inw(link->resource[0]->start + OSITECH_AUI_PWR),
+	      inw(link->resource[0]->start + OSITECH_RESET_ISR));
     }
     return 0;
 }
@@ -810,7 +799,7 @@ static int check_sig(struct pcmcia_device *link)
     }
 
     /* Try setting bus width */
-    width = (link->io.Attributes1 == IO_DATA_PATH_WIDTH_AUTO);
+    width = (link->resource[0]->flags == IO_DATA_PATH_WIDTH_AUTO);
     s = inb(ioaddr + CONFIG);
     if (width)
 	s |= CFG_16BIT;
@@ -877,7 +866,7 @@ static int smc91c92_config(struct pcmcia_device *link)
     if (i)
 	    goto config_failed;
 
-    i = pcmcia_request_irq(link, &link->irq);
+    i = pcmcia_request_irq(link, smc_interrupt);
     if (i)
 	    goto config_failed;
     i = pcmcia_request_configuration(link, &link->conf);
@@ -887,7 +876,7 @@ static int smc91c92_config(struct pcmcia_device *link)
     if (smc->manfid == MANFID_MOTOROLA)
 	mot_config(link);
 
-    dev->irq = link->irq.AssignedIRQ;
+    dev->irq = link->irq;
 
     if ((if_port >= 0) && (if_port <= 2))
 	dev->if_port = if_port;
@@ -960,16 +949,12 @@ static int smc91c92_config(struct pcmcia_device *link)
 	SMC_SELECT_BANK(0);
     }
 
-    link->dev_node = &smc->node;
     SET_NETDEV_DEV(dev, &link->dev);
 
     if (register_netdev(dev) != 0) {
 	printk(KERN_ERR "smc91c92_cs: register_netdev() failed\n");
-	link->dev_node = NULL;
 	goto config_undo;
     }
-
-    strcpy(smc->node.dev_name, dev->name);
 
     printk(KERN_INFO "%s: smc91c%s rev %d: io %#3lx, irq %d, "
 	   "hw_addr %pM\n",
@@ -1239,7 +1224,6 @@ static void smc_hardware_send_packet(struct net_device * dev)
     dev_kfree_skb_irq(skb);
     dev->trans_start = jiffies;
     netif_start_queue(dev);
-    return;
 }
 
 /*====================================================================*/
@@ -1254,7 +1238,7 @@ static void smc_tx_timeout(struct net_device *dev)
 	   dev->name, inw(ioaddr)&0xff, inw(ioaddr + 2));
     dev->stats.tx_errors++;
     smc_reset(dev);
-    dev->trans_start = jiffies;
+    dev->trans_start = jiffies; /* prevent tx timeout */
     smc->saved_skb = NULL;
     netif_wake_queue(dev);
 }
@@ -1369,7 +1353,6 @@ static void smc_tx_err(struct net_device * dev)
     smc->packets_waiting--;
 
     outw(saved_packet, ioaddr + PNR_ARR);
-    return;
 }
 
 /*====================================================================*/
@@ -1517,12 +1500,20 @@ irq_done:
 	writeb(cor & ~COR_IREQ_ENA, smc->base + MOT_LAN + CISREG_COR);
 	writeb(cor, smc->base + MOT_LAN + CISREG_COR);
     }
-#ifdef DOES_NOT_WORK
-    if (smc->base != NULL) { /* Megahertz MFC's */
-	readb(smc->base+MEGAHERTZ_ISR);
-	readb(smc->base+MEGAHERTZ_ISR);
+
+    if ((smc->base != NULL) &&  /* Megahertz MFC's */
+	(smc->manfid == MANFID_MEGAHERTZ) &&
+	(smc->cardid == PRODID_MEGAHERTZ_EM3288)) {
+
+	u_char tmp;
+	tmp = readb(smc->base+MEGAHERTZ_ISR);
+	tmp = readb(smc->base+MEGAHERTZ_ISR);
+
+	/* Retrigger interrupt if needed */
+	writeb(tmp, smc->base + MEGAHERTZ_ISR);
+	writeb(tmp, smc->base + MEGAHERTZ_ISR);
     }
-#endif
+
     spin_unlock(&smc->lock);
     return IRQ_RETVAL(handled);
 }
@@ -1589,8 +1580,6 @@ static void smc_rx(struct net_device *dev)
     }
     /* Let the MMU free the memory of this packet. */
     outw(MC_RELEASE, ioaddr + MMU_CMD);
-
-    return;
 }
 
 /*======================================================================
@@ -1621,10 +1610,10 @@ static void set_rx_mode(struct net_device *dev)
 	rx_cfg_setting = RxStripCRC | RxEnable | RxAllMulti;
     else {
 	if (!netdev_mc_empty(dev)) {
-	    struct dev_mc_list *mc_addr;
+	    struct netdev_hw_addr *ha;
 
-	    netdev_for_each_mc_addr(mc_addr, dev) {
-		u_int position = ether_crc(6, mc_addr->dmi_addr);
+	    netdev_for_each_mc_addr(ha, dev) {
+		u_int position = ether_crc(6, ha->addr);
 		multicast_table[position >> 29] |= 1 << ((position >> 26) & 7);
 	    }
 	}
@@ -1640,8 +1629,6 @@ static void set_rx_mode(struct net_device *dev)
     outw(rx_cfg_setting, ioaddr + RCR);
     SMC_SELECT_BANK(2);
     spin_unlock_irqrestore(&smc->lock, flags);
-
-    return;
 }
 
 /*======================================================================

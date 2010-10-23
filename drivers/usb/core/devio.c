@@ -43,6 +43,7 @@
 #include <linux/module.h>
 #include <linux/usb.h>
 #include <linux/usbdevice_fs.h>
+#include <linux/usb/hcd.h>	/* for usbcore internals */
 #include <linux/cdev.h>
 #include <linux/notifier.h>
 #include <linux/security.h>
@@ -50,9 +51,7 @@
 #include <asm/byteorder.h>
 #include <linux/moduleparam.h>
 
-#include "hcd.h"	/* for usbcore internals */
 #include "usb.h"
-#include "hub.h"
 
 #define USB_MAXBUS			64
 #define USB_DEVICE_MAX			USB_MAXBUS * 128
@@ -1669,13 +1668,10 @@ static int proc_ioctl(struct dev_state *ps, struct usbdevfs_ioctl *ctl)
 	default:
 		if (intf->dev.driver)
 			driver = to_usb_driver(intf->dev.driver);
-		if (driver == NULL || driver->ioctl == NULL) {
+		if (driver == NULL || driver->unlocked_ioctl == NULL) {
 			retval = -ENOTTY;
 		} else {
-			/* keep API that guarantees BKL */
-			lock_kernel();
-			retval = driver->ioctl(intf, ctl->ioctl_code, buf);
-			unlock_kernel();
+			retval = driver->unlocked_ioctl(intf, ctl->ioctl_code, buf);
 			if (retval == -ENOIOCTLCMD)
 				retval = -ENOTTY;
 		}

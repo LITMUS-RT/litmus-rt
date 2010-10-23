@@ -350,7 +350,7 @@ static void prot_queue_add(struct ubi_device *ubi, struct ubi_wl_entry *e)
  * @max: highest possible erase counter
  *
  * This function looks for a wear leveling entry with erase counter closest to
- * @max and less then @max.
+ * @max and less than @max.
  */
 static struct ubi_wl_entry *find_wl_entry(struct rb_root *root, int max)
 {
@@ -1212,7 +1212,8 @@ int ubi_wl_scrub_peb(struct ubi_device *ubi, int pnum)
 retry:
 	spin_lock(&ubi->wl_lock);
 	e = ubi->lookuptbl[pnum];
-	if (e == ubi->move_from || in_wl_tree(e, &ubi->scrub)) {
+	if (e == ubi->move_from || in_wl_tree(e, &ubi->scrub) ||
+				   in_wl_tree(e, &ubi->erroneous)) {
 		spin_unlock(&ubi->wl_lock);
 		return 0;
 	}

@@ -148,12 +148,14 @@ void ima_counts_get(struct file *file)
 	struct ima_iint_cache *iint;
 	int rc;
 
-	if (!ima_initialized || !S_ISREG(inode->i_mode))
+	if (!iint_initialized || !S_ISREG(inode->i_mode))
 		return;
 	iint = ima_iint_find_get(inode);
 	if (!iint)
 		return;
 	mutex_lock(&iint->mutex);
+	if (!ima_initialized)
+		goto out;
 	rc = ima_must_measure(iint, inode, MAY_READ, FILE_CHECK);
 	if (rc < 0)
 		goto out;
@@ -195,7 +197,7 @@ static void ima_dec_counts(struct ima_iint_cache *iint, struct inode *inode,
 	     (iint->writecount < 0)) &&
 	    !ima_limit_imbalance(file)) {
 		printk(KERN_INFO "%s: open/free imbalance (r:%ld w:%ld o:%ld)\n",
-		       __FUNCTION__, iint->readcount, iint->writecount,
+		       __func__, iint->readcount, iint->writecount,
 		       iint->opencount);
 		dump_stack();
 	}
@@ -213,7 +215,7 @@ void ima_file_free(struct file *file)
 	struct inode *inode = file->f_dentry->d_inode;
 	struct ima_iint_cache *iint;
 
-	if (!ima_initialized || !S_ISREG(inode->i_mode))
+	if (!iint_initialized || !S_ISREG(inode->i_mode))
 		return;
 	iint = ima_iint_find_get(inode);
 	if (!iint)
@@ -230,7 +232,7 @@ static int process_measurement(struct file *file, const unsigned char *filename,
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct ima_iint_cache *iint;
-	int rc;
+	int rc = 0;
 
 	if (!ima_initialized || !S_ISREG(inode->i_mode))
 		return 0;

@@ -21,6 +21,7 @@
 #include <linux/hdreg.h>
 #include <linux/async.h>
 #include <linux/mutex.h>
+#include <linux/smp_lock.h>
 
 #include <asm/ccwdev.h>
 #include <asm/ebcdic.h>
@@ -65,6 +66,7 @@ static void dasd_device_tasklet(struct dasd_device *);
 static void dasd_block_tasklet(struct dasd_block *);
 static void do_kick_device(struct work_struct *);
 static void do_restore_device(struct work_struct *);
+static void do_reload_device(struct work_struct *);
 static void dasd_return_cqr_cb(struct dasd_ccw_req *, void *);
 static void dasd_device_timeout(unsigned long);
 static void dasd_block_timeout(unsigned long);
@@ -115,6 +117,7 @@ struct dasd_device *dasd_alloc_device(void)
 	device->timer.data = (unsigned long) device;
 	INIT_WORK(&device->kick_work, do_kick_device);
 	INIT_WORK(&device->restore_device, do_restore_device);
+	INIT_WORK(&device->reload_device, do_reload_device);
 	device->state = DASD_STATE_NEW;
 	device->target = DASD_STATE_NEW;
 	mutex_init(&device->state_mutex);
@@ -519,6 +522,26 @@ void dasd_kick_device(struct dasd_device *device)
 	/* queue call to dasd_kick_device to the kernel event daemon. */
 	schedule_work(&device->kick_work);
 }
+
+/*
+ * dasd_reload_device will schedule a call do do_reload_device to the kernel
+ * event daemon.
+ */
+static void do_reload_device(struct work_struct *work)
+{
+	struct dasd_device *device = container_of(work, struct dasd_device,
+						  reload_device);
+	device->discipline->reload(device);
+	dasd_put_device(device);
+}
+
+void dasd_reload_device(struct dasd_device *device)
+{
+	dasd_get_device(device);
+	/* queue call to dasd_reload_device to the kernel event daemon. */
+	schedule_work(&device->reload_device);
+}
+EXPORT_SYMBOL(dasd_reload_device);
 
 /*
  * dasd_restore_device will schedule a call do do_restore_device to the kernel
@@ -1164,6 +1187,29 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 	dasd_schedule_device_bh(device);
 }
 
+enum uc_todo dasd_generic_uc_handler(struct ccw_device *cdev, struct irb *irb)
+{
+	struct dasd_device *device;
+
+	device = dasd_device_from_cdev_locked(cdev);
+
+	if (IS_ERR(device))
+		goto out;
+	if (test_bit(DASD_FLAG_OFFLINE, &device->flags) ||
+	   device->state != device->target ||
+	   !device->discipline->handle_unsolicited_interrupt){
+		dasd_put_device(device);
+		goto out;
+	}
+
+	dasd_device_clear_timer(device);
+	device->discipline->handle_unsolicited_interrupt(device, irb);
+	dasd_put_device(device);
+out:
+	return UC_TODO_RETRY;
+}
+EXPORT_SYMBOL_GPL(dasd_generic_uc_handler);
+
 /*
  * If we have an error on a dasd_block layer request then we cancel
  * and return all further requests from the same dasd_block as well.
@@ -1279,14 +1325,14 @@ static void __dasd_device_check_expire(struct dasd_device *device)
 		if (device->discipline->term_IO(cqr) != 0) {
 			/* Hmpf, try again in 5 sec */
 			dev_err(&device->cdev->dev,
-				"cqr %p timed out (%is) but cannot be "
+				"cqr %p timed out (%lus) but cannot be "
 				"ended, retrying in 5 s\n",
 				cqr, (cqr->expires/HZ));
 			cqr->expires += 5*HZ;
 			dasd_device_set_timer(device, 5*HZ);
 		} else {
 			dev_err(&device->cdev->dev,
-				"cqr %p timed out (%is), %i retries "
+				"cqr %p timed out (%lus), %i retries "
 				"remaining\n", cqr, (cqr->expires/HZ),
 				cqr->retries);
 		}
@@ -2151,7 +2197,7 @@ static void dasd_setup_queue(struct dasd_block *block)
 	 */
 	blk_queue_max_segment_size(block->request_queue, PAGE_SIZE);
 	blk_queue_segment_boundary(block->request_queue, PAGE_SIZE - 1);
-	blk_queue_ordered(block->request_queue, QUEUE_ORDERED_DRAIN, NULL);
+	blk_queue_ordered(block->request_queue, QUEUE_ORDERED_DRAIN);
 }
 
 /*
@@ -2190,6 +2236,7 @@ static int dasd_open(struct block_device *bdev, fmode_t mode)
 	if (!block)
 		return -ENODEV;
 
+	lock_kernel();
 	base = block->base;
 	atomic_inc(&block->open_count);
 	if (test_bit(DASD_FLAG_OFFLINE, &base->flags)) {
@@ -2224,12 +2271,14 @@ static int dasd_open(struct block_device *bdev, fmode_t mode)
 		goto out;
 	}
 
+	unlock_kernel();
 	return 0;
 
 out:
 	module_put(base->discipline->owner);
 unlock:
 	atomic_dec(&block->open_count);
+	unlock_kernel();
 	return rc;
 }
 
@@ -2237,8 +2286,10 @@ static int dasd_release(struct gendisk *disk, fmode_t mode)
 {
 	struct dasd_block *block = disk->private_data;
 
+	lock_kernel();
 	atomic_dec(&block->open_count);
 	module_put(block->base->discipline->owner);
+	unlock_kernel();
 	return 0;
 }
 

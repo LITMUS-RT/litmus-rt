@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2009 Analog Devices Inc.
+ * Copyright 2004-2010 Analog Devices Inc.
  *
  * Licensed under the GPL-2 or later.
  */
@@ -864,6 +864,13 @@ void __init setup_arch(char **cmdline_p)
 	bfin_write_EBIU_MODE(CONFIG_EBIU_MODEVAL);
 	bfin_write_EBIU_FCTL(CONFIG_EBIU_FCTLVAL);
 #endif
+#ifdef CONFIG_BFIN_HYSTERESIS_CONTROL
+	bfin_write_PORTF_HYSTERISIS(HYST_PORTF_0_15);
+	bfin_write_PORTG_HYSTERISIS(HYST_PORTG_0_15);
+	bfin_write_PORTH_HYSTERISIS(HYST_PORTH_0_15);
+	bfin_write_MISCPORT_HYSTERISIS((bfin_read_MISCPORT_HYSTERISIS() &
+					~HYST_NONEGPIO_MASK) | HYST_NONEGPIO);
+#endif
 
 	cclk = get_cclk();
 	sclk = get_sclk();
@@ -925,7 +932,7 @@ void __init setup_arch(char **cmdline_p)
 	else if (_bfin_swrst & RESET_SOFTWARE)
 		printk(KERN_NOTICE "Reset caused by Software reset\n");
 
-	printk(KERN_INFO "Blackfin support (C) 2004-2009 Analog Devices, Inc.\n");
+	printk(KERN_INFO "Blackfin support (C) 2004-2010 Analog Devices, Inc.\n");
 	if (bfin_compiled_revid() == 0xffff)
 		printk(KERN_INFO "Compiled for ADSP-%s Rev any, running on 0.%d\n", CPU, bfin_revid());
 	else if (bfin_compiled_revid() == -1)

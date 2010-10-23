@@ -47,7 +47,6 @@
 #include <linux/spinlock.h>
 #include <linux/kref.h>
 #include <linux/usb.h>
-#include <linux/smp_lock.h>
 #include <linux/vmalloc.h>
 
 #include "sisusb.h"
@@ -2416,14 +2415,11 @@ sisusb_open(struct inode *inode, struct file *file)
 	struct usb_interface *interface;
 	int subminor = iminor(inode);
 
-	lock_kernel();
 	if (!(interface = usb_find_interface(&sisusb_driver, subminor))) {
-		unlock_kernel();
 		return -ENODEV;
 	}
 
 	if (!(sisusb = usb_get_intfdata(interface))) {
-		unlock_kernel();
 		return -ENODEV;
 	}
 
@@ -2431,28 +2427,25 @@ sisusb_open(struct inode *inode, struct file *file)
 
 	if (!sisusb->present || !sisusb->ready) {
 		mutex_unlock(&sisusb->lock);
-		unlock_kernel();
 		return -ENODEV;
 	}
 
 	if (sisusb->isopen) {
 		mutex_unlock(&sisusb->lock);
-		unlock_kernel();
 		return -EBUSY;
 	}
 
 	if (!sisusb->devinit) {
-		if (sisusb->sisusb_dev->speed == USB_SPEED_HIGH) {
+		if (sisusb->sisusb_dev->speed == USB_SPEED_HIGH ||
+		    sisusb->sisusb_dev->speed == USB_SPEED_SUPER) {
 			if (sisusb_init_gfxdevice(sisusb, 0)) {
 				mutex_unlock(&sisusb->lock);
 				dev_err(&sisusb->sisusb_dev->dev, "Failed to initialize device\n");
-				unlock_kernel();
 				return -EIO;
 			}
 		} else {
 			mutex_unlock(&sisusb->lock);
 			dev_err(&sisusb->sisusb_dev->dev, "Device not attached to USB 2.0 hub\n");
-			unlock_kernel();
 			return -EIO;
 		}
 	}
@@ -2465,7 +2458,6 @@ sisusb_open(struct inode *inode, struct file *file)
 	file->private_data = sisusb;
 
 	mutex_unlock(&sisusb->lock);
-	unlock_kernel();
 
 	return 0;
 }
@@ -2495,7 +2487,7 @@ sisusb_release(struct inode *inode, struct file *file)
 {
 	struct sisusb_usb_data *sisusb;
 
-	if (!(sisusb = (struct sisusb_usb_data *)file->private_data))
+	if (!(sisusb = file->private_data))
 		return -ENODEV;
 
 	mutex_lock(&sisusb->lock);
@@ -2527,7 +2519,7 @@ sisusb_read(struct file *file, char __user *buffer, size_t count, loff_t *ppos)
 	u16 buf16;
 	u32 buf32, address;
 
-	if (!(sisusb = (struct sisusb_usb_data *)file->private_data))
+	if (!(sisusb = file->private_data))
 		return -ENODEV;
 
 	mutex_lock(&sisusb->lock);
@@ -2669,7 +2661,7 @@ sisusb_write(struct file *file, const char __user *buffer, size_t count,
 	u16 buf16;
 	u32 buf32, address;
 
-	if (!(sisusb = (struct sisusb_usb_data *)file->private_data))
+	if (!(sisusb = file->private_data))
 		return -ENODEV;
 
 	mutex_lock(&sisusb->lock);
@@ -2812,7 +2804,7 @@ sisusb_lseek(struct file *file, loff_t offset, int orig)
 	struct sisusb_usb_data *sisusb;
 	loff_t ret;
 
-	if (!(sisusb = (struct sisusb_usb_data *)file->private_data))
+	if (!(sisusb = file->private_data))
 		return -ENODEV;
 
 	mutex_lock(&sisusb->lock);
@@ -2974,13 +2966,12 @@ sisusb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct sisusb_usb_data *sisusb;
 	struct sisusb_info x;
 	struct sisusb_command y;
-	int	retval = 0;
+	long retval = 0;
 	u32 __user *argp = (u32 __user *)arg;
 
-	if (!(sisusb = (struct sisusb_usb_data *)file->private_data))
+	if (!(sisusb = file->private_data))
 		return -ENODEV;
 
-	lock_kernel();
 	mutex_lock(&sisusb->lock);
 
 	/* Sanity check */
@@ -3039,7 +3030,6 @@ sisusb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 err_out:
 	mutex_unlock(&sisusb->lock);
-	unlock_kernel();
 	return retval;
 }
 
@@ -3177,7 +3167,7 @@ static int sisusb_probe(struct usb_interface *intf,
 
 	sisusb->present = 1;
 
-	if (dev->speed == USB_SPEED_HIGH) {
+	if (dev->speed == USB_SPEED_HIGH || dev->speed == USB_SPEED_SUPER) {
 		int initscreen = 1;
 #ifdef INCL_SISUSB_CON
 		if (sisusb_first_vc > 0 &&

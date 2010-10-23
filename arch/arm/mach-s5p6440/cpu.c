@@ -19,6 +19,7 @@
 #include <linux/sysdev.h>
 #include <linux/serial_core.h>
 #include <linux/platform_device.h>
+#include <linux/sched.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -37,6 +38,7 @@
 #include <plat/devs.h>
 #include <plat/clock.h>
 #include <plat/s5p6440.h>
+#include <plat/adc-core.h>
 
 static void s5p6440_idle(void)
 {
@@ -61,6 +63,7 @@ static void s5p6440_idle(void)
 void __init s5p6440_map_io(void)
 {
 	/* initialize any device information early */
+	s3c_adc_setname("s3c64xx-adc");
 }
 
 void __init s5p6440_init_clocks(int xtal)
@@ -88,7 +91,7 @@ void __init s5p6440_init_irq(void)
 	s5p_init_irq(vic, ARRAY_SIZE(vic));
 }
 
-static struct sysdev_class s5p6440_sysclass = {
+struct sysdev_class s5p6440_sysclass = {
 	.name	= "s5p6440-core",
 };
 

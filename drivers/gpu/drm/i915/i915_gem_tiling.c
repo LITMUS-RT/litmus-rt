@@ -275,12 +275,17 @@ i915_gem_set_tiling(struct drm_device *dev, void *data,
 
 	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
 	if (obj == NULL)
-		return -EINVAL;
+		return -ENOENT;
 	obj_priv = to_intel_bo(obj);
 
 	if (!i915_tiling_ok(dev, args->stride, obj->size, args->tiling_mode)) {
 		drm_gem_object_unreference_unlocked(obj);
 		return -EINVAL;
+	}
+
+	if (obj_priv->pin_count) {
+		drm_gem_object_unreference_unlocked(obj);
+		return -EBUSY;
 	}
 
 	if (args->tiling_mode == I915_TILING_NONE) {
@@ -328,8 +333,6 @@ i915_gem_set_tiling(struct drm_device *dev, void *data,
 			i915_gem_release_mmap(obj);
 
 		if (ret != 0) {
-			WARN(ret != -ERESTARTSYS,
-			     "failed to reset object for tiling switch");
 			args->tiling_mode = obj_priv->tiling_mode;
 			args->stride = obj_priv->stride;
 			goto err;
@@ -359,7 +362,7 @@ i915_gem_get_tiling(struct drm_device *dev, void *data,
 
 	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
 	if (obj == NULL)
-		return -EINVAL;
+		return -ENOENT;
 	obj_priv = to_intel_bo(obj);
 
 	mutex_lock(&dev->struct_mutex);

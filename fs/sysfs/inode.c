@@ -117,13 +117,13 @@ int sysfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	if (error)
 		goto out;
 
-	iattr->ia_valid &= ~ATTR_SIZE; /* ignore size changes */
-
-	error = inode_setattr(inode, iattr);
+	error = sysfs_sd_setattr(sd, iattr);
 	if (error)
 		goto out;
 
-	error = sysfs_sd_setattr(sd, iattr);
+	/* this ignores size changes */
+	setattr_copy(inode, iattr);
+
 out:
 	mutex_unlock(&sysfs_mutex);
 	return error;
@@ -312,19 +312,19 @@ struct inode * sysfs_get_inode(struct super_block *sb, struct sysfs_dirent *sd)
  * The sysfs_dirent serves as both an inode and a directory entry for sysfs.
  * To prevent the sysfs inode numbers from being freed prematurely we take a
  * reference to sysfs_dirent from the sysfs inode.  A
- * super_operations.delete_inode() implementation is needed to drop that
+ * super_operations.evict_inode() implementation is needed to drop that
  * reference upon inode destruction.
  */
-void sysfs_delete_inode(struct inode *inode)
+void sysfs_evict_inode(struct inode *inode)
 {
 	struct sysfs_dirent *sd  = inode->i_private;
 
 	truncate_inode_pages(&inode->i_data, 0);
-	clear_inode(inode);
+	end_writeback(inode);
 	sysfs_put(sd);
 }
 
-int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const char *name)
+int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const void *ns, const char *name)
 {
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
@@ -334,7 +334,9 @@ int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const char *name)
 
 	sysfs_addrm_start(&acxt, dir_sd);
 
-	sd = sysfs_find_dirent(dir_sd, name);
+	sd = sysfs_find_dirent(dir_sd, ns, name);
+	if (sd && (sd->s_ns != ns))
+		sd = NULL;
 	if (sd)
 		sysfs_remove_one(&acxt, sd);
 

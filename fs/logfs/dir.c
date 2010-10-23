@@ -12,7 +12,7 @@
  * Atomic dir operations
  *
  * Directory operations are by default not atomic.  Dentries and Inodes are
- * created/removed/altered in seperate operations.  Therefore we need to do
+ * created/removed/altered in separate operations.  Therefore we need to do
  * a small amount of journaling.
  *
  * Create, link, mkdir, mknod and symlink all share the same function to do
@@ -434,8 +434,11 @@ static int __logfs_create(struct inode *dir, struct dentry *dentry,
 	int ret;
 
 	ta = kzalloc(sizeof(*ta), GFP_KERNEL);
-	if (!ta)
+	if (!ta) {
+		inode->i_nlink--;
+		iput(inode);
 		return -ENOMEM;
+	}
 
 	ta->state = CREATE_1;
 	ta->ino = inode->i_ino;
@@ -821,7 +824,7 @@ const struct inode_operations logfs_dir_iops = {
 };
 const struct file_operations logfs_dir_fops = {
 	.fsync		= logfs_fsync,
-	.ioctl		= logfs_ioctl,
+	.unlocked_ioctl	= logfs_ioctl,
 	.readdir	= logfs_readdir,
 	.read		= generic_read_dir,
 };

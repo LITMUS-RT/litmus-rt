@@ -574,7 +574,7 @@ static inline int sgiseeq_reset(struct net_device *dev)
 	if (err)
 		return err;
 
-	dev->trans_start = jiffies;
+	dev->trans_start = jiffies; /* prevent tx timeout */
 	netif_wake_queue(dev);
 
 	return 0;
@@ -638,8 +638,6 @@ static int sgiseeq_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (!(hregs->tx_ctrl & HPC3_ETXCTRL_ACTIVE))
 		kick_tx(dev, sp, hregs);
 
-	dev->trans_start = jiffies;
-
 	if (!TX_BUFFS_AVAIL(sp))
 		netif_stop_queue(dev);
 	spin_unlock_irqrestore(&sp->tx_lock, flags);
@@ -652,7 +650,7 @@ static void timeout(struct net_device *dev)
 	printk(KERN_NOTICE "%s: transmit timed out, resetting\n", dev->name);
 	sgiseeq_reset(dev);
 
-	dev->trans_start = jiffies;
+	dev->trans_start = jiffies; /* prevent tx timeout */
 	netif_wake_queue(dev);
 }
 
@@ -806,7 +804,7 @@ static int __devinit sgiseeq_probe(struct platform_device *pdev)
 err_out_free_page:
 	free_page((unsigned long) sp->srings);
 err_out_free_dev:
-	kfree(dev);
+	free_netdev(dev);
 
 err_out:
 	return err;

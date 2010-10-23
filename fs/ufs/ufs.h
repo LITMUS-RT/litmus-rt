@@ -108,7 +108,7 @@ extern struct inode * ufs_new_inode (struct inode *, int);
 extern struct inode *ufs_iget(struct super_block *, unsigned long);
 extern int ufs_write_inode (struct inode *, struct writeback_control *);
 extern int ufs_sync_inode (struct inode *);
-extern void ufs_delete_inode (struct inode *);
+extern void ufs_evict_inode (struct inode *);
 extern struct buffer_head * ufs_bread (struct inode *, unsigned, int, int *);
 extern int ufs_getfrag_block (struct inode *inode, sector_t fragment, struct buffer_head *bh_result, int create);
 
@@ -122,9 +122,11 @@ extern void ufs_panic (struct super_block *, const char *, const char *, ...) __
 
 /* symlink.c */
 extern const struct inode_operations ufs_fast_symlink_inode_operations;
+extern const struct inode_operations ufs_symlink_inode_operations;
 
 /* truncate.c */
 extern int ufs_truncate (struct inode *, loff_t);
+extern int ufs_setattr(struct dentry *dentry, struct iattr *attr);
 
 static inline struct ufs_sb_info *UFS_SB(struct super_block *sb)
 {

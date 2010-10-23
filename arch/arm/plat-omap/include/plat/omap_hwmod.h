@@ -1,7 +1,7 @@
 /*
  * omap_hwmod macros, structures
  *
- * Copyright (C) 2009 Nokia Corporation
+ * Copyright (C) 2009-2010 Nokia Corporation
  * Paul Walmsley
  *
  * Created in collaboration with (alphabetical order): Benoît Cousson,
@@ -176,9 +176,8 @@ struct omap_hwmod_addr_space {
 #define OCP_USER_SDMA			(1 << 1)
 
 /* omap_hwmod_ocp_if.flags bits */
-#define OCPIF_HAS_IDLEST		(1 << 0)
-#define OCPIF_SWSUP_IDLE		(1 << 1)
-#define OCPIF_CAN_BURST			(1 << 2)
+#define OCPIF_SWSUP_IDLE		(1 << 0)
+#define OCPIF_CAN_BURST			(1 << 1)
 
 /**
  * struct omap_hwmod_ocp_if - OCP interface data
@@ -327,14 +326,12 @@ struct omap_hwmod_omap2_prcm {
 
 /**
  * struct omap_hwmod_omap4_prcm - OMAP4-specific PRCM data
- * @module_offs: PRCM submodule offset from the start of the PRM/CM1/CM2
- * @device_offs: device register offset from @module_offs
+ * @clkctrl_reg: PRCM address of the clock control register
  * @submodule_wkdep_bit: bit shift of the WKDEP range
  */
 struct omap_hwmod_omap4_prcm {
-	u32 module_offs;
-	u16 device_offs;
-	u8 submodule_wkdep_bit;
+	void __iomem	*clkctrl_reg;
+	u8		submodule_wkdep_bit;
 };
 
 
@@ -353,6 +350,8 @@ struct omap_hwmod_omap4_prcm {
  *     when module is enabled, rather than the default, which is to
  *     enable autoidle
  * HWMOD_SET_DEFAULT_CLOCKACT: program CLOCKACTIVITY bits at startup
+ * HWMOD_NO_IDLEST : this module does not have idle status - this is the case
+ *     only for few initiator modules on OMAP2 & 3.
  */
 #define HWMOD_SWSUP_SIDLE			(1 << 0)
 #define HWMOD_SWSUP_MSTANDBY			(1 << 1)
@@ -360,6 +359,7 @@ struct omap_hwmod_omap4_prcm {
 #define HWMOD_INIT_NO_IDLE			(1 << 3)
 #define HWMOD_NO_OCP_AUTOIDLE			(1 << 4)
 #define HWMOD_SET_DEFAULT_CLOCKACT		(1 << 5)
+#define HWMOD_NO_IDLEST				(1 << 6)
 
 /*
  * omap_hwmod._int_flags definitions
@@ -419,7 +419,7 @@ struct omap_hwmod_class {
  * @slaves: ptr to array of OCP ifs that this hwmod can respond on
  * @dev_attr: arbitrary device attributes that can be passed to the driver
  * @_sysc_cache: internal-use hwmod flags
- * @_rt_va: cached register target start address (internal use)
+ * @_mpu_rt_va: cached register target start address (internal use)
  * @_mpu_port_index: cached MPU register target slave ID (internal use)
  * @msuspendmux_reg_id: CONTROL_MSUSPENDMUX register ID (1-6)
  * @msuspendmux_shift: CONTROL_MSUSPENDMUX register bit shift
@@ -460,7 +460,7 @@ struct omap_hwmod {
 	struct omap_hwmod_ocp_if	**slaves;  /* connect to *_TA */
 	void				*dev_attr;
 	u32				_sysc_cache;
-	void __iomem			*_rt_va;
+	void __iomem			*_mpu_rt_va;
 	struct list_head		node;
 	u16				flags;
 	u8				_mpu_port_index;
@@ -482,11 +482,14 @@ int omap_hwmod_init(struct omap_hwmod **ohs);
 int omap_hwmod_register(struct omap_hwmod *oh);
 int omap_hwmod_unregister(struct omap_hwmod *oh);
 struct omap_hwmod *omap_hwmod_lookup(const char *name);
-int omap_hwmod_for_each(int (*fn)(struct omap_hwmod *oh));
-int omap_hwmod_late_init(void);
+int omap_hwmod_for_each(int (*fn)(struct omap_hwmod *oh, void *data),
+			void *data);
+int omap_hwmod_late_init(u8 skip_setup_idle);
 
 int omap_hwmod_enable(struct omap_hwmod *oh);
+int _omap_hwmod_enable(struct omap_hwmod *oh);
 int omap_hwmod_idle(struct omap_hwmod *oh);
+int _omap_hwmod_idle(struct omap_hwmod *oh);
 int omap_hwmod_shutdown(struct omap_hwmod *oh);
 
 int omap_hwmod_enable_clocks(struct omap_hwmod *oh);
@@ -504,6 +507,7 @@ int omap_hwmod_count_resources(struct omap_hwmod *oh);
 int omap_hwmod_fill_resources(struct omap_hwmod *oh, struct resource *res);
 
 struct powerdomain *omap_hwmod_get_pwrdm(struct omap_hwmod *oh);
+void __iomem *omap_hwmod_get_mpu_rt_va(struct omap_hwmod *oh);
 
 int omap_hwmod_add_initiator_dep(struct omap_hwmod *oh,
 				 struct omap_hwmod *init_oh);

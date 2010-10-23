@@ -34,7 +34,7 @@
 #include <linux/irq.h>
 #include <linux/pda_power.h>
 #include <linux/power_supply.h>
-#include <linux/wm97xx_batt.h>
+#include <linux/wm97xx.h>
 #include <linux/mtd/physmap.h>
 #include <linux/usb/gpio_vbus.h>
 #include <linux/regulator/max1586.h>
@@ -426,6 +426,7 @@ struct gpio_vbus_mach_info gpio_vbus_data = {
  * to give the card a chance to fully insert/eject.
  */
 static struct pxamci_platform_data mioa701_mci_info = {
+	.detect_delay_ms	= 250,
 	.ocr_mask 		= MMC_VDD_32_33 | MMC_VDD_33_34,
 	.gpio_card_detect	= GPIO15_SDIO_INSERT,
 	.gpio_card_ro		= GPIO78_SDIO_RO,
@@ -635,7 +636,7 @@ static struct platform_device power_dev = {
 	},
 };
 
-static struct wm97xx_batt_info mioa701_battery_data = {
+static struct wm97xx_batt_pdata mioa701_battery_data = {
 	.batt_aux	= WM97XX_AUX_ID1,
 	.temp_aux	= -1,
 	.charge_gpio	= -1,
@@ -645,6 +646,10 @@ static struct wm97xx_batt_info mioa701_battery_data = {
 	.batt_div	= 1,
 	.batt_mult	= 1,
 	.batt_name	= "mioa701_battery",
+};
+
+static struct wm97xx_pdata mioa701_wm97xx_pdata = {
+	.batt_pdata	= &mioa701_battery_data,
 };
 
 /*
@@ -696,7 +701,7 @@ static struct i2c_board_info __initdata mioa701_pi2c_devices[] = {
 };
 
 /* Board I2C devices. */
-static struct i2c_board_info __initdata mioa701_i2c_devices[] = {
+static struct i2c_board_info mioa701_i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("mt9m111", 0x5d),
 	},
@@ -715,6 +720,7 @@ struct i2c_pxa_platform_data i2c_pdata = {
 
 static pxa2xx_audio_ops_t mioa701_ac97_info = {
 	.reset_gpio = 95,
+	.codec_pdata = { &mioa701_wm97xx_pdata, },
 };
 
 /*
@@ -791,10 +797,8 @@ static void __init mioa701_machine_init(void)
 	mio_gpio_request(ARRAY_AND_SIZE(global_gpios));
 	bootstrap_init();
 	set_pxa_fb_info(&mioa701_pxafb_info);
-	mioa701_mci_info.detect_delay = msecs_to_jiffies(250);
 	pxa_set_mci_info(&mioa701_mci_info);
 	pxa_set_keypad_info(&mioa701_keypad_info);
-	wm97xx_bat_set_pdata(&mioa701_battery_data);
 	pxa_set_udc_info(&mioa701_udc_info);
 	pxa_set_ac97_info(&mioa701_ac97_info);
 	pm_power_off = mioa701_poweroff;

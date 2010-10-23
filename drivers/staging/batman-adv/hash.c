@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2009 B.A.T.M.A.N. contributors:
+ * Copyright (C) 2006-2010 B.A.T.M.A.N. contributors:
  *
  * Simon Wunderlich, Marek Lindner
  *
@@ -23,7 +23,7 @@
 #include "hash.h"
 
 /* clears the hash */
-void hash_init(struct hashtable_t *hash)
+static void hash_init(struct hashtable_t *hash)
 {
 	int i;
 

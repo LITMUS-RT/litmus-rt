@@ -310,7 +310,7 @@ static int __devexit wl1251_spi_remove(struct spi_device *spi)
 
 static struct spi_driver wl1251_spi_driver = {
 	.driver = {
-		.name		= "wl1251",
+		.name		= DRIVER_NAME,
 		.bus		= &spi_bus_type,
 		.owner		= THIS_MODULE,
 	},
@@ -345,3 +345,4 @@ module_exit(wl1251_spi_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kalle Valo <kalle.valo@nokia.com>");
+MODULE_ALIAS("spi:wl1251");

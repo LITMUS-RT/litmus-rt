@@ -138,10 +138,14 @@ static int logfs_sb_set(struct super_block *sb, void *_super)
 	sb->s_fs_info = super;
 	sb->s_mtd = super->s_mtd;
 	sb->s_bdev = super->s_bdev;
+#ifdef CONFIG_BLOCK
 	if (sb->s_bdev)
 		sb->s_bdi = &bdev_get_queue(sb->s_bdev)->backing_dev_info;
+#endif
+#ifdef CONFIG_MTD
 	if (sb->s_mtd)
 		sb->s_bdi = sb->s_mtd->backing_dev_info;
+#endif
 	return 0;
 }
 
@@ -338,24 +342,27 @@ static int logfs_get_sb_final(struct super_block *sb, struct vfsmount *mnt)
 		goto fail;
 	}
 
+	/* at that point we know that ->put_super() will be called */
 	super->s_erase_page = alloc_pages(GFP_KERNEL, 0);
 	if (!super->s_erase_page)
-		goto fail;
+		return -ENOMEM;
 	memset(page_address(super->s_erase_page), 0xFF, PAGE_SIZE);
 
 	/* FIXME: check for read-only mounts */
 	err = logfs_make_writeable(sb);
-	if (err)
-		goto fail1;
+	if (err) {
+		__free_page(super->s_erase_page);
+		return err;
+	}
 
 	log_super("LogFS: Finished mounting\n");
 	simple_set_mnt(mnt, sb);
 	return 0;
 
-fail1:
-	__free_page(super->s_erase_page);
 fail:
-	iput(logfs_super(sb)->s_master_inode);
+	iput(super->s_master_inode);
+	iput(super->s_segfile_inode);
+	iput(super->s_mapping_inode);
 	return -EIO;
 }
 
@@ -382,7 +389,7 @@ static struct page *find_super_block(struct super_block *sb)
 	if (!first || IS_ERR(first))
 		return NULL;
 	last = super->s_devops->find_last_sb(sb, &super->s_sb_ofs[1]);
-	if (!last || IS_ERR(first)) {
+	if (!last || IS_ERR(last)) {
 		page_cache_release(first);
 		return NULL;
 	}
@@ -413,7 +420,7 @@ static int __logfs_read_sb(struct super_block *sb)
 
 	page = find_super_block(sb);
 	if (!page)
-		return -EIO;
+		return -EINVAL;
 
 	ds = page_address(page);
 	super->s_size = be64_to_cpu(ds->ds_filesystem_size);
@@ -576,10 +583,14 @@ int logfs_get_sb_device(struct file_system_type *type, int flags,
 	sb->s_flags |= MS_ACTIVE;
 	err = logfs_get_sb_final(sb, mnt);
 	if (err)
-		goto err1;
-	return 0;
+		deactivate_locked_super(sb);
+	return err;
 
 err1:
+	/* no ->s_root, no ->put_super() */
+	iput(super->s_master_inode);
+	iput(super->s_segfile_inode);
+	iput(super->s_mapping_inode);
 	deactivate_locked_super(sb);
 	return err;
 err0:

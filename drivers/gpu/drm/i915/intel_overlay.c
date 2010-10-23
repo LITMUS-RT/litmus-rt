@@ -25,6 +25,8 @@
  *
  * Derived from Xorg ddx, xf86-video-intel, src/i830_video.c
  */
+
+#include <linux/seq_file.h>
 #include "drmP.h"
 #include "drm.h"
 #include "i915_drm.h"
@@ -65,7 +67,7 @@
 #define OCMD_YUV_410_PLANAR	(0xe<<10) /* also 411 */
 #define OCMD_TVSYNCFLIP_PARITY	(0x1<<9)
 #define OCMD_TVSYNCFLIP_ENABLE	(0x1<<7)
-#define OCMD_BUF_TYPE_MASK	(Ox1<<5)
+#define OCMD_BUF_TYPE_MASK	(0x1<<5)
 #define OCMD_BUF_TYPE_FRAME	(0x0<<5)
 #define OCMD_BUF_TYPE_FIELD	(0x1<<5)
 #define OCMD_TEST_MODE		(0x1<<4)
@@ -185,7 +187,8 @@ static struct overlay_registers *intel_overlay_map_regs_atomic(struct intel_over
 
 	if (OVERLAY_NONPHYSICAL(overlay->dev)) {
 		regs = io_mapping_map_atomic_wc(dev_priv->mm.gtt_mapping,
-				overlay->reg_bo->gtt_offset);
+						overlay->reg_bo->gtt_offset,
+						KM_USER0);
 
 		if (!regs) {
 			DRM_ERROR("failed to map overlay regs in GTT\n");
@@ -200,7 +203,7 @@ static struct overlay_registers *intel_overlay_map_regs_atomic(struct intel_over
 static void intel_overlay_unmap_regs_atomic(struct intel_overlay *overlay)
 {
 	if (OVERLAY_NONPHYSICAL(overlay->dev))
-		io_mapping_unmap_atomic(overlay->virt_addr);
+		io_mapping_unmap_atomic(overlay->virt_addr, KM_USER0);
 
 	overlay->virt_addr = NULL;
 
@@ -211,9 +214,8 @@ static void intel_overlay_unmap_regs_atomic(struct intel_overlay *overlay)
 static int intel_overlay_on(struct intel_overlay *overlay)
 {
 	struct drm_device *dev = overlay->dev;
-        drm_i915_private_t *dev_priv = dev->dev_private;
 	int ret;
-	RING_LOCALS;
+	drm_i915_private_t *dev_priv = dev->dev_private;
 
 	BUG_ON(overlay->active);
 
@@ -227,11 +229,13 @@ static int intel_overlay_on(struct intel_overlay *overlay)
 	OUT_RING(MI_NOOP);
 	ADVANCE_LP_RING();
 
-	overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+	overlay->last_flip_req =
+		i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 	if (overlay->last_flip_req == 0)
 		return -ENOMEM;
 
-	ret = i915_do_wait_request(dev, overlay->last_flip_req, 1);
+	ret = i915_do_wait_request(dev,
+			overlay->last_flip_req, 1, &dev_priv->render_ring);
 	if (ret != 0)
 		return ret;
 
@@ -248,7 +252,6 @@ static void intel_overlay_continue(struct intel_overlay *overlay,
         drm_i915_private_t *dev_priv = dev->dev_private;
 	u32 flip_addr = overlay->flip_addr;
 	u32 tmp;
-	RING_LOCALS;
 
 	BUG_ON(!overlay->active);
 
@@ -265,7 +268,8 @@ static void intel_overlay_continue(struct intel_overlay *overlay,
 	OUT_RING(flip_addr);
         ADVANCE_LP_RING();
 
-	overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+	overlay->last_flip_req =
+		i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 }
 
 static int intel_overlay_wait_flip(struct intel_overlay *overlay)
@@ -274,10 +278,10 @@ static int intel_overlay_wait_flip(struct intel_overlay *overlay)
         drm_i915_private_t *dev_priv = dev->dev_private;
 	int ret;
 	u32 tmp;
-	RING_LOCALS;
 
 	if (overlay->last_flip_req != 0) {
-		ret = i915_do_wait_request(dev, overlay->last_flip_req, 1);
+		ret = i915_do_wait_request(dev, overlay->last_flip_req,
+				1, &dev_priv->render_ring);
 		if (ret == 0) {
 			overlay->last_flip_req = 0;
 
@@ -296,11 +300,13 @@ static int intel_overlay_wait_flip(struct intel_overlay *overlay)
         OUT_RING(MI_NOOP);
         ADVANCE_LP_RING();
 
-	overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+	overlay->last_flip_req =
+		i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 	if (overlay->last_flip_req == 0)
 		return -ENOMEM;
 
-	ret = i915_do_wait_request(dev, overlay->last_flip_req, 1);
+	ret = i915_do_wait_request(dev, overlay->last_flip_req,
+			1, &dev_priv->render_ring);
 	if (ret != 0)
 		return ret;
 
@@ -314,9 +320,8 @@ static int intel_overlay_off(struct intel_overlay *overlay)
 {
 	u32 flip_addr = overlay->flip_addr;
 	struct drm_device *dev = overlay->dev;
-        drm_i915_private_t *dev_priv = dev->dev_private;
+	drm_i915_private_t *dev_priv = dev->dev_private;
 	int ret;
-	RING_LOCALS;
 
 	BUG_ON(!overlay->active);
 
@@ -336,11 +341,13 @@ static int intel_overlay_off(struct intel_overlay *overlay)
         OUT_RING(MI_NOOP);
         ADVANCE_LP_RING();
 
-	overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+	overlay->last_flip_req =
+		i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 	if (overlay->last_flip_req == 0)
 		return -ENOMEM;
 
-	ret = i915_do_wait_request(dev, overlay->last_flip_req, 1);
+	ret = i915_do_wait_request(dev, overlay->last_flip_req,
+			1, &dev_priv->render_ring);
 	if (ret != 0)
 		return ret;
 
@@ -354,11 +361,13 @@ static int intel_overlay_off(struct intel_overlay *overlay)
         OUT_RING(MI_NOOP);
 	ADVANCE_LP_RING();
 
-	overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+	overlay->last_flip_req =
+		i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 	if (overlay->last_flip_req == 0)
 		return -ENOMEM;
 
-	ret = i915_do_wait_request(dev, overlay->last_flip_req, 1);
+	ret = i915_do_wait_request(dev, overlay->last_flip_req,
+			1, &dev_priv->render_ring);
 	if (ret != 0)
 		return ret;
 
@@ -373,7 +382,7 @@ static void intel_overlay_off_tail(struct intel_overlay *overlay)
 
 	/* never have the overlay hw on without showing a frame */
 	BUG_ON(!overlay->vid_bo);
-	obj = overlay->vid_bo->obj;
+	obj = &overlay->vid_bo->base;
 
 	i915_gem_object_unpin(obj);
 	drm_gem_object_unreference(obj);
@@ -390,28 +399,29 @@ int intel_overlay_recover_from_interrupt(struct intel_overlay *overlay,
 					 int interruptible)
 {
 	struct drm_device *dev = overlay->dev;
-        drm_i915_private_t *dev_priv = dev->dev_private;
 	struct drm_gem_object *obj;
+	drm_i915_private_t *dev_priv = dev->dev_private;
 	u32 flip_addr;
 	int ret;
-	RING_LOCALS;
 
 	if (overlay->hw_wedged == HW_WEDGED)
 		return -EIO;
 
 	if (overlay->last_flip_req == 0) {
-		overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+		overlay->last_flip_req =
+			i915_add_request(dev, NULL, 0, &dev_priv->render_ring);
 		if (overlay->last_flip_req == 0)
 			return -ENOMEM;
 	}
 
-	ret = i915_do_wait_request(dev, overlay->last_flip_req, interruptible);
+	ret = i915_do_wait_request(dev, overlay->last_flip_req,
+			interruptible, &dev_priv->render_ring);
 	if (ret != 0)
 		return ret;
 
 	switch (overlay->hw_wedged) {
 		case RELEASE_OLD_VID:
-			obj = overlay->old_vid_bo->obj;
+			obj = &overlay->old_vid_bo->base;
 			i915_gem_object_unpin(obj);
 			drm_gem_object_unreference(obj);
 			overlay->old_vid_bo = NULL;
@@ -429,12 +439,13 @@ int intel_overlay_recover_from_interrupt(struct intel_overlay *overlay,
 			OUT_RING(MI_NOOP);
 			ADVANCE_LP_RING();
 
-			overlay->last_flip_req = i915_add_request(dev, NULL, 0);
+			overlay->last_flip_req = i915_add_request(dev, NULL,
+					0, &dev_priv->render_ring);
 			if (overlay->last_flip_req == 0)
 				return -ENOMEM;
 
 			ret = i915_do_wait_request(dev, overlay->last_flip_req,
-					interruptible);
+					interruptible, &dev_priv->render_ring);
 			if (ret != 0)
 				return ret;
 
@@ -467,7 +478,7 @@ static int intel_overlay_release_old_vid(struct intel_overlay *overlay)
 	if (ret != 0)
 		return ret;
 
-	obj = overlay->old_vid_bo->obj;
+	obj = &overlay->old_vid_bo->base;
 	i915_gem_object_unpin(obj);
 	drm_gem_object_unreference(obj);
 	overlay->old_vid_bo = NULL;
@@ -950,7 +961,7 @@ static int check_overlay_src(struct drm_device *dev,
 	    || rec->src_width < N_HORIZ_Y_TAPS*4)
 		return -EINVAL;
 
-	/* check alingment constrains */
+	/* check alignment constraints */
 	switch (rec->flags & I915_OVERLAY_TYPE_MASK) {
 		case I915_OVERLAY_RGB:
 			/* not implemented */
@@ -982,7 +993,10 @@ static int check_overlay_src(struct drm_device *dev,
 		return -EINVAL;
 
 	/* stride checking */
-	stride_mask = 63;
+	if (IS_I830(dev) || IS_845G(dev))
+		stride_mask = 255;
+	else
+		stride_mask = 63;
 
 	if (rec->stride_Y & stride_mask || rec->stride_UV & stride_mask)
 		return -EINVAL;
@@ -1341,7 +1355,7 @@ void intel_setup_overlay(struct drm_device *dev)
 		return;
 	overlay->dev = dev;
 
-	reg_bo = drm_gem_object_alloc(dev, PAGE_SIZE);
+	reg_bo = i915_gem_alloc_object(dev, PAGE_SIZE);
 	if (!reg_bo)
 		goto out_free;
 	overlay->reg_bo = to_intel_bo(reg_bo);
@@ -1355,7 +1369,8 @@ void intel_setup_overlay(struct drm_device *dev)
 		overlay->flip_addr = overlay->reg_bo->gtt_offset;
 	} else {
 		ret = i915_gem_attach_phys_object(dev, reg_bo,
-				I915_GEM_PHYS_OVERLAY_REGS);
+						  I915_GEM_PHYS_OVERLAY_REGS,
+						  0);
                 if (ret) {
                         DRM_ERROR("failed to attach phys overlay regs\n");
                         goto out_free_bo;
@@ -1403,4 +1418,100 @@ void intel_cleanup_overlay(struct drm_device *dev)
 
 		kfree(dev_priv->overlay);
 	}
+}
+
+struct intel_overlay_error_state {
+	struct overlay_registers regs;
+	unsigned long base;
+	u32 dovsta;
+	u32 isr;
+};
+
+struct intel_overlay_error_state *
+intel_overlay_capture_error_state(struct drm_device *dev)
+{
+        drm_i915_private_t *dev_priv = dev->dev_private;
+	struct intel_overlay *overlay = dev_priv->overlay;
+	struct intel_overlay_error_state *error;
+	struct overlay_registers __iomem *regs;
+
+	if (!overlay || !overlay->active)
+		return NULL;
+
+	error = kmalloc(sizeof(*error), GFP_ATOMIC);
+	if (error == NULL)
+		return NULL;
+
+	error->dovsta = I915_READ(DOVSTA);
+	error->isr = I915_READ(ISR);
+	if (OVERLAY_NONPHYSICAL(overlay->dev))
+		error->base = (long) overlay->reg_bo->gtt_offset;
+	else
+		error->base = (long) overlay->reg_bo->phys_obj->handle->vaddr;
+
+	regs = intel_overlay_map_regs_atomic(overlay);
+	if (!regs)
+		goto err;
+
+	memcpy_fromio(&error->regs, regs, sizeof(struct overlay_registers));
+	intel_overlay_unmap_regs_atomic(overlay);
+
+	return error;
+
+err:
+	kfree(error);
+	return NULL;
+}
+
+void
+intel_overlay_print_error_state(struct seq_file *m, struct intel_overlay_error_state *error)
+{
+	seq_printf(m, "Overlay, status: 0x%08x, interrupt: 0x%08x\n",
+		   error->dovsta, error->isr);
+	seq_printf(m, "  Register file at 0x%08lx:\n",
+		   error->base);
+
+#define P(x) seq_printf(m, "    " #x ":	0x%08x\n", error->regs.x)
+	P(OBUF_0Y);
+	P(OBUF_1Y);
+	P(OBUF_0U);
+	P(OBUF_0V);
+	P(OBUF_1U);
+	P(OBUF_1V);
+	P(OSTRIDE);
+	P(YRGB_VPH);
+	P(UV_VPH);
+	P(HORZ_PH);
+	P(INIT_PHS);
+	P(DWINPOS);
+	P(DWINSZ);
+	P(SWIDTH);
+	P(SWIDTHSW);
+	P(SHEIGHT);
+	P(YRGBSCALE);
+	P(UVSCALE);
+	P(OCLRC0);
+	P(OCLRC1);
+	P(DCLRKV);
+	P(DCLRKM);
+	P(SCLRKVH);
+	P(SCLRKVL);
+	P(SCLRKEN);
+	P(OCONFIG);
+	P(OCMD);
+	P(OSTART_0Y);
+	P(OSTART_1Y);
+	P(OSTART_0U);
+	P(OSTART_0V);
+	P(OSTART_1U);
+	P(OSTART_1V);
+	P(OTILEOFF_0Y);
+	P(OTILEOFF_1Y);
+	P(OTILEOFF_0U);
+	P(OTILEOFF_0V);
+	P(OTILEOFF_1U);
+	P(OTILEOFF_1V);
+	P(FASTHSCALE);
+	P(UVSCALEV);
+#undef P
 }

@@ -40,7 +40,7 @@
  *
  * The HDA correspondence of pipes/ports are converter/pin nodes.
  */
-#define MAX_HDMI_CVTS	2
+#define MAX_HDMI_CVTS	3
 #define MAX_HDMI_PINS	3
 
 #include "patch_hdmi.c"
@@ -48,6 +48,7 @@
 static char *intel_hdmi_pcm_names[MAX_HDMI_CVTS] = {
 	"INTEL HDMI 0",
 	"INTEL HDMI 1",
+	"INTEL HDMI 2",
 };
 
 /*
@@ -65,23 +66,15 @@ static int intel_hdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 
 	hdmi_setup_audio_infoframe(codec, hinfo->nid, substream);
 
-	hdmi_setup_stream(codec, hinfo->nid, stream_tag, format);
-	return 0;
-}
-
-static int intel_hdmi_playback_pcm_cleanup(struct hda_pcm_stream *hinfo,
-					   struct hda_codec *codec,
-					   struct snd_pcm_substream *substream)
-{
-	return 0;
+	return hdmi_setup_stream(codec, hinfo->nid, stream_tag, format);
 }
 
 static struct hda_pcm_stream intel_hdmi_pcm_playback = {
 	.substreams = 1,
 	.channels_min = 2,
 	.ops = {
+		.open = hdmi_pcm_open,
 		.prepare = intel_hdmi_playback_pcm_prepare,
-		.cleanup = intel_hdmi_playback_pcm_cleanup,
 	},
 };
 
@@ -185,14 +178,15 @@ static int patch_intel_hdmi(struct hda_codec *codec)
 }
 
 static struct hda_codec_preset snd_hda_preset_intelhdmi[] = {
-	{ .id = 0x808629fb, .name = "G45 DEVCL",  .patch = patch_intel_hdmi },
-	{ .id = 0x80862801, .name = "G45 DEVBLC", .patch = patch_intel_hdmi },
-	{ .id = 0x80862802, .name = "G45 DEVCTG", .patch = patch_intel_hdmi },
-	{ .id = 0x80862803, .name = "G45 DEVELK", .patch = patch_intel_hdmi },
-	{ .id = 0x80862804, .name = "G45 DEVIBX", .patch = patch_intel_hdmi },
-	{ .id = 0x80860054, .name = "Q57 DEVIBX", .patch = patch_intel_hdmi },
-	{ .id = 0x10951392, .name = "SiI1392 HDMI",     .patch = patch_intel_hdmi },
-	{} /* terminator */
+{ .id = 0x808629fb, .name = "Crestline HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80862801, .name = "Bearlake HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80862802, .name = "Cantiga HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80862803, .name = "Eaglelake HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80862804, .name = "IbexPeak HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80860054, .name = "IbexPeak HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x80862805, .name = "CougarPoint HDMI",	.patch = patch_intel_hdmi },
+{ .id = 0x10951392, .name = "SiI1392 HDMI",	.patch = patch_intel_hdmi },
+{} /* terminator */
 };
 
 MODULE_ALIAS("snd-hda-codec-id:808629fb");
@@ -200,6 +194,7 @@ MODULE_ALIAS("snd-hda-codec-id:80862801");
 MODULE_ALIAS("snd-hda-codec-id:80862802");
 MODULE_ALIAS("snd-hda-codec-id:80862803");
 MODULE_ALIAS("snd-hda-codec-id:80862804");
+MODULE_ALIAS("snd-hda-codec-id:80862805");
 MODULE_ALIAS("snd-hda-codec-id:80860054");
 MODULE_ALIAS("snd-hda-codec-id:10951392");
 

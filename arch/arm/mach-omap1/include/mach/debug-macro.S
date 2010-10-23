@@ -13,6 +13,8 @@
 
 #include <linux/serial_reg.h>
 
+#include <asm/memory.h>
+
 #include <plat/serial.h>
 
 		.pushsection .data
@@ -31,29 +33,18 @@ omap_uart_virt:	.word	0x0
 		/* Use omap_uart_phys/virt if already configured */
 9:		mrc	p15, 0, \rx, c1, c0
 		tst	\rx, #1			@ MMU enabled?
-		ldreq	\rx, =omap_uart_phys	@ physical base address
+		ldreq	\rx, =__virt_to_phys(omap_uart_phys)	@ physical base address
 		ldrne	\rx, =omap_uart_virt	@ virtual base
 		ldr	\rx, [\rx, #0]
 		cmp	\rx, #0			@ is port configured?
 		bne	99f			@ already configured
 
-		/* Check 7XX UART1 scratchpad register for uart to use */
+		/* Check the debug UART configuration set in uncompress.h */
 		mrc	p15, 0, \rx, c1, c0
 		tst	\rx, #1			@ MMU enabled?
-		moveq	\rx, #0xff000000	@ physical base address
-		movne	\rx, #0xfe000000	@ virtual base
-		orr	\rx, \rx, #0x00fb0000	@ OMAP1UART1
-		ldrb	\rx, [\rx, #(UART_SCR << OMAP7XX_PORT_SHIFT)]
-		cmp	\rx, #0			@ anything in 7XX scratchpad?
-		bne	10f			@ found 7XX uart
-
-		/* Check 15xx/16xx UART1 scratchpad register for uart to use */
-		mrc	p15, 0, \rx, c1, c0
-		tst	\rx, #1			@ MMU enabled?
-		moveq	\rx, #0xff000000	@ physical base address
-		movne	\rx, #0xfe000000	@ virtual base
-		orr	\rx, \rx, #0x00fb0000	@ OMAP1UART1
-		ldrb	\rx, [\rx, #(UART_SCR << OMAP_PORT_SHIFT)]
+		ldreq	\rx, =OMAP_UART_INFO
+		ldrne	\rx, =__phys_to_virt(OMAP_UART_INFO)
+		ldr	\rx, [\rx, #0]
 
 		/* Select the UART to use based on the UART1 scratchpad value */
 10:		cmp	\rx, #0			@ no port configured?
@@ -77,11 +68,15 @@ omap_uart_virt:	.word	0x0
 
 		/* Store both phys and virt address for the uart */
 98:		add	\rx, \rx, #0xff000000	@ phys base
-		ldr	\tmp, =omap_uart_phys
+		mrc	p15, 0, \tmp, c1, c0
+		tst	\tmp, #1		@ MMU enabled?
+		ldreq	\tmp, =__virt_to_phys(omap_uart_phys)
+		ldrne	\tmp, =omap_uart_phys
 		str	\rx, [\tmp, #0]
 		sub	\rx, \rx, #0xff000000	@ phys base
 		add	\rx, \rx, #0xfe000000	@ virt base
-		ldr	\tmp, =omap_uart_virt
+		ldreq	\tmp, =__virt_to_phys(omap_uart_virt)
+		ldrne	\tmp, =omap_uart_virt
 		str	\rx, [\tmp, #0]
 		b	9b
 99:

@@ -62,6 +62,10 @@ static struct musb_hdrc_config musb_config = {
 	.num_eps	= 8,
 	.dma_channels	= 8,
 	.gpio_vrsel	= GPIO_PG13,
+	/* Some custom boards need to be active low, just set it to "0"
+	 * if it is the case.
+	 */
+	.gpio_vrsel_active	= 1,
 };
 
 static struct musb_hdrc_platform_data musb_plat = {
@@ -145,7 +149,6 @@ static struct mtd_partition partition_info[] = {
 };
 
 static struct bf5xx_nand_platform bf5xx_nand_platform = {
-	.page_size = NFC_PG_SIZE_256,
 	.data_width = NFC_NWIDTH_8,
 	.partitions = partition_info,
 	.nr_partitions = ARRAY_SIZE(partition_info),

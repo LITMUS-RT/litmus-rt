@@ -272,13 +272,14 @@ static int ad1836_register(struct ad1836_priv *ad1836)
 
 	if (ad1836_codec) {
 		dev_err(codec->dev, "Another ad1836 is registered\n");
+		kfree(ad1836);
 		return -EINVAL;
 	}
 
 	mutex_init(&codec->mutex);
 	INIT_LIST_HEAD(&codec->dapm_widgets);
 	INIT_LIST_HEAD(&codec->dapm_paths);
-	codec->private_data = ad1836;
+	snd_soc_codec_set_drvdata(codec, ad1836);
 	codec->reg_cache = ad1836->reg_cache;
 	codec->reg_cache_size = AD1836_NUM_REGS;
 	codec->name = "AD1836";

@@ -189,16 +189,10 @@ static long zfcp_cfdc_dev_ioctl(struct file *file, unsigned int command,
 	if (!fsf_cfdc)
 		return -ENOMEM;
 
-	data = kmalloc(sizeof(struct zfcp_cfdc_data), GFP_KERNEL);
-	if (!data) {
-		retval = -ENOMEM;
+	data = memdup_user(data_user, sizeof(*data_user));
+	if (IS_ERR(data)) {
+		retval = PTR_ERR(data);
 		goto no_mem_sense;
-	}
-
-	retval = copy_from_user(data, data_user, sizeof(*data));
-	if (retval) {
-		retval = -EFAULT;
-		goto free_buffer;
 	}
 
 	if (data->signature != 0xCFDCACDF) {
@@ -254,6 +248,7 @@ static long zfcp_cfdc_dev_ioctl(struct file *file, unsigned int command,
 }
 
 static const struct file_operations zfcp_cfdc_fops = {
+	.open = nonseekable_open,
 	.unlocked_ioctl = zfcp_cfdc_dev_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = zfcp_cfdc_dev_ioctl

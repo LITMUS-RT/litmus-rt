@@ -488,7 +488,7 @@ void exit_litmus(struct task_struct *dead_tsk)
 #ifdef CONFIG_MAGIC_SYSRQ
 int sys_kill(int pid, int sig);
 
-static void sysrq_handle_kill_rt_tasks(int key, struct tty_struct *tty)
+static void sysrq_handle_kill_rt_tasks(int key)
 {
 	struct task_struct *t;
 	read_lock(&tasklist_lock);

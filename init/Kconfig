@@ -76,6 +76,14 @@ config INIT_ENV_ARG_LIMIT
 	  variables passed to init from the kernel command line.
 
 
+config CROSS_COMPILE
+	string "Cross-compiler tool prefix"
+	help
+	  Same as running 'make CROSS_COMPILE=prefix-' but stored for
+	  default make runs in this kernel build directory.  You don't
+	  need to set this unless you want the configured kernel build
+	  directory to select the cross-compiler automatically.
+
 config LOCALVERSION
 	string "Local version - append to kernel release"
 	help
@@ -312,13 +320,17 @@ config AUDITSYSCALL
 	help
 	  Enable low-overhead system-call auditing infrastructure that
 	  can be used independently or with another kernel subsystem,
-	  such as SELinux.  To use audit's filesystem watch feature, please
-	  ensure that INOTIFY is configured.
+	  such as SELinux.
+
+config AUDIT_WATCH
+	def_bool y
+	depends on AUDITSYSCALL
+	select FSNOTIFY
 
 config AUDIT_TREE
 	def_bool y
 	depends on AUDITSYSCALL
-	select INOTIFY
+	select FSNOTIFY
 
 menu "RCU Subsystem"
 
@@ -565,8 +577,8 @@ config CGROUP_MEM_RES_CTLR
 	  could in turn add some fork/exit overhead.
 
 config CGROUP_MEM_RES_CTLR_SWAP
-	bool "Memory Resource Controller Swap Extension(EXPERIMENTAL)"
-	depends on CGROUP_MEM_RES_CTLR && SWAP && EXPERIMENTAL
+	bool "Memory Resource Controller Swap Extension"
+	depends on CGROUP_MEM_RES_CTLR && SWAP
 	help
 	  Add swap management feature to memory resource controller. When you
 	  enable this, you can limit mem+swap usage per cgroup. In other words,
@@ -604,13 +616,39 @@ config RT_GROUP_SCHED
 	default n
 	help
 	  This feature lets you explicitly allocate real CPU bandwidth
-	  to users or control groups (depending on the "Basis for grouping tasks"
-	  setting below. If enabled, it will also make it impossible to
+	  to task groups. If enabled, it will also make it impossible to
 	  schedule realtime tasks for non-root users until you allocate
 	  realtime bandwidth for them.
 	  See Documentation/scheduler/sched-rt-group.txt for more information.
 
 endif #CGROUP_SCHED
+
+config BLK_CGROUP
+	tristate "Block IO controller"
+	depends on CGROUPS && BLOCK
+	default n
+	---help---
+	Generic block IO controller cgroup interface. This is the common
+	cgroup interface which should be used by various IO controlling
+	policies.
+
+	Currently, CFQ IO scheduler uses it to recognize task groups and
+	control disk bandwidth allocation (proportional time slice allocation)
+	to such task groups.
+
+	This option only enables generic Block IO controller infrastructure.
+	One needs to also enable actual IO controlling logic in CFQ for it
+	to take effect. (CONFIG_CFQ_GROUP_IOSCHED=y).
+
+	See Documentation/cgroups/blkio-controller.txt for more information.
+
+config DEBUG_BLK_CGROUP
+	bool "Enable Block IO controller debugging"
+	depends on BLK_CGROUP
+	default n
+	---help---
+	Enable some debugging help. Currently it exports additional stat
+	files in a cgroup which can be useful for debugging.
 
 endif # CGROUPS
 
@@ -1108,30 +1146,6 @@ config TRACEPOINTS
 	bool
 
 source "arch/Kconfig"
-
-config SLOW_WORK
-	default n
-	bool
-	help
-	  The slow work thread pool provides a number of dynamically allocated
-	  threads that can be used by the kernel to perform operations that
-	  take a relatively long time.
-
-	  An example of this would be CacheFiles doing a path lookup followed
-	  by a series of mkdirs and a create call, all of which have to touch
-	  disk.
-
-	  See Documentation/slow-work.txt.
-
-config SLOW_WORK_DEBUG
-	bool "Slow work debugging through debugfs"
-	default n
-	depends on SLOW_WORK && DEBUG_FS
-	help
-	  Display the contents of the slow work run queue through debugfs,
-	  including items currently executing.
-
-	  See Documentation/slow-work.txt.
 
 endmenu		# General setup
 

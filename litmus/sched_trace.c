@@ -266,7 +266,7 @@ static int log_open(struct inode *in, struct file *filp)
 
 	printk(KERN_DEBUG
 	       "sched_trace kfifo with buffer starting at: 0x%p\n",
-	       (tbuf->buf.kfifo).buffer);
+	       (tbuf->buf.kfifo).buf);
 
 	/* override printk() */
 	trace_override++;
@@ -340,7 +340,7 @@ void dump_trace_buffer(int max)
 	trace_recurse = 0;
 }
 
-static void sysrq_dump_trace_buffer(int key, struct tty_struct *tty)
+static void sysrq_dump_trace_buffer(int key)
 {
 	dump_trace_buffer(100);
 }

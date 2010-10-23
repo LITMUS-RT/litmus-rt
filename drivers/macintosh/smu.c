@@ -75,7 +75,7 @@ struct smu_cmd_buf {
 struct smu_device {
 	spinlock_t		lock;
 	struct device_node	*of_node;
-	struct of_device	*of_dev;
+	struct platform_device	*of_dev;
 	int			doorbell;	/* doorbell gpio */
 	u32 __iomem		*db_buf;	/* doorbell buffer */
 	struct device_node	*db_node;
@@ -645,7 +645,7 @@ static void smu_expose_childs(struct work_struct *unused)
 
 static DECLARE_WORK(smu_expose_childs_work, smu_expose_childs);
 
-static int smu_platform_probe(struct of_device* dev,
+static int smu_platform_probe(struct platform_device* dev,
 			      const struct of_device_id *match)
 {
 	if (!smu)
@@ -671,8 +671,11 @@ static const struct of_device_id smu_platform_match[] =
 
 static struct of_platform_driver smu_of_platform_driver =
 {
-	.name 		= "smu",
-	.match_table	= smu_platform_match,
+	.driver = {
+		.name = "smu",
+		.owner = THIS_MODULE,
+		.of_match_table = smu_platform_match,
+	},
 	.probe		= smu_platform_probe,
 };
 
@@ -692,7 +695,7 @@ static int __init smu_init_sysfs(void)
 
 device_initcall(smu_init_sysfs);
 
-struct of_device *smu_get_ofdev(void)
+struct platform_device *smu_get_ofdev(void)
 {
 	if (!smu)
 		return NULL;
@@ -1183,8 +1186,10 @@ static ssize_t smu_read_command(struct file *file, struct smu_private *pp,
 		return -EOVERFLOW;
 	spin_lock_irqsave(&pp->lock, flags);
 	if (pp->cmd.status == 1) {
-		if (file->f_flags & O_NONBLOCK)
+		if (file->f_flags & O_NONBLOCK) {
+			spin_unlock_irqrestore(&pp->lock, flags);
 			return -EAGAIN;
+		}
 		add_wait_queue(&pp->wait, &wait);
 		for (;;) {
 			set_current_state(TASK_INTERRUPTIBLE);

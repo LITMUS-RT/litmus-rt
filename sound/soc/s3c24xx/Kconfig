@@ -1,6 +1,6 @@
 config SND_S3C24XX_SOC
 	tristate "SoC Audio for the Samsung S3CXXXX chips"
-	depends on ARCH_S3C2410 || ARCH_S3C64XX
+	depends on ARCH_S3C2410 || ARCH_S3C64XX || ARCH_S5PC100 || ARCH_S5PV210
 	select S3C64XX_DMA if ARCH_S3C64XX
 	help
 	  Say Y or M if you want to add support for codecs attached to
@@ -20,6 +20,11 @@ config SND_S3C2412_SOC_I2S
 	select S3C2410_DMA
 
 config SND_S3C64XX_SOC_I2S
+	tristate
+	select SND_S3C_I2SV2_SOC
+	select S3C64XX_DMA
+
+config SND_S3C64XX_SOC_I2S_V4
 	tristate
 	select SND_S3C_I2SV2_SOC
 	select S3C64XX_DMA
@@ -59,12 +64,11 @@ config SND_S3C24XX_SOC_JIVE_WM8750
 
 config SND_S3C64XX_SOC_WM8580
 	tristate "SoC I2S Audio support for WM8580 on SMDK64XX"
-	depends on SND_S3C24XX_SOC && (MACH_SMDK6400 || MACH_SMDK6410)
-	depends on BROKEN
+	depends on SND_S3C24XX_SOC && MACH_SMDK6410
 	select SND_SOC_WM8580
-	select SND_S3C64XX_SOC_I2S
+	select SND_S3C64XX_SOC_I2S_V4
 	help
-	  Sat Y if you want to add support for SoC audio on the SMDK64XX.
+	  Say Y if you want to add support for SoC audio on the SMDK6410.
 
 config SND_S3C24XX_SOC_SMDK2443_WM9710
 	tristate "SoC AC97 Audio support for SMDK2443 - WM9710"
@@ -116,8 +120,14 @@ config SND_S3C24XX_SOC_SIMTEC_HERMES
 
 config SND_SOC_SMDK_WM9713
 	tristate "SoC AC97 Audio support for SMDK with WM9713"
-	depends on SND_S3C24XX_SOC && MACH_SMDK6410
+	depends on SND_S3C24XX_SOC && (MACH_SMDK6410 || MACH_SMDKC100 || MACH_SMDKV210 || MACH_SMDKC110)
 	select SND_SOC_WM9713
 	select SND_S3C_SOC_AC97
 	help
 	  Sat Y if you want to add support for SoC audio on the SMDK.
+
+config SND_S3C64XX_SOC_SMARTQ
+	tristate "SoC I2S Audio support for SmartQ board"
+	depends on SND_S3C24XX_SOC && MACH_SMARTQ
+	select SND_S3C64XX_SOC_I2S
+	select SND_SOC_WM8750

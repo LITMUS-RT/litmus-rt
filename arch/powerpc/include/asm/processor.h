@@ -209,6 +209,14 @@ struct thread_struct {
 #ifdef CONFIG_PPC64
 	unsigned long	start_tb;	/* Start purr when proc switched in */
 	unsigned long	accum_tb;	/* Total accumilated purr for process */
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	struct perf_event *ptrace_bps[HBP_NUM];
+	/*
+	 * Helps identify source of single-step exception and subsequent
+	 * hw-breakpoint enablement
+	 */
+	struct perf_event *last_hit_ubp;
+#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 #endif
 	unsigned long	dabr;		/* Data address breakpoint register */
 #ifdef CONFIG_ALTIVEC
@@ -229,6 +237,9 @@ struct thread_struct {
 	unsigned long	spefscr;	/* SPE & eFP status */
 	int		used_spe;	/* set if process has used spe */
 #endif /* CONFIG_SPE */
+#ifdef CONFIG_KVM_BOOK3S_32_HANDLER
+	void*		kvm_shadow_vcpu; /* KVM internal data */
+#endif /* CONFIG_KVM_BOOK3S_32_HANDLER */
 };
 
 #define ARCH_MIN_TASKALIGN 16

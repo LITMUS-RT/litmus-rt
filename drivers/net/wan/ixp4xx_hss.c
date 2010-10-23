@@ -396,7 +396,7 @@ static void hss_config(struct port *port)
 	msg.cmd = PORT_CONFIG_WRITE;
 	msg.hss_port = port->id;
 	msg.index = HSS_CONFIG_TX_PCR;
-	msg.data32 = PCR_FRM_SYNC_OUTPUT_RISING | PCR_MSB_ENDIAN |
+	msg.data32 = PCR_FRM_PULSE_DISABLED | PCR_MSB_ENDIAN |
 		PCR_TX_DATA_ENABLE | PCR_SOF_NO_FBIT;
 	if (port->clock_type == CLOCK_INT)
 		msg.data32 |= PCR_SYNC_CLK_DIR_OUTPUT;
@@ -891,7 +891,6 @@ static int hss_hdlc_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	wmb();
 	queue_put_desc(queue_ids[port->id].tx, tx_desc_phys(port, n), desc);
-	dev->trans_start = jiffies;
 
 	if (qmgr_stat_below_low_watermark(txreadyq)) { /* empty */
 #if DEBUG_TX

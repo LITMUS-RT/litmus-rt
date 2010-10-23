@@ -78,7 +78,7 @@ static void wl1251_rx_status(struct wl1251 *wl,
 	 * FIXME: guessing that snr needs to be divided by two, otherwise
 	 * the values don't make any sense
 	 */
-	status->noise = desc->rssi - desc->snr / 2;
+	wl->noise = desc->rssi - desc->snr / 2;
 
 	status->freq = ieee80211_channel_to_frequency(desc->channel);
 
@@ -189,6 +189,4 @@ void wl1251_rx(struct wl1251 *wl)
 
 	/* Finally, we need to ACK the RX */
 	wl1251_rx_ack(wl);
-
-	return;
 }

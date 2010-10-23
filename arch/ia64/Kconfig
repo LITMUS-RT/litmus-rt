@@ -56,10 +56,10 @@ config MMU
 config NEED_DMA_MAP_STATE
 	def_bool y
 
-config SWIOTLB
-       bool
+config NEED_SG_DMA_LENGTH
+	def_bool y
 
-config IOMMU_HELPER
+config SWIOTLB
        bool
 
 config GENERIC_LOCKBREAK
@@ -79,10 +79,6 @@ config GENERIC_FIND_NEXT_BIT
 	default y
 
 config GENERIC_CALIBRATE_DELAY
-	bool
-	default y
-
-config GENERIC_TIME
 	bool
 	default y
 
@@ -497,6 +493,13 @@ config HAVE_ARCH_EARLY_PFN_TO_NID
 config HAVE_ARCH_NODEDATA_EXTENSION
 	def_bool y
 	depends on NUMA
+
+config USE_PERCPU_NUMA_NODE_ID
+	def_bool y
+	depends on NUMA
+
+config HAVE_MEMORYLESS_NODES
+	def_bool NUMA
 
 config ARCH_PROC_KCORE_TEXT
 	def_bool y

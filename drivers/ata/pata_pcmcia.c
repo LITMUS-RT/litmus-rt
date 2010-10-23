@@ -34,7 +34,6 @@
 #include <linux/ata.h>
 #include <linux/libata.h>
 
-#include <pcmcia/cs_types.h>
 #include <pcmcia/cs.h>
 #include <pcmcia/cistpl.h>
 #include <pcmcia/ds.h>
@@ -44,16 +43,6 @@
 
 #define DRV_NAME "pata_pcmcia"
 #define DRV_VERSION "0.3.5"
-
-/*
- *	Private data structure to glue stuff together
- */
-
-struct ata_pcmcia_info {
-	struct pcmcia_device *pdev;
-	int		ndev;
-	dev_node_t	node;
-};
 
 /**
  *	pcmcia_set_mode	-	PCMCIA specific mode setup
@@ -175,7 +164,7 @@ static struct ata_port_operations pcmcia_8bit_port_ops = {
 	.sff_data_xfer	= ata_data_xfer_8bit,
 	.cable_detect	= ata_cable_40wire,
 	.set_mode	= pcmcia_set_mode_8bit,
-	.drain_fifo	= pcmcia_8bit_drain_fifo,
+	.sff_drain_fifo	= pcmcia_8bit_drain_fifo,
 };
 
 
@@ -211,23 +200,25 @@ static int pcmcia_check_one_config(struct pcmcia_device *pdev,
 
 	if ((cfg->io.nwin > 0) || (dflt->io.nwin > 0)) {
 		cistpl_io_t *io = (cfg->io.nwin) ? &cfg->io : &dflt->io;
-		pdev->io.BasePort1 = io->win[0].base;
-		pdev->io.IOAddrLines = io->flags & CISTPL_IO_LINES_MASK;
-		if (!(io->flags & CISTPL_IO_16BIT))
-			pdev->io.Attributes1 = IO_DATA_PATH_WIDTH_8;
+		pdev->io_lines = io->flags & CISTPL_IO_LINES_MASK;
+		pdev->resource[0]->start = io->win[0].base;
+		if (!(io->flags & CISTPL_IO_16BIT)) {
+			pdev->resource[0]->flags &= ~IO_DATA_PATH_WIDTH;
+			pdev->resource[0]->flags |= IO_DATA_PATH_WIDTH_8;
+		}
 		if (io->nwin == 2) {
-			pdev->io.NumPorts1 = 8;
-			pdev->io.BasePort2 = io->win[1].base;
-			pdev->io.NumPorts2 = (stk->is_kme) ? 2 : 1;
-			if (pcmcia_request_io(pdev, &pdev->io) != 0)
+			pdev->resource[0]->end = 8;
+			pdev->resource[1]->start = io->win[1].base;
+			pdev->resource[1]->end = (stk->is_kme) ? 2 : 1;
+			if (pcmcia_request_io(pdev) != 0)
 				return -ENODEV;
-			stk->ctl_base = pdev->io.BasePort2;
+			stk->ctl_base = pdev->resource[1]->start;
 		} else if ((io->nwin == 1) && (io->win[0].len >= 16)) {
-			pdev->io.NumPorts1 = io->win[0].len;
-			pdev->io.NumPorts2 = 0;
-			if (pcmcia_request_io(pdev, &pdev->io) != 0)
+			pdev->resource[0]->end = io->win[0].len;
+			pdev->resource[1]->end = 0;
+			if (pcmcia_request_io(pdev) != 0)
 				return -ENODEV;
-			stk->ctl_base = pdev->io.BasePort1 + 0x0e;
+			stk->ctl_base = pdev->resource[0]->start + 0x0e;
 		} else
 			return -ENODEV;
 		/* If we've got this far, we're done */
@@ -248,7 +239,6 @@ static int pcmcia_init_one(struct pcmcia_device *pdev)
 {
 	struct ata_host *host;
 	struct ata_port *ap;
-	struct ata_pcmcia_info *info;
 	struct pcmcia_config_check *stk = NULL;
 	int is_kme = 0, ret = -ENOMEM, p;
 	unsigned long io_base, ctl_base;
@@ -256,19 +246,9 @@ static int pcmcia_init_one(struct pcmcia_device *pdev)
 	int n_ports = 1;
 	struct ata_port_operations *ops = &pcmcia_port_ops;
 
-	info = kzalloc(sizeof(*info), GFP_KERNEL);
-	if (info == NULL)
-		return -ENOMEM;
-
-	/* Glue stuff together. FIXME: We may be able to get rid of info with care */
-	info->pdev = pdev;
-	pdev->priv = info;
-
 	/* Set up attributes in order to probe card and get resources */
-	pdev->io.Attributes1 = IO_DATA_PATH_WIDTH_AUTO;
-	pdev->io.Attributes2 = IO_DATA_PATH_WIDTH_8;
-	pdev->io.IOAddrLines = 3;
-	pdev->irq.Attributes = IRQ_TYPE_DYNAMIC_SHARING;
+	pdev->resource[0]->flags |= IO_DATA_PATH_WIDTH_AUTO;
+	pdev->resource[1]->flags |= IO_DATA_PATH_WIDTH_8;
 	pdev->conf.Attributes = CONF_ENABLE_IRQ;
 	pdev->conf.IntType = INT_MEMORY_AND_IO;
 
@@ -291,10 +271,9 @@ static int pcmcia_init_one(struct pcmcia_device *pdev)
 		if (pcmcia_loop_config(pdev, pcmcia_check_one_config, stk))
 			goto failed; /* No suitable config found */
 	}
-	io_base = pdev->io.BasePort1;
+	io_base = pdev->resource[0]->start;
 	ctl_base = stk->ctl_base;
-	ret = pcmcia_request_irq(pdev, &pdev->irq);
-	if (ret)
+	if (!pdev->irq)
 		goto failed;
 
 	ret = pcmcia_request_configuration(pdev, &pdev->conf);
@@ -315,7 +294,7 @@ static int pcmcia_init_one(struct pcmcia_device *pdev)
 
 	/* FIXME: Could be more ports at base + 0x10 but we only deal with
 	   one right now */
-	if (pdev->io.NumPorts1 >= 0x20)
+	if (resource_size(pdev->resource[0]) >= 0x20)
 		n_ports = 2;
 
 	if (pdev->manf_id == 0x0097 && pdev->card_id == 0x1620)
@@ -344,21 +323,19 @@ static int pcmcia_init_one(struct pcmcia_device *pdev)
 	}
 
 	/* activate */
-	ret = ata_host_activate(host, pdev->irq.AssignedIRQ, ata_sff_interrupt,
+	ret = ata_host_activate(host, pdev->irq, ata_sff_interrupt,
 				IRQF_SHARED, &pcmcia_sht);
 	if (ret)
 		goto failed;
 
-	info->ndev = 1;
+	pdev->priv = host;
 	kfree(stk);
 	return 0;
 
 failed:
 	kfree(stk);
-	info->ndev = 0;
 	pcmcia_disable_device(pdev);
 out1:
-	kfree(info);
 	return ret;
 }
 
@@ -372,20 +349,12 @@ out1:
 
 static void pcmcia_remove_one(struct pcmcia_device *pdev)
 {
-	struct ata_pcmcia_info *info = pdev->priv;
-	struct device *dev = &pdev->dev;
+	struct ata_host *host = pdev->priv;
 
-	if (info != NULL) {
-		/* If we have attached the device to the ATA layer, detach it */
-		if (info->ndev) {
-			struct ata_host *host = dev_get_drvdata(dev);
-			ata_host_detach(host);
-		}
-		info->ndev = 0;
-		pdev->priv = NULL;
-	}
+	if (host)
+		ata_host_detach(host);
+
 	pcmcia_disable_device(pdev);
-	kfree(info);
 }
 
 static struct pcmcia_device_id pcmcia_devices[] = {

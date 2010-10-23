@@ -148,7 +148,7 @@ static int do_fmlp_down(struct pi_semaphore* sem)
 	    waitqueue_active(&sem->wait)) {
 		/* we need to suspend */
 		tsk->state = TASK_UNINTERRUPTIBLE;
-		add_wait_queue_exclusive_locked(&sem->wait, &wait);
+		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
 
 		TRACE_CUR("suspends on PI lock %p\n", sem);
 		litmus->pi_block(sem, tsk);

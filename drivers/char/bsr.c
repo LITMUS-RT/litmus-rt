@@ -23,6 +23,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
+#include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
 #include <linux/list.h>
@@ -253,7 +254,7 @@ static int bsr_add_node(struct device_node *bn)
 
 		cur->bsr_device = device_create(bsr_class, NULL, cur->bsr_dev,
 						cur, cur->bsr_name);
-		if (!cur->bsr_device) {
+		if (IS_ERR(cur->bsr_device)) {
 			printk(KERN_ERR "device_create failed for %s\n",
 			       cur->bsr_name);
 			cdev_del(&cur->bsr_cdev);

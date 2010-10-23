@@ -44,6 +44,7 @@
 #include <linux/spi/flash.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/jiffies.h>
 #include <linux/i2c-pca-platform.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -112,7 +113,7 @@ static struct resource bfin_i2c_pca_resources[] = {
 struct i2c_pca9564_pf_platform_data pca9564_platform_data = {
 	.gpio = -1,
 	.i2c_clock_speed = 330000,
-	.timeout = 10000
+	.timeout = HZ,
 };
 
 /* PCA9564 I2C Bus driver */
@@ -283,6 +284,7 @@ static int bfin_plat_nand_dev_ready(struct mtd_info *mtd)
 
 static struct platform_nand_data bfin_plat_nand_data = {
 	.chip = {
+		 .nr_chips = 1,
 		 .chip_delay = 30,
 #ifdef CONFIG_MTD_PARTITIONS
 		 .part_probe_types = part_probes,

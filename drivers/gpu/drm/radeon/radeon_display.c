@@ -42,7 +42,7 @@ static void avivo_crtc_load_lut(struct drm_crtc *crtc)
 	struct radeon_device *rdev = dev->dev_private;
 	int i;
 
-	DRM_DEBUG("%d\n", radeon_crtc->crtc_id);
+	DRM_DEBUG_KMS("%d\n", radeon_crtc->crtc_id);
 	WREG32(AVIVO_DC_LUTA_CONTROL + radeon_crtc->crtc_offset, 0);
 
 	WREG32(AVIVO_DC_LUTA_BLACK_OFFSET_BLUE + radeon_crtc->crtc_offset, 0);
@@ -75,7 +75,7 @@ static void evergreen_crtc_load_lut(struct drm_crtc *crtc)
 	struct radeon_device *rdev = dev->dev_private;
 	int i;
 
-	DRM_DEBUG("%d\n", radeon_crtc->crtc_id);
+	DRM_DEBUG_KMS("%d\n", radeon_crtc->crtc_id);
 	WREG32(EVERGREEN_DC_LUT_CONTROL + radeon_crtc->crtc_offset, 0);
 
 	WREG32(EVERGREEN_DC_LUT_BLACK_OFFSET_BLUE + radeon_crtc->crtc_offset, 0);
@@ -161,17 +161,13 @@ void radeon_crtc_fb_gamma_get(struct drm_crtc *crtc, u16 *red, u16 *green,
 }
 
 static void radeon_crtc_gamma_set(struct drm_crtc *crtc, u16 *red, u16 *green,
-				  u16 *blue, uint32_t size)
+				  u16 *blue, uint32_t start, uint32_t size)
 {
 	struct radeon_crtc *radeon_crtc = to_radeon_crtc(crtc);
-	int i;
-
-	if (size != 256) {
-		return;
-	}
+	int end = (start + size > 256) ? 256 : start + size, i;
 
 	/* userspace palettes are always correct as is */
-	for (i = 0; i < 256; i++) {
+	for (i = start; i < end; i++) {
 		radeon_crtc->lut_r[i] = red[i] >> 6;
 		radeon_crtc->lut_g[i] = green[i] >> 6;
 		radeon_crtc->lut_b[i] = blue[i] >> 6;
@@ -284,8 +280,7 @@ static const char *connector_names[15] = {
 	"eDP",
 };
 
-static const char *hpd_names[7] = {
-	"NONE",
+static const char *hpd_names[6] = {
 	"HPD1",
 	"HPD2",
 	"HPD3",
@@ -320,6 +315,10 @@ static void radeon_print_display_setup(struct drm_device *dev)
 				 radeon_connector->ddc_bus->rec.en_data_reg,
 				 radeon_connector->ddc_bus->rec.y_clk_reg,
 				 radeon_connector->ddc_bus->rec.y_data_reg);
+			if (radeon_connector->router_bus)
+				DRM_INFO("  DDC Router 0x%x/0x%x\n",
+					 radeon_connector->router.mux_control_pin,
+					 radeon_connector->router.mux_state);
 		} else {
 			if (connector->connector_type == DRM_MODE_CONNECTOR_VGA ||
 			    connector->connector_type == DRM_MODE_CONNECTOR_DVII ||
@@ -350,6 +349,8 @@ static void radeon_print_display_setup(struct drm_device *dev)
 					DRM_INFO("    DFP4: %s\n", encoder_names[radeon_encoder->encoder_id]);
 				if (devices & ATOM_DEVICE_DFP5_SUPPORT)
 					DRM_INFO("    DFP5: %s\n", encoder_names[radeon_encoder->encoder_id]);
+				if (devices & ATOM_DEVICE_DFP6_SUPPORT)
+					DRM_INFO("    DFP6: %s\n", encoder_names[radeon_encoder->encoder_id]);
 				if (devices & ATOM_DEVICE_TV1_SUPPORT)
 					DRM_INFO("    TV1: %s\n", encoder_names[radeon_encoder->encoder_id]);
 				if (devices & ATOM_DEVICE_CV_SUPPORT)
@@ -396,6 +397,10 @@ int radeon_ddc_get_modes(struct radeon_connector *radeon_connector)
 	struct radeon_device *rdev = dev->dev_private;
 	int ret = 0;
 
+	/* on hw with routers, select right port */
+	if (radeon_connector->router.valid)
+		radeon_router_select_port(radeon_connector);
+
 	if ((radeon_connector->base.connector_type == DRM_MODE_CONNECTOR_DisplayPort) ||
 	    (radeon_connector->base.connector_type == DRM_MODE_CONNECTOR_eDP)) {
 		struct radeon_connector_atom_dig *dig = radeon_connector->con_priv;
@@ -425,6 +430,10 @@ static int radeon_ddc_dump(struct drm_connector *connector)
 	struct edid *edid;
 	struct radeon_connector *radeon_connector = to_radeon_connector(connector);
 	int ret = 0;
+
+	/* on hw with routers, select right port */
+	if (radeon_connector->router.valid)
+		radeon_router_select_port(radeon_connector);
 
 	if (!radeon_connector->ddc_bus)
 		return -1;
@@ -470,7 +479,7 @@ static void radeon_compute_pll_legacy(struct radeon_pll *pll,
 	uint32_t post_div;
 	u32 pll_out_min, pll_out_max;
 
-	DRM_DEBUG("PLL freq %llu %u %u\n", freq, pll->min_ref_div, pll->max_ref_div);
+	DRM_DEBUG_KMS("PLL freq %llu %u %u\n", freq, pll->min_ref_div, pll->max_ref_div);
 	freq = freq * 1000;
 
 	if (pll->flags & RADEON_PLL_IS_LCD) {
@@ -559,15 +568,17 @@ static void radeon_compute_pll_legacy(struct radeon_pll *pll,
 					current_freq = radeon_div(tmp, ref_div * post_div);
 
 					if (pll->flags & RADEON_PLL_PREFER_CLOSEST_LOWER) {
-						error = freq - current_freq;
-						error = error < 0 ? 0xffffffff : error;
+						if (freq < current_freq)
+							error = 0xffffffff;
+						else
+							error = freq - current_freq;
 					} else
 						error = abs(current_freq - freq);
 					vco_diff = abs(vco - best_vco);
 
 					if ((best_vco == 0 && error < best_error) ||
 					    (best_vco != 0 &&
-					     (error < best_error - 100 ||
+					     ((best_error > 100 && error < best_error - 100) ||
 					      (abs(error - best_error) < 100 && vco_diff < best_vco_diff)))) {
 						best_post_div = post_div;
 						best_ref_div = ref_div;
@@ -633,37 +644,37 @@ calc_fb_div(struct radeon_pll *pll,
 
 	vco_freq = freq * post_div;
 	/* feedback_divider = vco_freq * ref_div / pll->reference_freq; */
-	a.full = rfixed_const(pll->reference_freq);
-	feedback_divider.full = rfixed_const(vco_freq);
-	feedback_divider.full = rfixed_div(feedback_divider, a);
-	a.full = rfixed_const(ref_div);
-	feedback_divider.full = rfixed_mul(feedback_divider, a);
+	a.full = dfixed_const(pll->reference_freq);
+	feedback_divider.full = dfixed_const(vco_freq);
+	feedback_divider.full = dfixed_div(feedback_divider, a);
+	a.full = dfixed_const(ref_div);
+	feedback_divider.full = dfixed_mul(feedback_divider, a);
 
 	if (pll->flags & RADEON_PLL_USE_FRAC_FB_DIV) {
 		/* feedback_divider = floor((feedback_divider * 10.0) + 0.5) * 0.1; */
-		a.full = rfixed_const(10);
-		feedback_divider.full = rfixed_mul(feedback_divider, a);
-		feedback_divider.full += rfixed_const_half(0);
-		feedback_divider.full = rfixed_floor(feedback_divider);
-		feedback_divider.full = rfixed_div(feedback_divider, a);
+		a.full = dfixed_const(10);
+		feedback_divider.full = dfixed_mul(feedback_divider, a);
+		feedback_divider.full += dfixed_const_half(0);
+		feedback_divider.full = dfixed_floor(feedback_divider);
+		feedback_divider.full = dfixed_div(feedback_divider, a);
 
 		/* *fb_div = floor(feedback_divider); */
-		a.full = rfixed_floor(feedback_divider);
-		*fb_div = rfixed_trunc(a);
+		a.full = dfixed_floor(feedback_divider);
+		*fb_div = dfixed_trunc(a);
 		/* *fb_div_frac = fmod(feedback_divider, 1.0) * 10.0; */
-		a.full = rfixed_const(10);
-		b.full = rfixed_mul(feedback_divider, a);
+		a.full = dfixed_const(10);
+		b.full = dfixed_mul(feedback_divider, a);
 
-		feedback_divider.full = rfixed_floor(feedback_divider);
-		feedback_divider.full = rfixed_mul(feedback_divider, a);
+		feedback_divider.full = dfixed_floor(feedback_divider);
+		feedback_divider.full = dfixed_mul(feedback_divider, a);
 		feedback_divider.full = b.full - feedback_divider.full;
-		*fb_div_frac = rfixed_trunc(feedback_divider);
+		*fb_div_frac = dfixed_trunc(feedback_divider);
 	} else {
 		/* *fb_div = floor(feedback_divider + 0.5); */
-		feedback_divider.full += rfixed_const_half(0);
-		feedback_divider.full = rfixed_floor(feedback_divider);
+		feedback_divider.full += dfixed_const_half(0);
+		feedback_divider.full = dfixed_floor(feedback_divider);
 
-		*fb_div = rfixed_trunc(feedback_divider);
+		*fb_div = dfixed_trunc(feedback_divider);
 		*fb_div_frac = 0;
 	}
 
@@ -693,10 +704,10 @@ calc_fb_ref_div(struct radeon_pll *pll,
 		pll_out_max = pll->pll_out_max;
 	}
 
-	ffreq.full = rfixed_const(freq);
+	ffreq.full = dfixed_const(freq);
 	/* max_error = ffreq * 0.0025; */
-	a.full = rfixed_const(400);
-	max_error.full = rfixed_div(ffreq, a);
+	a.full = dfixed_const(400);
+	max_error.full = dfixed_div(ffreq, a);
 
 	for ((*ref_div) = pll->min_ref_div; (*ref_div) < pll->max_ref_div; ++(*ref_div)) {
 		if (calc_fb_div(pll, freq, post_div, (*ref_div), fb_div, fb_div_frac)) {
@@ -707,9 +718,9 @@ calc_fb_ref_div(struct radeon_pll *pll,
 				continue;
 
 			/* pll_out = vco / post_div; */
-			a.full = rfixed_const(post_div);
-			pll_out.full = rfixed_const(vco);
-			pll_out.full = rfixed_div(pll_out, a);
+			a.full = dfixed_const(post_div);
+			pll_out.full = dfixed_const(vco);
+			pll_out.full = dfixed_div(pll_out, a);
 
 			if (pll_out.full >= ffreq.full) {
 				error.full = pll_out.full - ffreq.full;
@@ -804,7 +815,7 @@ done:
 	*ref_div_p = ref_div;
 	*post_div_p = post_div;
 
-	DRM_DEBUG("%u %d.%d, %d, %d\n", *dot_clock_p, *fb_div_p, *frac_fb_div_p, *ref_div_p, *post_div_p);
+	DRM_DEBUG_KMS("%u %d.%d, %d, %d\n", *dot_clock_p, *fb_div_p, *frac_fb_div_p, *ref_div_p, *post_div_p);
 }
 
 void radeon_compute_pll(struct radeon_pll *pll,
@@ -831,13 +842,10 @@ void radeon_compute_pll(struct radeon_pll *pll,
 static void radeon_user_framebuffer_destroy(struct drm_framebuffer *fb)
 {
 	struct radeon_framebuffer *radeon_fb = to_radeon_framebuffer(fb);
-	struct drm_device *dev = fb->dev;
 
-	if (fb->fbdev)
-		radeonfb_remove(dev, fb);
-
-	if (radeon_fb->obj)
+	if (radeon_fb->obj) {
 		drm_gem_object_unreference_unlocked(radeon_fb->obj);
+	}
 	drm_framebuffer_cleanup(fb);
 	kfree(radeon_fb);
 }
@@ -856,21 +864,15 @@ static const struct drm_framebuffer_funcs radeon_fb_funcs = {
 	.create_handle = radeon_user_framebuffer_create_handle,
 };
 
-struct drm_framebuffer *
-radeon_framebuffer_create(struct drm_device *dev,
-			  struct drm_mode_fb_cmd *mode_cmd,
-			  struct drm_gem_object *obj)
+void
+radeon_framebuffer_init(struct drm_device *dev,
+			struct radeon_framebuffer *rfb,
+			struct drm_mode_fb_cmd *mode_cmd,
+			struct drm_gem_object *obj)
 {
-	struct radeon_framebuffer *radeon_fb;
-
-	radeon_fb = kzalloc(sizeof(*radeon_fb), GFP_KERNEL);
-	if (radeon_fb == NULL) {
-		return NULL;
-	}
-	drm_framebuffer_init(dev, &radeon_fb->base, &radeon_fb_funcs);
-	drm_helper_mode_fill_fb_struct(&radeon_fb->base, mode_cmd);
-	radeon_fb->obj = obj;
-	return &radeon_fb->base;
+	rfb->obj = obj;
+	drm_framebuffer_init(dev, &rfb->base, &radeon_fb_funcs);
+	drm_helper_mode_fill_fb_struct(&rfb->base, mode_cmd);
 }
 
 static struct drm_framebuffer *
@@ -879,19 +881,33 @@ radeon_user_framebuffer_create(struct drm_device *dev,
 			       struct drm_mode_fb_cmd *mode_cmd)
 {
 	struct drm_gem_object *obj;
+	struct radeon_framebuffer *radeon_fb;
 
 	obj = drm_gem_object_lookup(dev, file_priv, mode_cmd->handle);
 	if (obj ==  NULL) {
 		dev_err(&dev->pdev->dev, "No GEM object associated to handle 0x%08X, "
 			"can't create framebuffer\n", mode_cmd->handle);
-		return NULL;
+		return ERR_PTR(-ENOENT);
 	}
-	return radeon_framebuffer_create(dev, mode_cmd, obj);
+
+	radeon_fb = kzalloc(sizeof(*radeon_fb), GFP_KERNEL);
+	if (radeon_fb == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	radeon_framebuffer_init(dev, radeon_fb, mode_cmd, obj);
+
+	return &radeon_fb->base;
+}
+
+static void radeon_output_poll_changed(struct drm_device *dev)
+{
+	struct radeon_device *rdev = dev->dev_private;
+	radeon_fb_output_poll_changed(rdev);
 }
 
 static const struct drm_mode_config_funcs radeon_mode_funcs = {
 	.fb_create = radeon_user_framebuffer_create,
-	.fb_changed = radeonfb_probe,
+	.output_poll_changed = radeon_output_poll_changed
 };
 
 struct drm_prop_enum_list {
@@ -913,6 +929,12 @@ static struct drm_prop_enum_list radeon_tv_std_enum_list[] =
 	{ TV_STD_SCART_PAL, "scart-pal" },
 	{ TV_STD_PAL_CN, "pal-cn" },
 	{ TV_STD_SECAM, "secam" },
+};
+
+static struct drm_prop_enum_list radeon_underscan_enum_list[] =
+{	{ UNDERSCAN_OFF, "off" },
+	{ UNDERSCAN_ON, "on" },
+	{ UNDERSCAN_AUTO, "auto" },
 };
 
 static int radeon_modeset_create_props(struct radeon_device *rdev)
@@ -968,6 +990,18 @@ static int radeon_modeset_create_props(struct radeon_device *rdev)
 				      radeon_tv_std_enum_list[i].name);
 	}
 
+	sz = ARRAY_SIZE(radeon_underscan_enum_list);
+	rdev->mode_info.underscan_property =
+		drm_property_create(rdev->ddev,
+				    DRM_MODE_PROP_ENUM,
+				    "underscan", sz);
+	for (i = 0; i < sz; i++) {
+		drm_property_add_enum(rdev->mode_info.underscan_property,
+				      i,
+				      radeon_underscan_enum_list[i].type,
+				      radeon_underscan_enum_list[i].name);
+	}
+
 	return 0;
 }
 
@@ -978,8 +1012,11 @@ void radeon_update_display_priority(struct radeon_device *rdev)
 		/* set display priority to high for r3xx, rv515 chips
 		 * this avoids flickering due to underflow to the
 		 * display controllers during heavy acceleration.
+		 * Don't force high on rs4xx igp chips as it seems to
+		 * affect the sound card.  See kernel bug 15982.
 		 */
-		if (ASIC_IS_R300(rdev) || (rdev->family == CHIP_RV515))
+		if ((ASIC_IS_R300(rdev) || (rdev->family == CHIP_RV515)) &&
+		    !(rdev->flags & RADEON_IS_IGP))
 			rdev->disp_priority = 2;
 		else
 			rdev->disp_priority = 0;
@@ -1013,6 +1050,9 @@ int radeon_modeset_init(struct radeon_device *rdev)
 		return ret;
 	}
 
+	/* init i2c buses */
+	radeon_i2c_init(rdev);
+
 	/* check combios for a valid hardcoded EDID - Sun servers */
 	if (!rdev->is_atom_bios) {
 		/* check for hardcoded EDID in BIOS */
@@ -1031,19 +1071,42 @@ int radeon_modeset_init(struct radeon_device *rdev)
 	}
 	/* initialize hpd */
 	radeon_hpd_init(rdev);
-	drm_helper_initial_config(rdev->ddev);
+
+	/* Initialize power management */
+	radeon_pm_init(rdev);
+
+	radeon_fbdev_init(rdev);
+	drm_kms_helper_poll_init(rdev->ddev);
+
 	return 0;
 }
 
 void radeon_modeset_fini(struct radeon_device *rdev)
 {
+	radeon_fbdev_fini(rdev);
 	kfree(rdev->mode_info.bios_hardcoded_edid);
+	radeon_pm_fini(rdev);
 
 	if (rdev->mode_info.mode_config_initialized) {
+		drm_kms_helper_poll_fini(rdev->ddev);
 		radeon_hpd_fini(rdev);
 		drm_mode_config_cleanup(rdev->ddev);
 		rdev->mode_info.mode_config_initialized = false;
 	}
+	/* free i2c buses */
+	radeon_i2c_fini(rdev);
+}
+
+static bool is_hdtv_mode(struct drm_display_mode *mode)
+{
+	/* try and guess if this is a tv or a monitor */
+	if ((mode->vdisplay == 480 && mode->hdisplay == 720) || /* 480p */
+	    (mode->vdisplay == 576) || /* 576p */
+	    (mode->vdisplay == 720) || /* 720p */
+	    (mode->vdisplay == 1080)) /* 1080p */
+		return true;
+	else
+		return false;
 }
 
 bool radeon_crtc_scaling_mode_fixup(struct drm_crtc *crtc,
@@ -1051,15 +1114,26 @@ bool radeon_crtc_scaling_mode_fixup(struct drm_crtc *crtc,
 				struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *dev = crtc->dev;
+	struct radeon_device *rdev = dev->dev_private;
 	struct drm_encoder *encoder;
 	struct radeon_crtc *radeon_crtc = to_radeon_crtc(crtc);
 	struct radeon_encoder *radeon_encoder;
+	struct drm_connector *connector;
+	struct radeon_connector *radeon_connector;
 	bool first = true;
+	u32 src_v = 1, dst_v = 1;
+	u32 src_h = 1, dst_h = 1;
+
+	radeon_crtc->h_border = 0;
+	radeon_crtc->v_border = 0;
 
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
-		radeon_encoder = to_radeon_encoder(encoder);
 		if (encoder->crtc != crtc)
 			continue;
+		radeon_encoder = to_radeon_encoder(encoder);
+		connector = radeon_get_connector_for_encoder(encoder);
+		radeon_connector = to_radeon_connector(connector);
+
 		if (first) {
 			/* set scaling */
 			if (radeon_encoder->rmx_type == RMX_OFF)
@@ -1073,31 +1147,51 @@ bool radeon_crtc_scaling_mode_fixup(struct drm_crtc *crtc,
 			memcpy(&radeon_crtc->native_mode,
 			       &radeon_encoder->native_mode,
 				sizeof(struct drm_display_mode));
+			src_v = crtc->mode.vdisplay;
+			dst_v = radeon_crtc->native_mode.vdisplay;
+			src_h = crtc->mode.hdisplay;
+			dst_h = radeon_crtc->native_mode.hdisplay;
+
+			/* fix up for overscan on hdmi */
+			if (ASIC_IS_AVIVO(rdev) &&
+			    (!(mode->flags & DRM_MODE_FLAG_INTERLACE)) &&
+			    ((radeon_encoder->underscan_type == UNDERSCAN_ON) ||
+			     ((radeon_encoder->underscan_type == UNDERSCAN_AUTO) &&
+			      drm_detect_hdmi_monitor(radeon_connector->edid) &&
+			      is_hdtv_mode(mode)))) {
+				radeon_crtc->h_border = (mode->hdisplay >> 5) + 16;
+				radeon_crtc->v_border = (mode->vdisplay >> 5) + 16;
+				radeon_crtc->rmx_type = RMX_FULL;
+				src_v = crtc->mode.vdisplay;
+				dst_v = crtc->mode.vdisplay - (radeon_crtc->v_border * 2);
+				src_h = crtc->mode.hdisplay;
+				dst_h = crtc->mode.hdisplay - (radeon_crtc->h_border * 2);
+			}
 			first = false;
 		} else {
 			if (radeon_crtc->rmx_type != radeon_encoder->rmx_type) {
 				/* WARNING: Right now this can't happen but
 				 * in the future we need to check that scaling
-				 * are consistent accross different encoder
+				 * are consistent across different encoder
 				 * (ie all encoder can work with the same
 				 *  scaling).
 				 */
-				DRM_ERROR("Scaling not consistent accross encoder.\n");
+				DRM_ERROR("Scaling not consistent across encoder.\n");
 				return false;
 			}
 		}
 	}
 	if (radeon_crtc->rmx_type != RMX_OFF) {
 		fixed20_12 a, b;
-		a.full = rfixed_const(crtc->mode.vdisplay);
-		b.full = rfixed_const(radeon_crtc->native_mode.hdisplay);
-		radeon_crtc->vsc.full = rfixed_div(a, b);
-		a.full = rfixed_const(crtc->mode.hdisplay);
-		b.full = rfixed_const(radeon_crtc->native_mode.vdisplay);
-		radeon_crtc->hsc.full = rfixed_div(a, b);
+		a.full = dfixed_const(src_v);
+		b.full = dfixed_const(dst_v);
+		radeon_crtc->vsc.full = dfixed_div(a, b);
+		a.full = dfixed_const(src_h);
+		b.full = dfixed_const(dst_h);
+		radeon_crtc->hsc.full = dfixed_div(a, b);
 	} else {
-		radeon_crtc->vsc.full = rfixed_const(1);
-		radeon_crtc->hsc.full = rfixed_const(1);
+		radeon_crtc->vsc.full = dfixed_const(1);
+		radeon_crtc->hsc.full = dfixed_const(1);
 	}
 	return true;
 }

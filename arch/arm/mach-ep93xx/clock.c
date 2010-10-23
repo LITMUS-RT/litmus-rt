@@ -43,7 +43,8 @@ static unsigned long get_uart_rate(struct clk *clk);
 
 static int set_keytchclk_rate(struct clk *clk, unsigned long rate);
 static int set_div_rate(struct clk *clk, unsigned long rate);
-
+static int set_i2s_sclk_rate(struct clk *clk, unsigned long rate);
+static int set_i2s_lrclk_rate(struct clk *clk, unsigned long rate);
 
 static struct clk clk_xtali = {
 	.rate		= EP93XX_EXT_CLK_RATE,
@@ -96,6 +97,10 @@ static struct clk clk_keypad = {
 	.enable_mask	= EP93XX_SYSCON_KEYTCHCLKDIV_KEN,
 	.set_rate	= set_keytchclk_rate,
 };
+static struct clk clk_spi = {
+	.parent		= &clk_xtali,
+	.rate		= EP93XX_EXT_CLK_RATE,
+};
 static struct clk clk_pwm = {
 	.parent		= &clk_xtali,
 	.rate		= EP93XX_EXT_CLK_RATE,
@@ -106,6 +111,29 @@ static struct clk clk_video = {
 	.enable_reg     = EP93XX_SYSCON_VIDCLKDIV,
 	.enable_mask    = EP93XX_SYSCON_CLKDIV_ENABLE,
 	.set_rate	= set_div_rate,
+};
+
+static struct clk clk_i2s_mclk = {
+	.sw_locked	= 1,
+	.enable_reg	= EP93XX_SYSCON_I2SCLKDIV,
+	.enable_mask	= EP93XX_SYSCON_CLKDIV_ENABLE,
+	.set_rate	= set_div_rate,
+};
+
+static struct clk clk_i2s_sclk = {
+	.sw_locked	= 1,
+	.parent		= &clk_i2s_mclk,
+	.enable_reg	= EP93XX_SYSCON_I2SCLKDIV,
+	.enable_mask	= EP93XX_SYSCON_I2SCLKDIV_SENA,
+	.set_rate	= set_i2s_sclk_rate,
+};
+
+static struct clk clk_i2s_lrclk = {
+	.sw_locked	= 1,
+	.parent		= &clk_i2s_sclk,
+	.enable_reg	= EP93XX_SYSCON_I2SCLKDIV,
+	.enable_mask	= EP93XX_SYSCON_I2SCLKDIV_SENA,
+	.set_rate	= set_i2s_lrclk_rate,
 };
 
 /* DMA Clocks */
@@ -181,11 +209,15 @@ static struct clk_lookup clocks[] = {
 	INIT_CK(NULL,			"pll1",		&clk_pll1),
 	INIT_CK(NULL,			"fclk",		&clk_f),
 	INIT_CK(NULL,			"hclk",		&clk_h),
-	INIT_CK(NULL,			"pclk",		&clk_p),
+	INIT_CK(NULL,			"apb_pclk",	&clk_p),
 	INIT_CK(NULL,			"pll2",		&clk_pll2),
 	INIT_CK("ep93xx-ohci",		NULL,		&clk_usb_host),
 	INIT_CK("ep93xx-keypad",	NULL,		&clk_keypad),
 	INIT_CK("ep93xx-fb",		NULL,		&clk_video),
+	INIT_CK("ep93xx-spi.0",		NULL,		&clk_spi),
+	INIT_CK("ep93xx-i2s",		"mclk",		&clk_i2s_mclk),
+	INIT_CK("ep93xx-i2s",		"sclk",		&clk_i2s_sclk),
+	INIT_CK("ep93xx-i2s",		"lrclk",	&clk_i2s_lrclk),
 	INIT_CK(NULL,			"pwm_clk",	&clk_pwm),
 	INIT_CK(NULL,			"m2p0",		&clk_m2p0),
 	INIT_CK(NULL,			"m2p1",		&clk_m2p1),
@@ -396,6 +428,44 @@ static int set_div_rate(struct clk *clk, unsigned long rate)
 	return 0;
 }
 
+static int set_i2s_sclk_rate(struct clk *clk, unsigned long rate)
+{
+	unsigned val = __raw_readl(clk->enable_reg);
+
+	if (rate == clk_i2s_mclk.rate / 2)
+		ep93xx_syscon_swlocked_write(val & ~EP93XX_I2SCLKDIV_SDIV, 
+					     clk->enable_reg);
+	else if (rate == clk_i2s_mclk.rate / 4)
+		ep93xx_syscon_swlocked_write(val | EP93XX_I2SCLKDIV_SDIV, 
+					     clk->enable_reg);
+	else
+		return -EINVAL;
+
+	clk_i2s_sclk.rate = rate;
+	return 0;
+}
+
+static int set_i2s_lrclk_rate(struct clk *clk, unsigned long rate)
+{
+	unsigned val = __raw_readl(clk->enable_reg) & 
+		~EP93XX_I2SCLKDIV_LRDIV_MASK;
+	
+	if (rate == clk_i2s_sclk.rate / 32)
+		ep93xx_syscon_swlocked_write(val | EP93XX_I2SCLKDIV_LRDIV32,
+					     clk->enable_reg);
+	else if (rate == clk_i2s_sclk.rate / 64)
+		ep93xx_syscon_swlocked_write(val | EP93XX_I2SCLKDIV_LRDIV64,
+					     clk->enable_reg);
+	else if (rate == clk_i2s_sclk.rate / 128)
+		ep93xx_syscon_swlocked_write(val | EP93XX_I2SCLKDIV_LRDIV128,
+					     clk->enable_reg);
+	else
+		return -EINVAL;
+
+	clk_i2s_lrclk.rate = rate;
+	return 0;
+}
+
 int clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	if (clk->set_rate)
@@ -473,6 +543,14 @@ static int __init ep93xx_clock_init(void)
 	/* Initialize the pll2 derived clocks */
 	clk_usb_host.rate = clk_pll2.rate / (((value >> 28) & 0xf) + 1);
 
+	/*
+	 * EP93xx SSP clock rate was doubled in version E2. For more information
+	 * see:
+	 *     http://www.cirrus.com/en/pubs/appNote/AN273REV4.pdf
+	 */
+	if (ep93xx_chip_revision() < EP93XX_CHIP_REV_E2)
+		clk_spi.rate /= 2;
+
 	pr_info("PLL1 running at %ld MHz, PLL2 at %ld MHz\n",
 		clk_pll1.rate / 1000000, clk_pll2.rate / 1000000);
 	pr_info("FCLK %ld MHz, HCLK %ld MHz, PCLK %ld MHz\n",
@@ -482,4 +560,4 @@ static int __init ep93xx_clock_init(void)
 	clkdev_add_table(clocks, ARRAY_SIZE(clocks));
 	return 0;
 }
-arch_initcall(ep93xx_clock_init);
+postcore_initcall(ep93xx_clock_init);

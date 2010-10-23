@@ -1,5 +1,5 @@
-#ifndef __RADOS_H
-#define __RADOS_H
+#ifndef CEPH_RADOS_H
+#define CEPH_RADOS_H
 
 /*
  * Data types for the Ceph distributed object storage layer RADOS
@@ -101,8 +101,8 @@ struct ceph_pg_pool {
 	__le64 snap_seq;          /* seq for per-pool snapshot */
 	__le32 snap_epoch;        /* epoch of last snap */
 	__le32 num_snaps;
-	__le32 num_removed_snap_intervals;
-	__le64 uid;
+	__le32 num_removed_snap_intervals; /* if non-empty, NO per-pool snaps */
+	__le64 auid;               /* who owns the pg */
 } __attribute__ ((packed));
 
 /*
@@ -203,11 +203,13 @@ enum {
 	CEPH_OSD_OP_TMAPGET = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 12,
 
 	CEPH_OSD_OP_CREATE  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 13,
+	CEPH_OSD_OP_ROLLBACK= CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 14,
 
 	/** attrs **/
 	/* read */
 	CEPH_OSD_OP_GETXATTR  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_ATTR | 1,
 	CEPH_OSD_OP_GETXATTRS = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_ATTR | 2,
+	CEPH_OSD_OP_CMPXATTR  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_ATTR | 3,
 
 	/* write */
 	CEPH_OSD_OP_SETXATTR  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_ATTR | 1,
@@ -271,6 +273,10 @@ static inline int ceph_osd_op_mode_modify(int op)
 	return (op & CEPH_OSD_OP_MODE) == CEPH_OSD_OP_MODE_WR;
 }
 
+/*
+ * note that the following tmap stuff is also defined in the ceph librados.h
+ * any modification here needs to be updated there
+ */
 #define CEPH_OSD_TMAP_HDR 'h'
 #define CEPH_OSD_TMAP_SET 's'
 #define CEPH_OSD_TMAP_RM  'r'
@@ -296,6 +302,7 @@ enum {
 	CEPH_OSD_FLAG_PARALLELEXEC = 512, /* execute op in parallel */
 	CEPH_OSD_FLAG_PGOP = 1024,      /* pg op, no object */
 	CEPH_OSD_FLAG_EXEC = 2048,      /* op may exec */
+	CEPH_OSD_FLAG_EXEC_PUBLIC = 4096, /* op may exec (public) */
 };
 
 enum {
@@ -304,6 +311,22 @@ enum {
 
 #define EOLDSNAPC    ERESTART  /* ORDERSNAP flag set; writer has old snapc*/
 #define EBLACKLISTED ESHUTDOWN /* blacklisted */
+
+/* xattr comparison */
+enum {
+	CEPH_OSD_CMPXATTR_OP_NOP = 0,
+	CEPH_OSD_CMPXATTR_OP_EQ  = 1,
+	CEPH_OSD_CMPXATTR_OP_NE  = 2,
+	CEPH_OSD_CMPXATTR_OP_GT  = 3,
+	CEPH_OSD_CMPXATTR_OP_GTE = 4,
+	CEPH_OSD_CMPXATTR_OP_LT  = 5,
+	CEPH_OSD_CMPXATTR_OP_LTE = 6
+};
+
+enum {
+	CEPH_OSD_CMPXATTR_MODE_STRING = 1,
+	CEPH_OSD_CMPXATTR_MODE_U64    = 2
+};
 
 /*
  * an individual object operation.  each may be accompanied by some data
@@ -321,6 +344,8 @@ struct ceph_osd_op {
 		struct {
 			__le32 name_len;
 			__le32 value_len;
+			__u8 cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
+			__u8 cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
 		} __attribute__ ((packed)) xattr;
 		struct {
 			__u8 class_len;
@@ -331,6 +356,9 @@ struct ceph_osd_op {
 		struct {
 			__le64 cookie, count;
 		} __attribute__ ((packed)) pgls;
+	        struct {
+		        __le64 snapid;
+	        } __attribute__ ((packed)) snap;
 	};
 	__le32 payload_len;
 } __attribute__ ((packed));

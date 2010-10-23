@@ -74,12 +74,12 @@ static struct mfd_cell backlight_devs[] = {
 }
 
 static struct resource led_resources[] = {
-	PM8606_LED_RESOURCE(PM8606_LED1_RED, RGB2B),
-	PM8606_LED_RESOURCE(PM8606_LED1_GREEN, RGB2C),
-	PM8606_LED_RESOURCE(PM8606_LED1_BLUE, RGB2D),
-	PM8606_LED_RESOURCE(PM8606_LED2_RED, RGB1B),
-	PM8606_LED_RESOURCE(PM8606_LED2_GREEN, RGB1C),
-	PM8606_LED_RESOURCE(PM8606_LED2_BLUE, RGB1D),
+	PM8606_LED_RESOURCE(PM8606_LED1_RED, RGB1B),
+	PM8606_LED_RESOURCE(PM8606_LED1_GREEN, RGB1C),
+	PM8606_LED_RESOURCE(PM8606_LED1_BLUE, RGB1D),
+	PM8606_LED_RESOURCE(PM8606_LED2_RED, RGB2B),
+	PM8606_LED_RESOURCE(PM8606_LED2_GREEN, RGB2C),
+	PM8606_LED_RESOURCE(PM8606_LED2_BLUE, RGB2D),
 };
 
 #define PM8606_LED_DEVS(_i)				\
@@ -173,33 +173,35 @@ static struct resource regulator_resources[] = {
 	PM8607_REG_RESOURCE(LDO9,  LDO9),
 	PM8607_REG_RESOURCE(LDO10, LDO10),
 	PM8607_REG_RESOURCE(LDO12, LDO12),
+	PM8607_REG_RESOURCE(VIBRATOR_SET, VIBRATOR_SET),
 	PM8607_REG_RESOURCE(LDO14, LDO14),
 };
 
-#define PM8607_REG_DEVS(_name, _id)					\
+#define PM8607_REG_DEVS(_id)						\
 {									\
-	.name		= "88pm8607-" #_name,				\
+	.name		= "88pm860x-regulator",				\
 	.num_resources	= 1,						\
 	.resources	= &regulator_resources[PM8607_ID_##_id],	\
 	.id		= PM8607_ID_##_id,				\
 }
 
 static struct mfd_cell regulator_devs[] = {
-	PM8607_REG_DEVS(buck1, BUCK1),
-	PM8607_REG_DEVS(buck2, BUCK2),
-	PM8607_REG_DEVS(buck3, BUCK3),
-	PM8607_REG_DEVS(ldo1,  LDO1),
-	PM8607_REG_DEVS(ldo2,  LDO2),
-	PM8607_REG_DEVS(ldo3,  LDO3),
-	PM8607_REG_DEVS(ldo4,  LDO4),
-	PM8607_REG_DEVS(ldo5,  LDO5),
-	PM8607_REG_DEVS(ldo6,  LDO6),
-	PM8607_REG_DEVS(ldo7,  LDO7),
-	PM8607_REG_DEVS(ldo8,  LDO8),
-	PM8607_REG_DEVS(ldo9,  LDO9),
-	PM8607_REG_DEVS(ldo10, LDO10),
-	PM8607_REG_DEVS(ldo12, LDO12),
-	PM8607_REG_DEVS(ldo14, LDO14),
+	PM8607_REG_DEVS(BUCK1),
+	PM8607_REG_DEVS(BUCK2),
+	PM8607_REG_DEVS(BUCK3),
+	PM8607_REG_DEVS(LDO1),
+	PM8607_REG_DEVS(LDO2),
+	PM8607_REG_DEVS(LDO3),
+	PM8607_REG_DEVS(LDO4),
+	PM8607_REG_DEVS(LDO5),
+	PM8607_REG_DEVS(LDO6),
+	PM8607_REG_DEVS(LDO7),
+	PM8607_REG_DEVS(LDO8),
+	PM8607_REG_DEVS(LDO9),
+	PM8607_REG_DEVS(LDO10),
+	PM8607_REG_DEVS(LDO12),
+	PM8607_REG_DEVS(LDO13),
+	PM8607_REG_DEVS(LDO14),
 };
 
 struct pm860x_irq_data {
@@ -426,52 +428,44 @@ static int __devinit device_gpadc_init(struct pm860x_chip *chip,
 {
 	struct i2c_client *i2c = (chip->id == CHIP_PM8607) ? chip->client \
 				: chip->companion;
-	int use_gpadc = 0, data, ret;
+	int data;
+	int ret;
 
 	/* initialize GPADC without activating it */
 
-	if (pdata && pdata->touch) {
-		/* set GPADC MISC1 register */
-		data = 0;
-		data |= (pdata->touch->gpadc_prebias << 1)
-			& PM8607_GPADC_PREBIAS_MASK;
-		data |= (pdata->touch->slot_cycle << 3)
-			& PM8607_GPADC_SLOT_CYCLE_MASK;
-		data |= (pdata->touch->off_scale << 5)
-			& PM8607_GPADC_OFF_SCALE_MASK;
-		data |= (pdata->touch->sw_cal << 7)
-			& PM8607_GPADC_SW_CAL_MASK;
-		if (data) {
-			ret = pm860x_reg_write(i2c, PM8607_GPADC_MISC1, data);
-			if (ret < 0)
-				goto out;
-		}
-		/* set tsi prebias time */
-		if (pdata->touch->tsi_prebias) {
-			data = pdata->touch->tsi_prebias;
-			ret = pm860x_reg_write(i2c, PM8607_TSI_PREBIAS, data);
-			if (ret < 0)
-				goto out;
-		}
-		/* set prebias & prechg time of pen detect */
-		data = 0;
-		data |= pdata->touch->pen_prebias & PM8607_PD_PREBIAS_MASK;
-		data |= (pdata->touch->pen_prechg << 5)
-			& PM8607_PD_PRECHG_MASK;
-		if (data) {
-			ret = pm860x_reg_write(i2c, PM8607_PD_PREBIAS, data);
-			if (ret < 0)
-				goto out;
-		}
+	if (!pdata || !pdata->touch)
+		return -EINVAL;
 
-		use_gpadc = 1;
+	/* set GPADC MISC1 register */
+	data = 0;
+	data |= (pdata->touch->gpadc_prebias << 1) & PM8607_GPADC_PREBIAS_MASK;
+	data |= (pdata->touch->slot_cycle << 3) & PM8607_GPADC_SLOT_CYCLE_MASK;
+	data |= (pdata->touch->off_scale << 5) & PM8607_GPADC_OFF_SCALE_MASK;
+	data |= (pdata->touch->sw_cal << 7) & PM8607_GPADC_SW_CAL_MASK;
+	if (data) {
+		ret = pm860x_reg_write(i2c, PM8607_GPADC_MISC1, data);
+		if (ret < 0)
+			goto out;
+	}
+	/* set tsi prebias time */
+	if (pdata->touch->tsi_prebias) {
+		data = pdata->touch->tsi_prebias;
+		ret = pm860x_reg_write(i2c, PM8607_TSI_PREBIAS, data);
+		if (ret < 0)
+			goto out;
+	}
+	/* set prebias & prechg time of pen detect */
+	data = 0;
+	data |= pdata->touch->pen_prebias & PM8607_PD_PREBIAS_MASK;
+	data |= (pdata->touch->pen_prechg << 5) & PM8607_PD_PRECHG_MASK;
+	if (data) {
+		ret = pm860x_reg_write(i2c, PM8607_PD_PREBIAS, data);
+		if (ret < 0)
+			goto out;
 	}
 
-	/* turn on GPADC */
-	if (use_gpadc) {
-		ret = pm860x_set_bits(i2c, PM8607_GPADC_MISC1,
-				      PM8607_GPADC_EN, PM8607_GPADC_EN);
-	}
+	ret = pm860x_set_bits(i2c, PM8607_GPADC_MISC1,
+			      PM8607_GPADC_EN, PM8607_GPADC_EN);
 out:
 	return ret;
 }
@@ -564,7 +558,7 @@ out:
 	return ret;
 }
 
-static void __devexit device_irq_exit(struct pm860x_chip *chip)
+static void device_irq_exit(struct pm860x_chip *chip)
 {
 	if (chip->core_irq)
 		free_irq(chip->core_irq, chip);
@@ -701,7 +695,7 @@ out:
 	return;
 }
 
-int pm860x_device_init(struct pm860x_chip *chip,
+int __devinit pm860x_device_init(struct pm860x_chip *chip,
 		       struct pm860x_platform_data *pdata)
 {
 	chip->core_irq = 0;
@@ -729,7 +723,7 @@ int pm860x_device_init(struct pm860x_chip *chip,
 	return 0;
 }
 
-void pm860x_device_exit(struct pm860x_chip *chip)
+void __devexit pm860x_device_exit(struct pm860x_chip *chip)
 {
 	device_irq_exit(chip);
 	mfd_remove_devices(chip->dev);

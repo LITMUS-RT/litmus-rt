@@ -273,7 +273,6 @@ static inline s64 clocksource_cyc2ns(cycle_t cycles, u32 mult, u32 shift)
 }
 
 
-/* used to install a new clocksource */
 extern int clocksource_register(struct clocksource*);
 extern void clocksource_unregister(struct clocksource*);
 extern void clocksource_touch_watchdog(void);
@@ -287,6 +286,35 @@ extern void clocksource_mark_unstable(struct clocksource *cs);
 extern void
 clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 minsec);
 
+/*
+ * Don't call __clocksource_register_scale directly, use
+ * clocksource_register_hz/khz
+ */
+extern int
+__clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq);
+extern void
+__clocksource_updatefreq_scale(struct clocksource *cs, u32 scale, u32 freq);
+
+static inline int clocksource_register_hz(struct clocksource *cs, u32 hz)
+{
+	return __clocksource_register_scale(cs, 1, hz);
+}
+
+static inline int clocksource_register_khz(struct clocksource *cs, u32 khz)
+{
+	return __clocksource_register_scale(cs, 1000, khz);
+}
+
+static inline void __clocksource_updatefreq_hz(struct clocksource *cs, u32 hz)
+{
+	__clocksource_updatefreq_scale(cs, 1, hz);
+}
+
+static inline void __clocksource_updatefreq_khz(struct clocksource *cs, u32 khz)
+{
+	__clocksource_updatefreq_scale(cs, 1000, khz);
+}
+
 static inline void
 clocksource_calc_mult_shift(struct clocksource *cs, u32 freq, u32 minsec)
 {
@@ -296,11 +324,13 @@ clocksource_calc_mult_shift(struct clocksource *cs, u32 freq, u32 minsec)
 
 #ifdef CONFIG_GENERIC_TIME_VSYSCALL
 extern void
-update_vsyscall(struct timespec *ts, struct clocksource *c, u32 mult);
+update_vsyscall(struct timespec *ts, struct timespec *wtm,
+			struct clocksource *c, u32 mult);
 extern void update_vsyscall_tz(void);
 #else
 static inline void
-update_vsyscall(struct timespec *ts, struct clocksource *c, u32 mult)
+update_vsyscall(struct timespec *ts, struct timespec *wtm,
+			struct clocksource *c, u32 mult)
 {
 }
 

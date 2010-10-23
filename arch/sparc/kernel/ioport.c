@@ -253,7 +253,7 @@ EXPORT_SYMBOL(sbus_set_sbus64);
 static void *sbus_alloc_coherent(struct device *dev, size_t len,
 				 dma_addr_t *dma_addrp, gfp_t gfp)
 {
-	struct of_device *op = to_of_device(dev);
+	struct platform_device *op = to_platform_device(dev);
 	unsigned long len_total = (len + PAGE_SIZE-1) & PAGE_MASK;
 	unsigned long va;
 	struct resource *res;
@@ -290,7 +290,7 @@ static void *sbus_alloc_coherent(struct device *dev, size_t len,
 	if (mmu_map_dma_area(dev, dma_addrp, va, res->start, len_total) != 0)
 		goto err_noiommu;
 
-	res->name = op->node->name;
+	res->name = op->dev.of_node->name;
 
 	return (void *)(unsigned long)res->start;
 

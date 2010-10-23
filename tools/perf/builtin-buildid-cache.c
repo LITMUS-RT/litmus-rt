@@ -27,7 +27,7 @@ static const struct option buildid_cache_options[] = {
 		   "file list", "file(s) to add"),
 	OPT_STRING('r', "remove", &remove_name_list_str, "file list",
 		    "file(s) to remove"),
-	OPT_BOOLEAN('v', "verbose", &verbose, "be more verbose"),
+	OPT_INCR('v', "verbose", &verbose, "be more verbose"),
 	OPT_END()
 };
 
@@ -78,8 +78,7 @@ static int __cmd_buildid_cache(void)
 	struct str_node *pos;
 	char debugdir[PATH_MAX];
 
-	snprintf(debugdir, sizeof(debugdir), "%s/%s", getenv("HOME"),
-		 DEBUG_CACHE_DIR);
+	snprintf(debugdir, sizeof(debugdir), "%s", buildid_dir);
 
 	if (add_name_list_str) {
 		list = strlist__new(true, add_name_list_str);

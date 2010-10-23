@@ -258,7 +258,7 @@ loop_lock:
 
 		BUG_ON(atomic_read(&cur->bi_cnt) == 0);
 
-		if (bio_rw_flagged(cur, BIO_RW_SYNCIO))
+		if (cur->bi_rw & REQ_SYNC)
 			num_sync_run++;
 
 		submit_bio(cur->bi_rw, cur);
@@ -1097,7 +1097,7 @@ static int btrfs_rm_dev_item(struct btrfs_root *root,
 	if (!path)
 		return -ENOMEM;
 
-	trans = btrfs_start_transaction(root, 1);
+	trans = btrfs_start_transaction(root, 0);
 	key.objectid = BTRFS_DEV_ITEMS_OBJECTID;
 	key.type = BTRFS_DEV_ITEM_KEY;
 	key.offset = device->devid;
@@ -1486,7 +1486,7 @@ int btrfs_init_new_device(struct btrfs_root *root, char *device_path)
 		goto error;
 	}
 
-	trans = btrfs_start_transaction(root, 1);
+	trans = btrfs_start_transaction(root, 0);
 	lock_chunks(root);
 
 	device->barriers = 1;
@@ -1751,9 +1751,10 @@ static int btrfs_relocate_chunk(struct btrfs_root *root,
 
 	/* step one, relocate all the extents inside this chunk */
 	ret = btrfs_relocate_block_group(extent_root, chunk_offset);
-	BUG_ON(ret);
+	if (ret)
+		return ret;
 
-	trans = btrfs_start_transaction(root, 1);
+	trans = btrfs_start_transaction(root, 0);
 	BUG_ON(!trans);
 
 	lock_chunks(root);
@@ -1925,7 +1926,7 @@ int btrfs_balance(struct btrfs_root *dev_root)
 			break;
 		BUG_ON(ret);
 
-		trans = btrfs_start_transaction(dev_root, 1);
+		trans = btrfs_start_transaction(dev_root, 0);
 		BUG_ON(!trans);
 
 		ret = btrfs_grow_device(trans, device, old_size);
@@ -2094,11 +2095,7 @@ again:
 	}
 
 	/* Shrinking succeeded, else we would be at "done". */
-	trans = btrfs_start_transaction(root, 1);
-	if (!trans) {
-		ret = -ENOMEM;
-		goto done;
-	}
+	trans = btrfs_start_transaction(root, 0);
 	lock_chunks(root);
 
 	device->disk_total_bytes = new_size;
@@ -2654,7 +2651,7 @@ static int __btrfs_map_block(struct btrfs_mapping_tree *map_tree, int rw,
 	int max_errors = 0;
 	struct btrfs_multi_bio *multi = NULL;
 
-	if (multi_ret && !(rw & (1 << BIO_RW)))
+	if (multi_ret && !(rw & REQ_WRITE))
 		stripes_allocated = 1;
 again:
 	if (multi_ret) {
@@ -2690,7 +2687,7 @@ again:
 		mirror_num = 0;
 
 	/* if our multi bio struct is too small, back off and try again */
-	if (rw & (1 << BIO_RW)) {
+	if (rw & REQ_WRITE) {
 		if (map->type & (BTRFS_BLOCK_GROUP_RAID1 |
 				 BTRFS_BLOCK_GROUP_DUP)) {
 			stripes_required = map->num_stripes;
@@ -2700,7 +2697,7 @@ again:
 			max_errors = 1;
 		}
 	}
-	if (multi_ret && (rw & (1 << BIO_RW)) &&
+	if (multi_ret && (rw & REQ_WRITE) &&
 	    stripes_allocated < stripes_required) {
 		stripes_allocated = map->num_stripes;
 		free_extent_map(em);
@@ -2736,7 +2733,7 @@ again:
 	num_stripes = 1;
 	stripe_index = 0;
 	if (map->type & BTRFS_BLOCK_GROUP_RAID1) {
-		if (unplug_page || (rw & (1 << BIO_RW)))
+		if (unplug_page || (rw & REQ_WRITE))
 			num_stripes = map->num_stripes;
 		else if (mirror_num)
 			stripe_index = mirror_num - 1;
@@ -2747,7 +2744,7 @@ again:
 		}
 
 	} else if (map->type & BTRFS_BLOCK_GROUP_DUP) {
-		if (rw & (1 << BIO_RW))
+		if (rw & REQ_WRITE)
 			num_stripes = map->num_stripes;
 		else if (mirror_num)
 			stripe_index = mirror_num - 1;
@@ -2758,7 +2755,7 @@ again:
 		stripe_index = do_div(stripe_nr, factor);
 		stripe_index *= map->sub_stripes;
 
-		if (unplug_page || (rw & (1 << BIO_RW)))
+		if (unplug_page || (rw & REQ_WRITE))
 			num_stripes = map->sub_stripes;
 		else if (mirror_num)
 			stripe_index += mirror_num - 1;
@@ -2948,7 +2945,7 @@ static noinline int schedule_bio(struct btrfs_root *root,
 	struct btrfs_pending_bios *pending_bios;
 
 	/* don't bother with additional async steps for reads, right now */
-	if (!(rw & (1 << BIO_RW))) {
+	if (!(rw & REQ_WRITE)) {
 		bio_get(bio);
 		submit_bio(rw, bio);
 		bio_put(bio);
@@ -2967,7 +2964,7 @@ static noinline int schedule_bio(struct btrfs_root *root,
 	bio->bi_rw |= rw;
 
 	spin_lock(&device->io_lock);
-	if (bio_rw_flagged(bio, BIO_RW_SYNCIO))
+	if (bio->bi_rw & REQ_SYNC)
 		pending_bios = &device->pending_sync_bios;
 	else
 		pending_bios = &device->pending_bios;

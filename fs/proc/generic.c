@@ -12,6 +12,7 @@
 #include <linux/time.h>
 #include <linux/proc_fs.h>
 #include <linux/stat.h>
+#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/mount.h>
@@ -258,17 +259,22 @@ static int proc_notify_change(struct dentry *dentry, struct iattr *iattr)
 
 	error = inode_change_ok(inode, iattr);
 	if (error)
-		goto out;
+		return error;
 
-	error = inode_setattr(inode, iattr);
-	if (error)
-		goto out;
+	if ((iattr->ia_valid & ATTR_SIZE) &&
+	    iattr->ia_size != i_size_read(inode)) {
+		error = vmtruncate(inode, iattr->ia_size);
+		if (error)
+			return error;
+	}
+
+	setattr_copy(inode, iattr);
+	mark_inode_dirty(inode);
 	
 	de->uid = inode->i_uid;
 	de->gid = inode->i_gid;
 	de->mode = inode->i_mode;
-out:
-	return error;
+	return 0;
 }
 
 static int proc_getattr(struct vfsmount *mnt, struct dentry *dentry,
@@ -343,21 +349,6 @@ static DEFINE_SPINLOCK(proc_inum_lock); /* protects the above */
 /*
  * Return an inode number between PROC_DYNAMIC_FIRST and
  * 0xffffffff, or zero on failure.
- *
- * Current inode allocations in the proc-fs (hex-numbers):
- *
- * 00000000		reserved
- * 00000001-00000fff	static entries	(goners)
- *      001		root-ino
- *
- * 00001000-00001fff	unused
- * 0001xxxx-7fffxxxx	pid-dir entries for pid 1-7fff
- * 80000000-efffffff	unused
- * f0000000-ffffffff	dynamic entries
- *
- * Goal:
- *	Once we split the thing into several virtual filesystems,
- *	we will get rid of magical ranges (and this comment, BTW).
  */
 static unsigned int get_inode_number(void)
 {

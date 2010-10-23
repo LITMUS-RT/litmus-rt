@@ -67,7 +67,6 @@ rix_to_ndx(struct minstrel_sta_info *mi, int rix)
 	for (i = rix; i >= 0; i--)
 		if (mi->r[i].rix == rix)
 			break;
-	WARN_ON(i < 0);
 	return i;
 }
 
@@ -542,7 +541,7 @@ minstrel_free(void *priv)
 	kfree(priv);
 }
 
-static struct rate_control_ops mac80211_minstrel = {
+struct rate_control_ops mac80211_minstrel = {
 	.name = "minstrel",
 	.tx_status = minstrel_tx_status,
 	.get_rate = minstrel_get_rate,

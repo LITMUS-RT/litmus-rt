@@ -225,12 +225,13 @@ static void pipe_grant_credits(struct sock *sk)
 static int pipe_rcv_status(struct sock *sk, struct sk_buff *skb)
 {
 	struct pep_sock *pn = pep_sk(sk);
-	struct pnpipehdr *hdr = pnp_hdr(skb);
+	struct pnpipehdr *hdr;
 	int wake = 0;
 
 	if (!pskb_may_pull(skb, sizeof(*hdr) + 4))
 		return -EINVAL;
 
+	hdr = pnp_hdr(skb);
 	if (hdr->data[0] != PN_PEP_TYPE_COMMON) {
 		LIMIT_NETDEBUG(KERN_DEBUG"Phonet unknown PEP type: %u\n",
 				(unsigned)hdr->data[0]);
@@ -626,6 +627,7 @@ static void pep_sock_close(struct sock *sk, long timeout)
 	struct pep_sock *pn = pep_sk(sk);
 	int ifindex = 0;
 
+	sock_hold(sk); /* keep a reference after sk_common_release() */
 	sk_common_release(sk);
 
 	lock_sock(sk);
@@ -644,6 +646,7 @@ static void pep_sock_close(struct sock *sk, long timeout)
 
 	if (ifindex)
 		gprs_detach(sk);
+	sock_put(sk);
 }
 
 static int pep_wait_connreq(struct sock *sk, int noblock)
@@ -664,12 +667,12 @@ static int pep_wait_connreq(struct sock *sk, int noblock)
 		if (signal_pending(tsk))
 			return sock_intr_errno(timeo);
 
-		prepare_to_wait_exclusive(&sk->sk_socket->wait, &wait,
+		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
 						TASK_INTERRUPTIBLE);
 		release_sock(sk);
 		timeo = schedule_timeout(timeo);
 		lock_sock(sk);
-		finish_wait(&sk->sk_socket->wait, &wait);
+		finish_wait(sk_sleep(sk), &wait);
 	}
 
 	return 0;
@@ -696,6 +699,7 @@ static struct sock *pep_sock_accept(struct sock *sk, int flags, int *errp)
 		newsk = NULL;
 		goto out;
 	}
+	kfree_skb(oskb);
 
 	sock_hold(sk);
 	pep_sk(newsk)->listener = sk;
@@ -910,10 +914,10 @@ disabled:
 			goto out;
 		}
 
-		prepare_to_wait(&sk->sk_socket->wait, &wait,
+		prepare_to_wait(sk_sleep(sk), &wait,
 				TASK_INTERRUPTIBLE);
 		done = sk_wait_event(sk, &timeo, atomic_read(&pn->tx_credits));
-		finish_wait(&sk->sk_socket->wait, &wait);
+		finish_wait(sk_sleep(sk), &wait);
 
 		if (sk->sk_state != TCP_ESTABLISHED)
 			goto disabled;
@@ -1043,12 +1047,12 @@ static void pep_sock_unhash(struct sock *sk)
 	lock_sock(sk);
 	if ((1 << sk->sk_state) & ~(TCPF_CLOSE|TCPF_LISTEN)) {
 		skparent = pn->listener;
-		sk_del_node_init(sk);
 		release_sock(sk);
 
-		sk = skparent;
 		pn = pep_sk(skparent);
-		lock_sock(sk);
+		lock_sock(skparent);
+		sk_del_node_init(sk);
+		sk = skparent;
 	}
 	/* Unhash a listening sock only when it is closed
 	 * and all of its active connected pipes are closed. */

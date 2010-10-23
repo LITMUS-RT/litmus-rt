@@ -19,7 +19,6 @@
 #include <linux/sched.h>	/* task_struct, completion */
 #include <linux/mutex.h>
 
-#include <pcmcia/cs_types.h>
 #include <pcmcia/cs.h>
 #ifdef CONFIG_CARDBUS
 #include <linux/pci.h>
@@ -141,10 +140,6 @@ struct pcmcia_socket {
 	u_short				lock_count;
 	pccard_mem_map			cis_mem;
 	void __iomem 			*cis_virt;
-	struct {
-		u_int			AssignedIRQ;
-		u_int			Config;
-	} irq;
 	io_window_t			io[MAX_IO_WIN];
 	pccard_mem_map			win[MAX_WIN];
 	struct list_head		cis_cache;
@@ -166,17 +161,10 @@ struct pcmcia_socket {
 	u_int				pci_irq;
 	struct pci_dev			*cb_dev;
 
-
 	/* socket setup is done so resources should be able to be allocated.
 	 * Only if set to 1, calls to find_{io,mem}_region are handled, and
 	 * insertio events are actually managed by the PCMCIA layer.*/
-	u8				resource_setup_done:1;
-
-	/* It's old if resource setup is done using adjust_resource_info() */
-	u8				resource_setup_old:1;
-	u8				resource_setup_new:1;
-
-	u8				reserved:5;
+	u8				resource_setup_done;
 
 	/* socket operations */
 	struct pccard_operations	*ops;
@@ -222,23 +210,15 @@ struct pcmcia_socket {
 	 * incorrectness and change */
 	u8				device_count;
 
-	/* 16-bit state: */
-	struct {
-		/* "master" ioctl is used */
-		u8			busy:1;
-		/* the PCMCIA card consists of two pseudo devices */
-		u8			has_pfc:1;
-
-		u8			reserved:6;
-	} pcmcia_state;
+	/* does the PCMCIA card consist of two pseudo devices? */
+	u8				pcmcia_pfc;
 
 	/* non-zero if PCMCIA card is present */
 	atomic_t			present;
 
-#ifdef CONFIG_PCMCIA_IOCTL
-	struct user_info_t		*user;
-	wait_queue_head_t		queue;
-#endif /* CONFIG_PCMCIA_IOCTL */
+	/* IRQ to be used by PCMCIA devices. May not be IRQ 0. */
+	unsigned int			pcmcia_irq;
+
 #endif /* CONFIG_PCMCIA */
 
 	/* socket device */

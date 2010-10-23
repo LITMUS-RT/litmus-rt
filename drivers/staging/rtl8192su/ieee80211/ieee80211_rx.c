@@ -360,7 +360,7 @@ ieee80211_rx_frame_decrypt_msdu(struct ieee80211_device* ieee, struct sk_buff *s
 	hdrlen = ieee80211_get_hdrlen(le16_to_cpu(hdr->frame_ctl));
 
 	atomic_inc(&crypt->refcnt);
-	res = crypt->ops->decrypt_msdu(skb, keyidx, hdrlen, crypt->priv);
+	res = crypt->ops->decrypt_msdu(skb, keyidx, hdrlen, crypt->priv,ieee);
 	atomic_dec(&crypt->refcnt);
 	if (res < 0) {
 		printk(KERN_DEBUG "%s: MSDU decryption/MIC verification failed"
@@ -1191,7 +1191,7 @@ int ieee80211_rtl_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 	/* skb: hdr + (possible reassembled) full plaintext payload */
 	payload = skb->data + hdrlen;
 	//ethertype = (payload[6] << 8) | payload[7];
-	rxb = (struct ieee80211_rxb*)kmalloc(sizeof(struct ieee80211_rxb),GFP_ATOMIC);
+	rxb = kmalloc(sizeof(struct ieee80211_rxb), GFP_ATOMIC);
 	if(rxb == NULL)
 	{
 		IEEE80211_DEBUG(IEEE80211_DL_ERR,"%s(): kmalloc rxb error\n",__FUNCTION__);

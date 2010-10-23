@@ -343,14 +343,17 @@
 #define __NR_rt_tgsigqueueinfo	335
 #define __NR_perf_event_open	336
 #define __NR_recvmmsg		337
+#define __NR_fanotify_init	338
+#define __NR_fanotify_mark	339
+#define __NR_prlimit64		340
 
-#define __NR_LITMUS		338
+#define __NR_LITMUS		341
 
 #include "litmus/unistd_32.h"
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 338 + NR_litmus_syscalls
+#define NR_syscalls 341 + NR_litmus_syscalls
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR

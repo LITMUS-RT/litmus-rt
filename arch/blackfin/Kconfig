@@ -25,6 +25,8 @@ config BLACKFIN
 	def_bool y
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_TRACEHOOK
+	select HAVE_DYNAMIC_FTRACE
+	select HAVE_FTRACE_MCOUNT_RECORD
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_TRACER
 	select HAVE_FUNCTION_TRACE_MCOUNT_TEST
@@ -32,6 +34,7 @@ config BLACKFIN
 	select HAVE_KERNEL_GZIP if RAMKERNEL
 	select HAVE_KERNEL_BZIP2 if RAMKERNEL
 	select HAVE_KERNEL_LZMA if RAMKERNEL
+	select HAVE_KERNEL_LZO if RAMKERNEL
 	select HAVE_OPROFILE
 	select ARCH_WANT_OPTIONAL_GPIOLIB
 
@@ -328,11 +331,6 @@ config BF53x
 	depends on (BF531 || BF532 || BF533 || BF534 || BF536 || BF537)
 	default y
 
-config MEM_GENERIC_BOARD
-	bool
-	depends on GENERIC_BOARD
-	default y
-
 config MEM_MT48LC64M4A2FB_7E
 	bool
 	depends on (BFIN533_STAMP)
@@ -348,7 +346,7 @@ config MEM_MT48LC16M16A2TG_75
 
 config MEM_MT48LC32M8A2_75
 	bool
-	depends on (BFIN537_STAMP || PNAV10 || BFIN538_EZKIT)
+	depends on (BFIN518F_EZBRD || BFIN537_STAMP || PNAV10 || BFIN538_EZKIT)
 	default y
 
 config MEM_MT48LC8M32B2B5_7
@@ -359,11 +357,6 @@ config MEM_MT48LC8M32B2B5_7
 config MEM_MT48LC32M16A2TG_75
 	bool
 	depends on (BFIN527_EZKIT || BFIN527_EZKIT_V2 || BFIN532_IP0X || BLACKSTAMP)
-	default y
-
-config MEM_MT48LC32M8A2_75
-	bool
-	depends on (BFIN518F_EZBRD)
 	default y
 
 config MEM_MT48H32M16LFCJ_75
@@ -619,9 +612,6 @@ comment "Kernel Timer/Scheduler"
 
 source kernel/Kconfig.hz
 
-config GENERIC_TIME
-	def_bool y
-
 config GENERIC_CLOCKEVENTS
 	bool "Generic clock events"
 	default y
@@ -791,6 +781,34 @@ config MEMCPY_L1
 	  If enabled, the memcpy function is linked
 	  into L1 instruction memory. (less latency)
 
+config STRCMP_L1
+	bool "locate strcmp function in L1 Memory"
+	default y
+	help
+	  If enabled, the strcmp function is linked
+	  into L1 instruction memory (less latency).
+
+config STRNCMP_L1
+	bool "locate strncmp function in L1 Memory"
+	default y
+	help
+	  If enabled, the strncmp function is linked
+	  into L1 instruction memory (less latency).
+
+config STRCPY_L1
+	bool "locate strcpy function in L1 Memory"
+	default y
+	help
+	  If enabled, the strcpy function is linked
+	  into L1 instruction memory (less latency).
+
+config STRNCPY_L1
+	bool "locate strncpy function in L1 Memory"
+	default y
+	help
+	  If enabled, the strncpy function is linked
+	  into L1 instruction memory (less latency).
+
 config SYS_BFIN_SPINLOCK_L1
 	bool "Locate sys_bfin_spinlock function in L1 Memory"
 	default y
@@ -829,6 +847,18 @@ config CPLB_SWITCH_TAB_L1
 	help
 	  If enabled, the CPLB Switch Tables are linked
 	  into L1 data memory. (less latency)
+
+config CACHE_FLUSH_L1
+	bool "Locate cache flush funcs in L1 Inst Memory"
+	default y
+	help
+	  If enabled, the Blackfin cache flushing functions are linked
+	  into L1 instruction memory.
+
+	  Note that this might be required to address anomalies, but
+	  these functions are pretty small, so it shouldn't be too bad.
+	  If you are using a processor affected by an anomaly, the build
+	  system will double check for you and prevent it.
 
 config APP_STACK_L1
 	bool "Support locating application stack in L1 Scratch Memory"
@@ -1185,32 +1215,6 @@ config  PM_BFIN_SLEEP
 	  memory is not supported.
 
 	  If unsure, select "Sleep Deeper".
-endchoice
-
-config PM_WAKEUP_BY_GPIO
-	bool "Allow Wakeup from Standby by GPIO"
-	depends on PM && !BF54x
-
-config PM_WAKEUP_GPIO_NUMBER
-	int "GPIO number"
-	range 0 47
-	depends on PM_WAKEUP_BY_GPIO
-	default 2
-
-choice
-	prompt "GPIO Polarity"
-	depends on PM_WAKEUP_BY_GPIO
-	default PM_WAKEUP_GPIO_POLAR_H
-config  PM_WAKEUP_GPIO_POLAR_H
-	bool "Active High"
-config  PM_WAKEUP_GPIO_POLAR_L
-	bool "Active Low"
-config  PM_WAKEUP_GPIO_POLAR_EDGE_F
-	bool "Falling EDGE"
-config  PM_WAKEUP_GPIO_POLAR_EDGE_R
-	bool "Rising EDGE"
-config  PM_WAKEUP_GPIO_POLAR_EDGE_B
-	bool "Both EDGE"
 endchoice
 
 comment "Possible Suspend Mem / Hibernate Wake-Up Sources"

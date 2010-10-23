@@ -113,7 +113,7 @@ static int osdmap_show(struct seq_file *s, void *p)
 static int monc_show(struct seq_file *s, void *p)
 {
 	struct ceph_client *client = s->private;
-	struct ceph_mon_statfs_request *req;
+	struct ceph_mon_generic_request *req;
 	struct ceph_mon_client *monc = &client->monc;
 	struct rb_node *rp;
 
@@ -126,9 +126,14 @@ static int monc_show(struct seq_file *s, void *p)
 	if (monc->want_next_osdmap)
 		seq_printf(s, "want next osdmap\n");
 
-	for (rp = rb_first(&monc->statfs_request_tree); rp; rp = rb_next(rp)) {
-		req = rb_entry(rp, struct ceph_mon_statfs_request, node);
-		seq_printf(s, "%lld statfs\n", req->tid);
+	for (rp = rb_first(&monc->generic_request_tree); rp; rp = rb_next(rp)) {
+		__u16 op;
+		req = rb_entry(rp, struct ceph_mon_generic_request, node);
+		op = le16_to_cpu(req->request->hdr.type);
+		if (op == CEPH_MSG_STATFS)
+			seq_printf(s, "%lld statfs\n", req->tid);
+		else
+			seq_printf(s, "%lld unknown\n", req->tid);
 	}
 
 	mutex_unlock(&monc->mutex);
@@ -166,6 +171,8 @@ static int mdsc_show(struct seq_file *s, void *p)
 		} else if (req->r_dentry) {
 			path = ceph_mdsc_build_path(req->r_dentry, &pathlen,
 						    &pathbase, 0);
+			if (IS_ERR(path))
+				path = NULL;
 			spin_lock(&req->r_dentry->d_lock);
 			seq_printf(s, " #%llx/%.*s (%s)",
 				   ceph_ino(req->r_dentry->d_parent->d_inode),
@@ -182,6 +189,8 @@ static int mdsc_show(struct seq_file *s, void *p)
 		if (req->r_old_dentry) {
 			path = ceph_mdsc_build_path(req->r_old_dentry, &pathlen,
 						    &pathbase, 0);
+			if (IS_ERR(path))
+				path = NULL;
 			spin_lock(&req->r_old_dentry->d_lock);
 			seq_printf(s, " #%llx/%.*s (%s)",
 			   ceph_ino(req->r_old_dentry->d_parent->d_inode),
@@ -256,7 +265,7 @@ static int osdc_show(struct seq_file *s, void *pp)
 
 static int caps_show(struct seq_file *s, void *p)
 {
-	struct ceph_client *client = p;
+	struct ceph_client *client = s->private;
 	int total, avail, used, reserved, min;
 
 	ceph_reservation_status(client, &total, &avail, &used, &reserved, &min);
@@ -286,7 +295,7 @@ static int dentry_lru_show(struct seq_file *s, void *ptr)
 	return 0;
 }
 
-#define DEFINE_SHOW_FUNC(name) 						\
+#define DEFINE_SHOW_FUNC(name)						\
 static int name##_open(struct inode *inode, struct file *file)		\
 {									\
 	struct seq_file *sf;						\
@@ -356,8 +365,8 @@ int ceph_debugfs_client_init(struct ceph_client *client)
 	int ret = 0;
 	char name[80];
 
-	snprintf(name, sizeof(name), FSID_FORMAT ".client%lld",
-		 PR_FSID(&client->fsid), client->monc.auth->global_id);
+	snprintf(name, sizeof(name), "%pU.client%lld", &client->fsid,
+		 client->monc.auth->global_id);
 
 	client->debugfs_dir = debugfs_create_dir(name, ceph_debugfs_dir);
 	if (!client->debugfs_dir)
@@ -427,11 +436,12 @@ int ceph_debugfs_client_init(struct ceph_client *client)
 	if (!client->debugfs_caps)
 		goto out;
 
-	client->debugfs_congestion_kb = debugfs_create_file("writeback_congestion_kb",
-						   0600,
-						   client->debugfs_dir,
-						   client,
-						   &congestion_kb_fops);
+	client->debugfs_congestion_kb =
+		debugfs_create_file("writeback_congestion_kb",
+				    0600,
+				    client->debugfs_dir,
+				    client,
+				    &congestion_kb_fops);
 	if (!client->debugfs_congestion_kb)
 		goto out;
 
@@ -461,7 +471,7 @@ void ceph_debugfs_client_cleanup(struct ceph_client *client)
 	debugfs_remove(client->debugfs_dir);
 }
 
-#else  // CONFIG_DEBUG_FS
+#else  /* CONFIG_DEBUG_FS */
 
 int __init ceph_debugfs_init(void)
 {
@@ -481,4 +491,4 @@ void ceph_debugfs_client_cleanup(struct ceph_client *client)
 {
 }
 
-#endif  // CONFIG_DEBUG_FS
+#endif  /* CONFIG_DEBUG_FS */

@@ -349,7 +349,7 @@ static void trizeps4_mci_exit(struct device *dev, void *data)
 
 static struct pxamci_platform_data trizeps4_mci_platform_data = {
 	.ocr_mask	= MMC_VDD_32_33|MMC_VDD_33_34,
-	.detect_delay	= 1,
+	.detect_delay_ms= 10,
 	.init 		= trizeps4_mci_init,
 	.exit		= trizeps4_mci_exit,
 	.get_ro		= NULL,	/* write-protection not supported */
@@ -530,13 +530,9 @@ static void __init trizeps4_init(void)
 	i2c_register_board_info(0, trizeps4_i2c_devices,
 					ARRAY_SIZE(trizeps4_i2c_devices));
 
-#ifdef CONFIG_IDE_PXA_CF
-	/* if boot direct from compact flash dont disable power */
-	trizeps_conxs_bcr = 0x0009;
-#else
 	/* this is the reset value */
 	trizeps_conxs_bcr = 0x00A0;
-#endif
+
 	BCR_writew(trizeps_conxs_bcr);
 	board_backlight_power(1);
 }

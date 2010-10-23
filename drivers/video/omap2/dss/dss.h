@@ -199,7 +199,8 @@ int dss_init_overlay_managers(struct platform_device *pdev);
 void dss_uninit_overlay_managers(struct platform_device *pdev);
 int dss_mgr_wait_for_go_ovl(struct omap_overlay *ovl);
 void dss_setup_partial_planes(struct omap_dss_device *dssdev,
-				u16 *x, u16 *y, u16 *w, u16 *h);
+				u16 *x, u16 *y, u16 *w, u16 *h,
+				bool enlarge_update_area);
 void dss_start_update(struct omap_dss_device *dssdev);
 
 /* overlay */
@@ -242,11 +243,22 @@ int dss_calc_clock_div(bool is_tft, unsigned long req_pck,
 		struct dispc_clock_info *dispc_cinfo);
 
 /* SDI */
+#ifdef CONFIG_OMAP2_DSS_SDI
 int sdi_init(bool skip_init);
 void sdi_exit(void);
 int sdi_init_display(struct omap_dss_device *display);
+#else
+static inline int sdi_init(bool skip_init)
+{
+	return 0;
+}
+static inline void sdi_exit(void)
+{
+}
+#endif
 
 /* DSI */
+#ifdef CONFIG_OMAP2_DSS_DSI
 int dsi_init(struct platform_device *pdev);
 void dsi_exit(void);
 
@@ -270,11 +282,38 @@ void dsi_pll_uninit(void);
 void dsi_get_overlay_fifo_thresholds(enum omap_plane plane,
 		u32 fifo_size, enum omap_burst_size *burst_size,
 		u32 *fifo_low, u32 *fifo_high);
+void dsi_wait_dsi1_pll_active(void);
+void dsi_wait_dsi2_pll_active(void);
+#else
+static inline int dsi_init(struct platform_device *pdev)
+{
+	return 0;
+}
+static inline void dsi_exit(void)
+{
+}
+static inline void dsi_wait_dsi1_pll_active(void)
+{
+}
+static inline void dsi_wait_dsi2_pll_active(void)
+{
+}
+#endif
 
 /* DPI */
+#ifdef CONFIG_OMAP2_DSS_DPI
 int dpi_init(struct platform_device *pdev);
 void dpi_exit(void);
 int dpi_init_display(struct omap_dss_device *dssdev);
+#else
+static inline int dpi_init(struct platform_device *pdev)
+{
+	return 0;
+}
+static inline void dpi_exit(void)
+{
+}
+#endif
 
 /* DISPC */
 int dispc_init(void);
@@ -362,12 +401,23 @@ int dispc_get_clock_div(struct dispc_clock_info *cinfo);
 
 
 /* VENC */
+#ifdef CONFIG_OMAP2_DSS_VENC
 int venc_init(struct platform_device *pdev);
 void venc_exit(void);
 void venc_dump_regs(struct seq_file *s);
 int venc_init_display(struct omap_dss_device *display);
+#else
+static inline int venc_init(struct platform_device *pdev)
+{
+	return 0;
+}
+static inline void venc_exit(void)
+{
+}
+#endif
 
 /* RFBI */
+#ifdef CONFIG_OMAP2_DSS_RFBI
 int rfbi_init(void);
 void rfbi_exit(void);
 void rfbi_dump_regs(struct seq_file *s);
@@ -379,6 +429,15 @@ void rfbi_transfer_area(u16 width, u16 height,
 void rfbi_set_timings(int rfbi_module, struct rfbi_timings *t);
 unsigned long rfbi_get_max_tx_rate(void);
 int rfbi_init_display(struct omap_dss_device *display);
+#else
+static inline int rfbi_init(void)
+{
+	return 0;
+}
+static inline void rfbi_exit(void)
+{
+}
+#endif
 
 
 #ifdef CONFIG_OMAP2_DSS_COLLECT_IRQ_STATS

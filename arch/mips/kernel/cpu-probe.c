@@ -125,6 +125,30 @@ static int __init wait_disable(char *s)
 
 __setup("nowait", wait_disable);
 
+static int __cpuinitdata mips_fpu_disabled;
+
+static int __init fpu_disable(char *s)
+{
+	cpu_data[0].options &= ~MIPS_CPU_FPU;
+	mips_fpu_disabled = 1;
+
+	return 1;
+}
+
+__setup("nofpu", fpu_disable);
+
+int __cpuinitdata mips_dsp_disabled;
+
+static int __init dsp_disable(char *s)
+{
+	cpu_data[0].ases &= ~MIPS_ASE_DSP;
+	mips_dsp_disabled = 1;
+
+	return 1;
+}
+
+__setup("nodsp", dsp_disable);
+
 void __init check_wait(void)
 {
 	struct cpuinfo_mips *c = &current_cpu_data;
@@ -163,6 +187,7 @@ void __init check_wait(void)
 	case CPU_BCM6358:
 	case CPU_CAVIUM_OCTEON:
 	case CPU_CAVIUM_OCTEON_PLUS:
+	case CPU_JZRISC:
 		cpu_wait = r4k_wait;
 		break;
 
@@ -736,6 +761,9 @@ static void __cpuinit decode_configs(struct cpuinfo_mips *c)
 		ok = decode_config4(c);
 
 	mips_probe_watch_registers(c);
+
+	if (cpu_has_mips_r2)
+		c->core = read_c0_ebase() & 0x3ff;
 }
 
 static inline void cpu_probe_mips(struct cpuinfo_mips *c, unsigned int cpu)
@@ -932,6 +960,22 @@ platform:
 	}
 }
 
+static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
+{
+	decode_configs(c);
+	/* JZRISC does not implement the CP0 counter. */
+	c->options &= ~MIPS_CPU_COUNTER;
+	switch (c->processor_id & 0xff00) {
+	case PRID_IMP_JZRISC:
+		c->cputype = CPU_JZRISC;
+		__cpu_name[cpu] = "Ingenic JZRISC";
+		break;
+	default:
+		panic("Unknown Ingenic Processor ID!");
+		break;
+	}
+}
+
 const char *__cpu_name[NR_CPUS];
 const char *__elf_platform;
 
@@ -970,6 +1014,9 @@ __cpuinit void cpu_probe(void)
 	case PRID_COMP_CAVIUM:
 		cpu_probe_cavium(c, cpu);
 		break;
+	case PRID_COMP_INGENIC:
+		cpu_probe_ingenic(c, cpu);
+		break;
 	}
 
 	BUG_ON(!__cpu_name[cpu]);
@@ -981,6 +1028,12 @@ __cpuinit void cpu_probe(void)
 	 * manually setup otherwise it could trigger some nasty bugs.
 	 */
 	BUG_ON(current_cpu_type() != c->cputype);
+
+	if (mips_fpu_disabled)
+		c->options &= ~MIPS_CPU_FPU;
+
+	if (mips_dsp_disabled)
+		c->ases &= ~MIPS_ASE_DSP;
 
 	if (c->options & MIPS_CPU_FPU) {
 		c->fpu_id = cpu_get_fpu_id();

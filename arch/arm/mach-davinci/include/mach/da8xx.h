@@ -64,31 +64,11 @@ extern void __iomem *da8xx_syscfg1_base;
 #define DA8XX_DDR2_CTL_BASE	0xb0000000
 #define DA8XX_ARM_RAM_BASE	0xffff0000
 
-#define PINMUX0			0x00
-#define PINMUX1			0x04
-#define PINMUX2			0x08
-#define PINMUX3			0x0c
-#define PINMUX4			0x10
-#define PINMUX5			0x14
-#define PINMUX6			0x18
-#define PINMUX7			0x1c
-#define PINMUX8			0x20
-#define PINMUX9			0x24
-#define PINMUX10		0x28
-#define PINMUX11		0x2c
-#define PINMUX12		0x30
-#define PINMUX13		0x34
-#define PINMUX14		0x38
-#define PINMUX15		0x3c
-#define PINMUX16		0x40
-#define PINMUX17		0x44
-#define PINMUX18		0x48
-#define PINMUX19		0x4c
-
 void __init da830_init(void);
 void __init da850_init(void);
 
-int da8xx_register_edma(void);
+int da830_register_edma(struct edma_rsv_info *rsv);
+int da850_register_edma(struct edma_rsv_info *rsv[2]);
 int da8xx_register_i2c(int instance, struct davinci_i2c_platform_data *pdata);
 int da8xx_register_watchdog(void);
 int da8xx_register_usb20(unsigned mA, unsigned potpgt);
@@ -107,6 +87,8 @@ extern struct platform_device da8xx_serial_device;
 extern struct emac_platform_data da8xx_emac_pdata;
 extern struct da8xx_lcdc_platform_data sharp_lcd035q3dg01_pdata;
 extern struct da8xx_lcdc_platform_data sharp_lk043t1dg01_pdata;
+
+extern struct platform_device da8xx_wdt_device;
 
 extern const short da830_emif25_pins[];
 extern const short da830_spi0_pins[];
@@ -145,11 +127,5 @@ extern const short da850_lcdcntl_pins[];
 extern const short da850_mmcsd0_pins[];
 extern const short da850_nand_pins[];
 extern const short da850_nor_pins[];
-
-#ifdef CONFIG_DAVINCI_MUX
-int da8xx_pinmux_setup(const short pins[]);
-#else
-static inline int da8xx_pinmux_setup(const short pins[]) { return 0; }
-#endif
 
 #endif /* __ASM_ARCH_DAVINCI_DA8XX_H */

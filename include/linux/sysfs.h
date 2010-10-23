@@ -16,19 +16,15 @@
 #include <linux/errno.h>
 #include <linux/list.h>
 #include <linux/lockdep.h>
+#include <linux/kobject_ns.h>
 #include <asm/atomic.h>
 
 struct kobject;
 struct module;
+enum kobj_ns_type;
 
-/* FIXME
- * The *owner field is no longer used.
- * x86 tree has been cleaned up. The owner
- * attribute is still left for other arches.
- */
 struct attribute {
 	const char		*name;
-	struct module		*owner;
 	mode_t			mode;
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 	struct lock_class_key	*key;
@@ -86,17 +82,18 @@ struct attribute_group {
 
 #define attr_name(_attr) (_attr).attr.name
 
+struct file;
 struct vm_area_struct;
 
 struct bin_attribute {
 	struct attribute	attr;
 	size_t			size;
 	void			*private;
-	ssize_t (*read)(struct kobject *, struct bin_attribute *,
+	ssize_t (*read)(struct file *, struct kobject *, struct bin_attribute *,
 			char *, loff_t, size_t);
-	ssize_t (*write)(struct kobject *, struct bin_attribute *,
+	ssize_t (*write)(struct file *,struct kobject *, struct bin_attribute *,
 			 char *, loff_t, size_t);
-	int (*mmap)(struct kobject *, struct bin_attribute *attr,
+	int (*mmap)(struct file *, struct kobject *, struct bin_attribute *attr,
 		    struct vm_area_struct *vma);
 };
 
@@ -134,8 +131,8 @@ int __must_check sysfs_create_file(struct kobject *kobj,
 				   const struct attribute *attr);
 int __must_check sysfs_create_files(struct kobject *kobj,
 				   const struct attribute **attr);
-int __must_check sysfs_chmod_file(struct kobject *kobj, struct attribute *attr,
-				  mode_t mode);
+int __must_check sysfs_chmod_file(struct kobject *kobj,
+				  const struct attribute *attr, mode_t mode);
 void sysfs_remove_file(struct kobject *kobj, const struct attribute *attr);
 void sysfs_remove_files(struct kobject *kobj, const struct attribute **attr);
 
@@ -154,6 +151,9 @@ void sysfs_remove_link(struct kobject *kobj, const char *name);
 int sysfs_rename_link(struct kobject *kobj, struct kobject *target,
 			const char *old_name, const char *new_name);
 
+void sysfs_delete_link(struct kobject *dir, struct kobject *targ,
+			const char *name);
+
 int __must_check sysfs_create_group(struct kobject *kobj,
 				    const struct attribute_group *grp);
 int sysfs_update_group(struct kobject *kobj,
@@ -168,10 +168,15 @@ void sysfs_remove_file_from_group(struct kobject *kobj,
 void sysfs_notify(struct kobject *kobj, const char *dir, const char *attr);
 void sysfs_notify_dirent(struct sysfs_dirent *sd);
 struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
+				      const void *ns,
 				      const unsigned char *name);
 struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd);
 void sysfs_put(struct sysfs_dirent *sd);
 void sysfs_printk_last_file(void);
+
+/* Called to clear a ns tag when it is no longer valid */
+void sysfs_exit_ns(enum kobj_ns_type type, const void *tag);
+
 int __must_check sysfs_init(void);
 
 #else /* CONFIG_SYSFS */
@@ -215,7 +220,7 @@ static inline int sysfs_create_files(struct kobject *kobj,
 }
 
 static inline int sysfs_chmod_file(struct kobject *kobj,
-				   struct attribute *attr, mode_t mode)
+				   const struct attribute *attr, mode_t mode)
 {
 	return 0;
 }
@@ -264,6 +269,11 @@ static inline int sysfs_rename_link(struct kobject *k, struct kobject *t,
 	return 0;
 }
 
+static inline void sysfs_delete_link(struct kobject *k, struct kobject *t,
+				     const char *name)
+{
+}
+
 static inline int sysfs_create_group(struct kobject *kobj,
 				     const struct attribute_group *grp)
 {
@@ -301,6 +311,7 @@ static inline void sysfs_notify_dirent(struct sysfs_dirent *sd)
 }
 static inline
 struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
+				      const void *ns,
 				      const unsigned char *name)
 {
 	return NULL;
@@ -310,6 +321,10 @@ static inline struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd)
 	return NULL;
 }
 static inline void sysfs_put(struct sysfs_dirent *sd)
+{
+}
+
+static inline void sysfs_exit_ns(int type, const void *tag)
 {
 }
 

@@ -132,11 +132,6 @@ static void jfs_destroy_inode(struct inode *inode)
 	kmem_cache_free(jfs_inode_cachep, ji);
 }
 
-static void jfs_clear_inode(struct inode *inode)
-{
-	dquot_drop(inode);
-}
-
 static int jfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
 	struct jfs_sb_info *sbi = JFS_SBI(dentry->d_sb);
@@ -178,6 +173,8 @@ static void jfs_put_super(struct super_block *sb)
 	int rc;
 
 	jfs_info("In jfs_put_super");
+
+	dquot_disable(sb, -1, DQUOT_USAGE_ENABLED | DQUOT_LIMITS_ENABLED);
 
 	lock_kernel();
 
@@ -396,10 +393,20 @@ static int jfs_remount(struct super_block *sb, int *flags, char *data)
 
 		JFS_SBI(sb)->flag = flag;
 		ret = jfs_mount_rw(sb, 1);
+
+		/* mark the fs r/w for quota activity */
+		sb->s_flags &= ~MS_RDONLY;
+
 		unlock_kernel();
+		dquot_resume(sb, -1);
 		return ret;
 	}
 	if ((!(sb->s_flags & MS_RDONLY)) && (*flags & MS_RDONLY)) {
+		rc = dquot_suspend(sb, -1);
+		if (rc < 0) {
+			unlock_kernel();
+			return rc;
+		}
 		rc = jfs_umount_rw(sb);
 		JFS_SBI(sb)->flag = flag;
 		unlock_kernel();
@@ -469,6 +476,10 @@ static int jfs_fill_super(struct super_block *sb, void *data, int silent)
 	 */
 	sb->s_op = &jfs_super_operations;
 	sb->s_export_op = &jfs_export_operations;
+#ifdef CONFIG_QUOTA
+	sb->dq_op = &dquot_operations;
+	sb->s_qcop = &dquot_quotactl_ops;
+#endif
 
 	/*
 	 * Initialize direct-mapping inode/address-space
@@ -749,8 +760,7 @@ static const struct super_operations jfs_super_operations = {
 	.destroy_inode	= jfs_destroy_inode,
 	.dirty_inode	= jfs_dirty_inode,
 	.write_inode	= jfs_write_inode,
-	.delete_inode	= jfs_delete_inode,
-	.clear_inode	= jfs_clear_inode,
+	.evict_inode	= jfs_evict_inode,
 	.put_super	= jfs_put_super,
 	.sync_fs	= jfs_sync_fs,
 	.freeze_fs	= jfs_freeze,

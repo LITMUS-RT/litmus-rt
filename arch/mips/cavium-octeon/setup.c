@@ -32,6 +32,7 @@
 #include <asm/time.h>
 
 #include <asm/octeon/octeon.h>
+#include <asm/octeon/pci-octeon.h>
 
 #ifdef CONFIG_CAVIUM_DECODE_RSL
 extern void cvmx_interrupt_rsl_decode(void);
@@ -403,7 +404,6 @@ void __init prom_init(void)
 	const int coreid = cvmx_get_core_num();
 	int i;
 	int argc;
-	struct uart_port octeon_port;
 #ifdef CONFIG_CAVIUM_RESERVE32
 	int64_t addr = -1;
 #endif
@@ -579,9 +579,6 @@ void __init prom_init(void)
 	}
 
 	if (strstr(arcs_cmdline, "console=") == NULL) {
-#ifdef CONFIG_GDB_CONSOLE
-		strcat(arcs_cmdline, " console=gdb");
-#else
 #ifdef CONFIG_CAVIUM_OCTEON_2ND_KERNEL
 		strcat(arcs_cmdline, " console=ttyS0,115200");
 #else
@@ -589,7 +586,6 @@ void __init prom_init(void)
 			strcat(arcs_cmdline, " console=ttyS1,115200");
 		else
 			strcat(arcs_cmdline, " console=ttyS0,115200");
-#endif
 #endif
 	}
 
@@ -599,43 +595,35 @@ void __init prom_init(void)
 		 * the filesystem. Also specify the calibration delay
 		 * to avoid calculating it every time.
 		 */
-		strcat(arcs_cmdline, " rw root=1f00"
-		       " lpj=60176 slram=root,0x40000000,+1073741824");
+		strcat(arcs_cmdline, " rw root=1f00 slram=root,0x40000000,+1073741824");
 	}
 
 	mips_hpt_frequency = octeon_get_clock_rate();
 
 	octeon_init_cvmcount();
+	octeon_setup_delays();
 
 	_machine_restart = octeon_restart;
 	_machine_halt = octeon_halt;
 
-	memset(&octeon_port, 0, sizeof(octeon_port));
-	/*
-	 * For early_serial_setup we don't set the port type or
-	 * UPF_FIXED_TYPE.
-	 */
-	octeon_port.flags = ASYNC_SKIP_TEST | UPF_SHARE_IRQ;
-	octeon_port.iotype = UPIO_MEM;
-	/* I/O addresses are every 8 bytes */
-	octeon_port.regshift = 3;
-	/* Clock rate of the chip */
-	octeon_port.uartclk = mips_hpt_frequency;
-	octeon_port.fifosize = 64;
-	octeon_port.mapbase = 0x0001180000000800ull + (1024 * octeon_uart);
-	octeon_port.membase = cvmx_phys_to_ptr(octeon_port.mapbase);
-	octeon_port.serial_in = octeon_serial_in;
-	octeon_port.serial_out = octeon_serial_out;
-#ifdef CONFIG_CAVIUM_OCTEON_2ND_KERNEL
-	octeon_port.line = 0;
-#else
-	octeon_port.line = octeon_uart;
-#endif
-	octeon_port.irq = 42 + octeon_uart;
-	early_serial_setup(&octeon_port);
-
 	octeon_user_io_init();
 	register_smp_ops(&octeon_smp_ops);
+}
+
+/* Exclude a single page from the regions obtained in plat_mem_setup. */
+static __init void memory_exclude_page(u64 addr, u64 *mem, u64 *size)
+{
+	if (addr > *mem && addr < *mem + *size) {
+		u64 inc = addr - *mem;
+		add_memory_region(*mem, inc, BOOT_MEM_RAM);
+		*mem += inc;
+		*size -= inc;
+	}
+
+	if (addr == *mem && *size > PAGE_SIZE) {
+		*mem += PAGE_SIZE;
+		*size -= PAGE_SIZE;
+	}
 }
 
 void __init plat_mem_setup(void)
@@ -688,12 +676,27 @@ void __init plat_mem_setup(void)
 						CVMX_BOOTMEM_FLAG_NO_LOCKING);
 #endif
 		if (memory >= 0) {
+			u64 size = mem_alloc_size;
+
+			/*
+			 * exclude a page at the beginning and end of
+			 * the 256MB PCIe 'hole' so the kernel will not
+			 * try to allocate multi-page buffers that
+			 * span the discontinuity.
+			 */
+			memory_exclude_page(CVMX_PCIE_BAR1_PHYS_BASE,
+					    &memory, &size);
+			memory_exclude_page(CVMX_PCIE_BAR1_PHYS_BASE +
+					    CVMX_PCIE_BAR1_PHYS_SIZE,
+					    &memory, &size);
+
 			/*
 			 * This function automatically merges address
 			 * regions next to each other if they are
 			 * received in incrementing order.
 			 */
-			add_memory_region(memory, mem_alloc_size, BOOT_MEM_RAM);
+			if (size)
+				add_memory_region(memory, size, BOOT_MEM_RAM);
 			total += mem_alloc_size;
 		} else {
 			break;
@@ -716,7 +719,10 @@ void __init plat_mem_setup(void)
 		      "cvmx_bootmem_phy_alloc\n");
 }
 
-
+/*
+ * Emit one character to the boot UART.  Exported for use by the
+ * watchdog timer.
+ */
 int prom_putchar(char c)
 {
 	uint64_t lsrval;
@@ -727,9 +733,10 @@ int prom_putchar(char c)
 	} while ((lsrval & 0x20) == 0);
 
 	/* Write the byte */
-	cvmx_write_csr(CVMX_MIO_UARTX_THR(octeon_uart), c);
+	cvmx_write_csr(CVMX_MIO_UARTX_THR(octeon_uart), c & 0xffull);
 	return 1;
 }
+EXPORT_SYMBOL(prom_putchar);
 
 void prom_free_prom_memory(void)
 {

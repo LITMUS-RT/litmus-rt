@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel PRO/1000 Linux driver
-  Copyright(c) 1999 - 2009 Intel Corporation.
+  Copyright(c) 1999 - 2010 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -234,9 +234,6 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	mac->mta_reg_count = 128;
 	/* Set rar entry count */
 	mac->rar_entry_count = E1000_RAR_ENTRIES;
-	/* Set if manageability features are enabled. */
-	mac->arc_subsystem_valid = (er32(FWSM) & E1000_FWSM_MODE_MASK)
-	                ? true : false;
 	/* Adaptive IFS supported */
 	mac->adaptive_ifs = true;
 
@@ -271,6 +268,16 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 		func->set_lan_id = e1000_set_lan_id_single_port;
 		func->check_mng_mode = e1000e_check_mng_mode_generic;
 		func->led_on = e1000e_led_on_generic;
+
+		/* FWSM register */
+		mac->has_fwsm = true;
+		/*
+		 * ARC supported; valid only if manageability features are
+		 * enabled.
+		 */
+		mac->arc_subsystem_valid =
+			(er32(FWSM) & E1000_FWSM_MODE_MASK)
+			? true : false;
 		break;
 	case e1000_82574:
 	case e1000_82583:
@@ -281,6 +288,9 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	default:
 		func->check_mng_mode = e1000e_check_mng_mode_generic;
 		func->led_on = e1000e_led_on_generic;
+
+		/* FWSM register */
+		mac->has_fwsm = true;
 		break;
 	}
 
@@ -323,7 +333,7 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	}
 
 	/*
-	 * Initialze device specific counter of SMBI acquisition
+	 * Initialize device specific counter of SMBI acquisition
 	 * timeouts.
 	 */
 	 hw->dev_spec.e82571.smb_counter = 0;
@@ -926,12 +936,14 @@ static s32 e1000_reset_hw_82571(struct e1000_hw *hw)
 	ew32(IMC, 0xffffffff);
 	icr = er32(ICR);
 
-	/* Install any alternate MAC address into RAR0 */
-	ret_val = e1000_check_alt_mac_addr_generic(hw);
-	if (ret_val)
-		return ret_val;
+	if (hw->mac.type == e1000_82571) {
+		/* Install any alternate MAC address into RAR0 */
+		ret_val = e1000_check_alt_mac_addr_generic(hw);
+		if (ret_val)
+			return ret_val;
 
-	e1000e_set_laa_state_82571(hw, true);
+		e1000e_set_laa_state_82571(hw, true);
+	}
 
 	/* Reinitialize the 82571 serdes link state machine */
 	if (hw->phy.media_type == e1000_media_type_internal_serdes)
@@ -993,9 +1005,10 @@ static s32 e1000_init_hw_82571(struct e1000_hw *hw)
 	/* ...for both queues. */
 	switch (mac->type) {
 	case e1000_82573:
+		e1000e_enable_tx_pkt_filtering(hw);
+		/* fall through */
 	case e1000_82574:
 	case e1000_82583:
-		e1000e_enable_tx_pkt_filtering(hw);
 		reg_data = er32(GCR);
 		reg_data |= E1000_GCR_L1_ACT_WITHOUT_L0S_RX;
 		ew32(GCR, reg_data);
@@ -1137,8 +1150,6 @@ static void e1000_initialize_hw_bits_82571(struct e1000_hw *hw)
 	default:
 		break;
 	}
-
-	return;
 }
 
 /**
@@ -1609,14 +1620,16 @@ static s32 e1000_read_mac_addr_82571(struct e1000_hw *hw)
 {
 	s32 ret_val = 0;
 
-	/*
-	 * If there's an alternate MAC address place it in RAR0
-	 * so that it will override the Si installed default perm
-	 * address.
-	 */
-	ret_val = e1000_check_alt_mac_addr_generic(hw);
-	if (ret_val)
-		goto out;
+	if (hw->mac.type == e1000_82571) {
+		/*
+		 * If there's an alternate MAC address place it in RAR0
+		 * so that it will override the Si installed default perm
+		 * address.
+		 */
+		ret_val = e1000_check_alt_mac_addr_generic(hw);
+		if (ret_val)
+			goto out;
+	}
 
 	ret_val = e1000_read_mac_addr_generic(hw);
 
@@ -1642,8 +1655,6 @@ static void e1000_power_down_phy_copper_82571(struct e1000_hw *hw)
 	/* If the management interface is not enabled, then power down */
 	if (!(mac->ops.check_mng_mode(hw) || phy->ops.check_reset_block(hw)))
 		e1000_power_down_phy_copper(hw);
-
-	return;
 }
 
 /**
@@ -1826,6 +1837,7 @@ struct e1000_info e1000_82573_info = {
 				  | FLAG_HAS_SMART_POWER_DOWN
 				  | FLAG_HAS_AMT
 				  | FLAG_HAS_SWSM_ON_LOAD,
+	.flags2			= FLAG2_DISABLE_ASPM_L1,
 	.pba			= 20,
 	.max_hw_frame_size	= ETH_FRAME_LEN + ETH_FCS_LEN,
 	.get_variants		= e1000_get_variants_82571,
@@ -1845,7 +1857,7 @@ struct e1000_info e1000_82574_info = {
 				  | FLAG_HAS_SMART_POWER_DOWN
 				  | FLAG_HAS_AMT
 				  | FLAG_HAS_CTRLEXT_ON_LOAD,
-	.pba			= 20,
+	.pba			= 36,
 	.max_hw_frame_size	= DEFAULT_JUMBO,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
@@ -1862,7 +1874,7 @@ struct e1000_info e1000_82583_info = {
 				  | FLAG_HAS_SMART_POWER_DOWN
 				  | FLAG_HAS_AMT
 				  | FLAG_HAS_CTRLEXT_ON_LOAD,
-	.pba			= 20,
+	.pba			= 36,
 	.max_hw_frame_size	= ETH_FRAME_LEN + ETH_FCS_LEN,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,

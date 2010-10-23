@@ -292,40 +292,28 @@ static struct platform_device cpmac_high = {
 	.num_resources	= ARRAY_SIZE(cpmac_high_res),
 };
 
-static inline unsigned char char2hex(char h)
+static void __init cpmac_get_mac(int instance, unsigned char *dev_addr)
 {
-	switch (h) {
-	case '0': case '1': case '2': case '3': case '4':
-	case '5': case '6': case '7': case '8': case '9':
-		return h - '0';
-	case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
-		return h - 'A' + 10;
-	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
-		return h - 'a' + 10;
-	default:
-		return 0;
-	}
-}
+	char name[5], *mac;
 
-static void cpmac_get_mac(int instance, unsigned char *dev_addr)
-{
-	int i;
-	char name[5], default_mac[ETH_ALEN], *mac;
-
-	mac = NULL;
 	sprintf(name, "mac%c", 'a' + instance);
 	mac = prom_getenv(name);
-	if (!mac) {
+	if (!mac && instance) {
 		sprintf(name, "mac%c", 'a');
 		mac = prom_getenv(name);
 	}
-	if (!mac) {
-		random_ether_addr(default_mac);
-		mac = default_mac;
-	}
-	for (i = 0; i < 6; i++)
-		dev_addr[i] = (char2hex(mac[i * 3]) << 4) +
-			char2hex(mac[i * 3 + 1]);
+
+	if (mac) {
+		if (sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+					&dev_addr[0], &dev_addr[1],
+					&dev_addr[2], &dev_addr[3],
+					&dev_addr[4], &dev_addr[5]) != 6) {
+			pr_warning("cannot parse mac address, "
+					"using random address\n");
+			random_ether_addr(dev_addr);
+		}
+	} else
+		random_ether_addr(dev_addr);
 }
 
 /*****************************************************************************
@@ -542,7 +530,7 @@ static int __init ar7_register_uarts(void)
 	if (IS_ERR(bus_clk))
 		panic("unable to get bus clk\n");
 
-	uart_port.type		= PORT_16550A;
+	uart_port.type		= PORT_AR7;
 	uart_port.uartclk	= clk_get_rate(bus_clk) / 2;
 	uart_port.iotype	= UPIO_MEM32;
 	uart_port.regshift	= 2;
@@ -576,7 +564,6 @@ static int __init ar7_register_devices(void)
 {
 	void __iomem *bootcr;
 	u32 val;
-	u16 chip_id;
 	int res;
 
 	res = ar7_register_uarts();
@@ -635,18 +622,10 @@ static int __init ar7_register_devices(void)
 	val = readl(bootcr);
 	iounmap(bootcr);
 	if (val & AR7_WDT_HW_ENA) {
-		chip_id = ar7_chip_id();
-		switch (chip_id) {
-		case AR7_CHIP_7100:
-		case AR7_CHIP_7200:
-			ar7_wdt_res.start = AR7_REGS_WDT;
-			break;
-		case AR7_CHIP_7300:
+		if (ar7_has_high_vlynq())
 			ar7_wdt_res.start = UR8_REGS_WDT;
-			break;
-		default:
-			break;
-		}
+		else
+			ar7_wdt_res.start = AR7_REGS_WDT;
 
 		ar7_wdt_res.end = ar7_wdt_res.start + 0x20;
 		res = platform_device_register(&ar7_wdt);
@@ -656,4 +635,4 @@ static int __init ar7_register_devices(void)
 
 	return 0;
 }
-arch_initcall(ar7_register_devices);
+device_initcall(ar7_register_devices);

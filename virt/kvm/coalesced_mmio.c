@@ -2,6 +2,7 @@
  * KVM coalesced MMIO
  *
  * Copyright (c) 2008 Bull S.A.S.
+ * Copyright 2009 Red Hat, Inc. and/or its affiliates.
  *
  *  Author: Laurent Vivier <Laurent.Vivier@bull.net>
  *
@@ -120,8 +121,10 @@ int kvm_coalesced_mmio_init(struct kvm *kvm)
 	return ret;
 
 out_free_dev:
+	kvm->coalesced_mmio_dev = NULL;
 	kfree(dev);
 out_free_page:
+	kvm->coalesced_mmio_ring = NULL;
 	__free_page(page);
 out_err:
 	return ret;
@@ -139,7 +142,7 @@ int kvm_vm_ioctl_register_coalesced_mmio(struct kvm *kvm,
 	struct kvm_coalesced_mmio_dev *dev = kvm->coalesced_mmio_dev;
 
 	if (dev == NULL)
-		return -EINVAL;
+		return -ENXIO;
 
 	mutex_lock(&kvm->slots_lock);
 	if (dev->nb_zones >= KVM_COALESCED_MMIO_ZONE_MAX) {
@@ -162,7 +165,7 @@ int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *kvm,
 	struct kvm_coalesced_mmio_zone *z;
 
 	if (dev == NULL)
-		return -EINVAL;
+		return -ENXIO;
 
 	mutex_lock(&kvm->slots_lock);
 

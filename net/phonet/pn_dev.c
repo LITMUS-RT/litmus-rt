@@ -46,9 +46,16 @@ struct phonet_net {
 
 int phonet_net_id __read_mostly;
 
+static struct phonet_net *phonet_pernet(struct net *net)
+{
+	BUG_ON(!net);
+
+	return net_generic(net, phonet_net_id);
+}
+
 struct phonet_device_list *phonet_device_list(struct net *net)
 {
-	struct phonet_net *pnn = net_generic(net, phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(net);
 	return &pnn->pndevs;
 }
 
@@ -155,6 +162,14 @@ int phonet_address_add(struct net_device *dev, u8 addr)
 	return err;
 }
 
+static void phonet_device_rcu_free(struct rcu_head *head)
+{
+	struct phonet_device *pnd;
+
+	pnd = container_of(head, struct phonet_device, rcu);
+	kfree(pnd);
+}
+
 int phonet_address_del(struct net_device *dev, u8 addr)
 {
 	struct phonet_device_list *pndevs = phonet_device_list(dev_net(dev));
@@ -172,10 +187,9 @@ int phonet_address_del(struct net_device *dev, u8 addr)
 		pnd = NULL;
 	mutex_unlock(&pndevs->lock);
 
-	if (pnd) {
-		synchronize_rcu();
-		kfree(pnd);
-	}
+	if (pnd)
+		call_rcu(&pnd->rcu, phonet_device_rcu_free);
+
 	return err;
 }
 
@@ -261,7 +275,7 @@ static int phonet_device_autoconf(struct net_device *dev)
 
 static void phonet_route_autodel(struct net_device *dev)
 {
-	struct phonet_net *pnn = net_generic(dev_net(dev), phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(dev_net(dev));
 	unsigned i;
 	DECLARE_BITMAP(deleted, 64);
 
@@ -313,7 +327,7 @@ static struct notifier_block phonet_device_notifier = {
 /* Per-namespace Phonet devices handling */
 static int __net_init phonet_init_net(struct net *net)
 {
-	struct phonet_net *pnn = net_generic(net, phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(net);
 
 	if (!proc_net_fops_create(net, "phonet", 0, &pn_sock_seq_fops))
 		return -ENOMEM;
@@ -326,7 +340,7 @@ static int __net_init phonet_init_net(struct net *net)
 
 static void __net_exit phonet_exit_net(struct net *net)
 {
-	struct phonet_net *pnn = net_generic(net, phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(net);
 	struct net_device *dev;
 	unsigned i;
 
@@ -376,7 +390,7 @@ void phonet_device_exit(void)
 
 int phonet_route_add(struct net_device *dev, u8 daddr)
 {
-	struct phonet_net *pnn = net_generic(dev_net(dev), phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(dev_net(dev));
 	struct phonet_routes *routes = &pnn->routes;
 	int err = -EEXIST;
 
@@ -393,7 +407,7 @@ int phonet_route_add(struct net_device *dev, u8 daddr)
 
 int phonet_route_del(struct net_device *dev, u8 daddr)
 {
-	struct phonet_net *pnn = net_generic(dev_net(dev), phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(dev_net(dev));
 	struct phonet_routes *routes = &pnn->routes;
 
 	daddr = daddr >> 2;
@@ -413,7 +427,7 @@ int phonet_route_del(struct net_device *dev, u8 daddr)
 
 struct net_device *phonet_route_get(struct net *net, u8 daddr)
 {
-	struct phonet_net *pnn = net_generic(net, phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(net);
 	struct phonet_routes *routes = &pnn->routes;
 	struct net_device *dev;
 
@@ -428,7 +442,7 @@ struct net_device *phonet_route_get(struct net *net, u8 daddr)
 
 struct net_device *phonet_route_output(struct net *net, u8 daddr)
 {
-	struct phonet_net *pnn = net_generic(net, phonet_net_id);
+	struct phonet_net *pnn = phonet_pernet(net);
 	struct phonet_routes *routes = &pnn->routes;
 	struct net_device *dev;
 

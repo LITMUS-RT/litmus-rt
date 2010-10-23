@@ -164,12 +164,12 @@ unsigned long read_timer(void)
 	unsigned long t, flags;
 	int i;
 
-	spin_lock_irqsave(&i8253_lock, flags);
+	raw_spin_lock_irqsave(&i8253_lock, flags);
 	t = jiffies * 11932;
 	outb_p(0, 0x43);
 	i = inb_p(0x40);
 	i |= inb(0x40) << 8;
-	spin_unlock_irqrestore(&i8253_lock, flags);
+	raw_spin_unlock_irqrestore(&i8253_lock, flags);
 	return(t - i);
 }
 #endif
@@ -627,7 +627,7 @@ repeat:
 		req_data_dir(req) == READ ? "read" : "writ",
 		cyl, head, sec, nsect, req->buffer);
 #endif
-	if (blk_fs_request(req)) {
+	if (req->cmd_type == REQ_TYPE_FS) {
 		switch (rq_data_dir(req)) {
 		case READ:
 			hd_out(disk, nsect, sec, head, cyl, ATA_CMD_PIO_READ,

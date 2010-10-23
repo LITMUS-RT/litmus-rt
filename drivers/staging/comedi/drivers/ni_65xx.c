@@ -266,30 +266,29 @@ static inline unsigned ni_65xx_total_num_ports(const struct ni_65xx_board
 }
 
 static DEFINE_PCI_DEVICE_TABLE(ni_65xx_pci_table) = {
-	{
-	PCI_VENDOR_ID_NATINST, 0x1710, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7085, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7086, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7087, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7088, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70a9, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70c3, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70c8, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70c9, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70cc, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70CD, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70d1, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70d2, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x70d3, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7124, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7125, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7126, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7127, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x7128, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x718b, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x718c, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_NATINST, 0x71c5, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	0}
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x1710)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7085)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7086)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7087)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7088)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70a9)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70c3)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70c8)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70c9)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70cc)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70CD)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70d1)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70d2)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x70d3)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7124)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7125)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7126)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7127)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x7128)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x718b)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x718c)},
+	{PCI_DEVICE(PCI_VENDOR_ID_NI, 0x71c5)},
+	{0}
 };
 
 MODULE_DEVICE_TABLE(pci, ni_65xx_pci_table);
@@ -835,4 +834,40 @@ static int ni_65xx_find_device(struct comedi_device *dev, int bus, int slot)
 	return -EIO;
 }
 
-COMEDI_PCI_INITCLEANUP(driver_ni_65xx, ni_65xx_pci_table);
+static int __devinit driver_ni_65xx_pci_probe(struct pci_dev *dev,
+					      const struct pci_device_id *ent)
+{
+	return comedi_pci_auto_config(dev, driver_ni_65xx.driver_name);
+}
+
+static void __devexit driver_ni_65xx_pci_remove(struct pci_dev *dev)
+{
+	comedi_pci_auto_unconfig(dev);
+}
+
+static struct pci_driver driver_ni_65xx_pci_driver = {
+	.id_table = ni_65xx_pci_table,
+	.probe = &driver_ni_65xx_pci_probe,
+	.remove = __devexit_p(&driver_ni_65xx_pci_remove)
+};
+
+static int __init driver_ni_65xx_init_module(void)
+{
+	int retval;
+
+	retval = comedi_driver_register(&driver_ni_65xx);
+	if (retval < 0)
+		return retval;
+
+	driver_ni_65xx_pci_driver.name = (char *)driver_ni_65xx.driver_name;
+	return pci_register_driver(&driver_ni_65xx_pci_driver);
+}
+
+static void __exit driver_ni_65xx_cleanup_module(void)
+{
+	pci_unregister_driver(&driver_ni_65xx_pci_driver);
+	comedi_driver_unregister(&driver_ni_65xx);
+}
+
+module_init(driver_ni_65xx_init_module);
+module_exit(driver_ni_65xx_cleanup_module);
