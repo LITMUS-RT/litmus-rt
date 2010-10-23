@@ -3,6 +3,7 @@
 #
 
 obj-y     = sched_plugin.o litmus.o \
+	    litmus_proc.o \
 	    budget.o \
 	    jobs.o \
 	    sync.o \
