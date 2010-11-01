@@ -18,7 +18,7 @@
 
 /* set MAJOR to 0 to have it dynamically assigned */
 #define FT_TASK_TRACE_MAJOR	253
-#define NO_EVENTS		4096 /* this is a buffer of 12 4k pages per CPU */
+#define NO_EVENTS		(1 << CONFIG_SCHED_TASK_TRACE_SHIFT)
 
 #define now() litmus_clock()
 
@@ -41,6 +41,9 @@ static int __init init_sched_task_trace(void)
 {
 	struct local_buffer* buf;
 	int i, ok = 0;
+	printk("Allocated %u sched_trace_xxx() events per CPU "
+	       "(buffer size: %u bytes)\n",
+	       NO_EVENTS, sizeof(struct local_buffer));
 	ftdev_init(&st_dev, THIS_MODULE);
 	for (i = 0; i < NR_CPUS; i++) {
 		buf = &per_cpu(st_event_buffer, i);
