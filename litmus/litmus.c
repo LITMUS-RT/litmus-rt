@@ -6,20 +6,16 @@
 #include <asm/uaccess.h>
 #include <linux/uaccess.h>
 #include <linux/sysrq.h>
-
+#include <linux/sched.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 
 #include <litmus/litmus.h>
-#include <linux/sched.h>
-
 #include <litmus/bheap.h>
-
 #include <litmus/trace.h>
-
 #include <litmus/rt_domain.h>
-
 #include <litmus/litmus_proc.h>
+#include <litmus/sched_trace.h>
 
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);

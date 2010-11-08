@@ -2,6 +2,7 @@
  * litmus_proc.c -- Implementation of the /proc/litmus directory tree.
  */
 
+#include <linux/sched.h>
 #include <linux/uaccess.h>
 
 #include <litmus/litmus.h>

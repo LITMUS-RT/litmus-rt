@@ -6,6 +6,7 @@
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/sched.h>
 
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>

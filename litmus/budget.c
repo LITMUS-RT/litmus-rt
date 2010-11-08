@@ -1,3 +1,4 @@
+#include <linux/sched.h>
 #include <linux/percpu.h>
 #include <linux/hrtimer.h>
 

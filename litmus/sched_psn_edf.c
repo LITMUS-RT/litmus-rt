@@ -12,14 +12,13 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-
 #include <linux/module.h>
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
-
+#include <litmus/sched_trace.h>
 
 typedef struct {
 	rt_domain_t 		domain;

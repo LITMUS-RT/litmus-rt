@@ -3,12 +3,12 @@
 /* ************************************************************************** */
 
 #include <asm/atomic.h>
+#include <linux/sched.h>
 #include <linux/wait.h>
+
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
-
 #include <litmus/fdso.h>
-
 #include <litmus/trace.h>
 
 
