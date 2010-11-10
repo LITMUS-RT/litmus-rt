@@ -38,6 +38,8 @@
 #include <asm/localtimer.h>
 #include <asm/smp_plat.h>
 
+#include <litmus/preempt.h>
+
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -533,6 +535,8 @@ asmlinkage void __exception do_IPI(struct pt_regs *regs)
 				 * nothing more to do - eveything is
 				 * done on the interrupt return path
 				 */
+				/* LITMUS^RT: take action based on scheduler state */
+				sched_state_ipi();
 				break;
 
 			case IPI_CALL_FUNC:
