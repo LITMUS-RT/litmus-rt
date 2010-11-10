@@ -23,7 +23,8 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
-#include <litmus/litmus.h>
+#include <litmus/preempt.h>
+#include <litmus/debug_trace.h>
 #include <litmus/trace.h>
 
 #include <asm/mtrr.h>
@@ -212,10 +213,8 @@ static void native_smp_send_stop(void)
 void smp_reschedule_interrupt(struct pt_regs *regs)
 {
 	ack_APIC_irq();
-	/* LITMUS^RT needs this interrupt to proper reschedule
-	 * on this cpu
-	 */
-	set_tsk_need_resched(current);
+	/* LITMUS^RT: this IPI might need to trigger the sched state machine. */
+	sched_state_ipi();
 	inc_irq_stat(irq_resched_count);
 	TS_SEND_RESCHED_END;
 	/*
