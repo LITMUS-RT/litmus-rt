@@ -18,6 +18,8 @@
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
 
+#include <litmus/preempt.h>
+
 #include <litmus/bheap.h>
 
 #include <linux/module.h>
@@ -95,20 +97,11 @@ typedef struct  {
 	int 			cpu;
 	struct task_struct*	linked;		/* only RT tasks */
 	struct task_struct*	scheduled;	/* only RT tasks */
-	atomic_t		will_schedule;	/* prevent unneeded IPIs */
 	struct bheap_node*	hn;
 } cpu_entry_t;
 DEFINE_PER_CPU(cpu_entry_t, gsnedf_cpu_entries);
 
 cpu_entry_t* gsnedf_cpus[NR_CPUS];
-
-#define set_will_schedule() \
-	(atomic_set(&__get_cpu_var(gsnedf_cpu_entries).will_schedule, 1))
-#define clear_will_schedule() \
-	(atomic_set(&__get_cpu_var(gsnedf_cpu_entries).will_schedule, 0))
-#define test_will_schedule(cpu) \
-	(atomic_read(&per_cpu(gsnedf_cpu_entries, cpu).will_schedule))
-
 
 /* the cpus queue themselves according to priority in here */
 static struct bheap_node gsnedf_heap_node[NR_CPUS];
@@ -341,8 +334,7 @@ static void gsnedf_tick(struct task_struct* t)
 			/* np tasks will be preempted when they become
 			 * preemptable again
 			 */
-			set_tsk_need_resched(t);
-			set_will_schedule();
+			litmus_reschedule_local();
 			TRACE("gsnedf_scheduler_tick: "
 			      "%d is preemptable "
 			      " => FORCE_RESCHED\n", t->pid);
@@ -391,7 +383,6 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 #endif
 
 	raw_spin_lock(&gsnedf_lock);
-	clear_will_schedule();
 
 	/* sanity checking */
 	BUG_ON(entry->scheduled && entry->scheduled != prev);
@@ -472,6 +463,8 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		 */
 		if (exists)
 			next = prev;
+
+	sched_state_task_picked();
 
 	raw_spin_unlock(&gsnedf_lock);
 
@@ -780,7 +773,6 @@ static long gsnedf_activate_plugin(void)
 	for_each_online_cpu(cpu) {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
 		bheap_node_init(&entry->hn, entry);
-		atomic_set(&entry->will_schedule, 0);
 		entry->linked    = NULL;
 		entry->scheduled = NULL;
 #ifdef CONFIG_RELEASE_MASTER
@@ -829,7 +821,6 @@ static int __init init_gsn_edf(void)
 	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
 		entry = &per_cpu(gsnedf_cpu_entries, cpu);
 		gsnedf_cpus[cpu] = entry;
-		atomic_set(&entry->will_schedule, 0);
 		entry->cpu 	 = cpu;
 		entry->hn        = &gsnedf_heap_node[cpu];
 		bheap_node_init(&entry->hn, entry);

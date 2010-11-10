@@ -10,7 +10,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
-
+#include <litmus/preempt.h>
 #include <litmus/jobs.h>
 
 /*
@@ -19,36 +19,30 @@
  * non-preemptive section aware and does not invoke the scheduler / send
  * IPIs if the to-be-preempted task is actually non-preemptive.
  */
-void preempt_if_preemptable(struct task_struct* t, int on_cpu)
+void preempt_if_preemptable(struct task_struct* t, int cpu)
 {
 	/* t is the real-time task executing on CPU on_cpu If t is NULL, then
 	 * on_cpu is currently scheduling background work.
 	 */
 
-	int send_ipi;
+	int reschedule = 0;
 
-	if (smp_processor_id() == on_cpu) {
-		/* local CPU case */
-		if (t) {
+	if (!t)
+		/* move non-real-time task out of the way */
+		reschedule = 1;
+	else {
+		if (smp_processor_id() == cpu) {
+			/* local CPU case */
 			/* check if we need to poke userspace */
 			if (is_user_np(t))
 				/* yes, poke it */
 				request_exit_np(t);
-			else
-				/* no, see if we are allowed to preempt the
+			else if (!is_kernel_np(t))
+				/* only if we are allowed to preempt the
 				 * currently-executing task */
-				if (!is_kernel_np(t))
-					set_tsk_need_resched(t);
-		} else
-			/* move non-real-time task out of the way */
-			set_tsk_need_resched(current);
-	} else {
-		/* remote CPU case */
-		if (!t)
-			/* currently schedules non-real-time work */
-			send_ipi = 1;
-		else {
-			/* currently schedules real-time work */
+				reschedule = 1;
+		} else {
+			/* remote CPU case */
 			if (is_user_np(t)) {
 				/* need to notify user space of delayed
 				 * preemption */
@@ -60,14 +54,14 @@ void preempt_if_preemptable(struct task_struct* t, int on_cpu)
 				mb();
 			}
 			/* Only send an ipi if remote task might have raced our
-			 * request, i.e., send an IPI to make sure if it exited
-			 * its critical section.
+			 * request, i.e., send an IPI to make sure in case it
+			 * exited its critical section.
 			 */
-			send_ipi = !is_np(t) && !is_kernel_np(t);
+			reschedule = !is_np(t) && !is_kernel_np(t);
 		}
-		if (likely(send_ipi))
-			smp_send_reschedule(on_cpu);
 	}
+	if (likely(reschedule))
+		litmus_reschedule(cpu);
 }
 
 
@@ -81,6 +75,7 @@ static void litmus_dummy_finish_switch(struct task_struct * prev)
 
 static struct task_struct* litmus_dummy_schedule(struct task_struct * prev)
 {
+	sched_state_task_picked();
 	return NULL;
 }
 

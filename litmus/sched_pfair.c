@@ -16,6 +16,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
+#include <litmus/preempt.h>
 #include <litmus/rt_domain.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/sched_trace.h>
@@ -241,11 +242,7 @@ static void check_preempt(struct task_struct* t)
 		PTRACE_TASK(t, "linked_on:%d, scheduled_on:%d\n",
 			   tsk_rt(t)->linked_on, tsk_rt(t)->scheduled_on);
 		/* preempt */
-		if (cpu == smp_processor_id())
-			set_tsk_need_resched(current);
-		else {
-			smp_send_reschedule(cpu);
-		}
+		litmus_reschedule(cpu);
 	}
 }
 
@@ -545,7 +542,7 @@ static void pfair_tick(struct task_struct* t)
 
 	if (state->local != current
 	    && (is_realtime(current) || is_present(state->local)))
-		set_tsk_need_resched(current);
+		litmus_reschedule_local();
 }
 
 static int safe_to_schedule(struct task_struct* t, int cpu)
@@ -577,7 +574,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 		if (next)
 			tsk_rt(next)->scheduled_on = state->cpu;
 	}
-
+	sched_state_task_picked();
 	raw_spin_unlock(&pfair_lock);
 
 	if (next)

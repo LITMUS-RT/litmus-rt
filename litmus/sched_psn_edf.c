@@ -16,6 +16,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
+#include <litmus/preempt.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
@@ -108,7 +109,7 @@ static void psnedf_tick(struct task_struct *t)
 
 	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
 		if (!is_np(t)) {
-			set_tsk_need_resched(t);
+			litmus_reschedule_local();
 			TRACE("psnedf_scheduler_tick: "
 			      "%d is preemptable "
 			      " => FORCE_RESCHED\n", t->pid);
@@ -204,6 +205,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	}
 
 	pedf->scheduled = next;
+	sched_state_task_picked();
 	raw_spin_unlock(&pedf->slock);
 
 	return next;

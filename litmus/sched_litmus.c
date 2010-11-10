@@ -3,6 +3,7 @@
 #include <litmus/litmus.h>
 #include <litmus/budget.h>
 #include <litmus/sched_plugin.h>
+#include <litmus/preempt.h>
 
 static void update_time_litmus(struct rq *rq, struct task_struct *p)
 {
@@ -51,6 +52,8 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 	/* let the plugin schedule */
 	next = litmus->schedule(prev);
+
+	sched_state_plugin_check();
 
 	/* check if a global plugin pulled a task from a different RQ */
 	if (next && task_rq(next) != rq) {
@@ -198,7 +201,7 @@ static void yield_task_litmus(struct rq *rq)
 	 * then determine if a preemption is still required.
 	 */
 	clear_exit_np(current);
-	set_tsk_need_resched(current);
+	litmus_reschedule_local();
 }
 
 /* Plugins are responsible for this.

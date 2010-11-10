@@ -34,6 +34,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
+#include <litmus/preempt.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
@@ -341,7 +342,7 @@ static void cedf_tick(struct task_struct* t)
 			/* np tasks will be preempted when they become
 			 * preemptable again
 			 */
-			set_tsk_need_resched(t);
+			litmus_reschedule_local();
 			set_will_schedule();
 			TRACE("cedf_scheduler_tick: "
 			      "%d is preemptable "
@@ -466,6 +467,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 		if (exists)
 			next = prev;
 
+	sched_state_task_picked();
 	raw_spin_unlock(&cluster->lock);
 
 #ifdef WANT_ALL_SCHED_EVENTS

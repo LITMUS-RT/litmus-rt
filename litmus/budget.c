@@ -3,6 +3,7 @@
 #include <linux/hrtimer.h>
 
 #include <litmus/litmus.h>
+#include <litmus/preempt.h>
 
 struct enforcement_timer {
 	/* The enforcement timer is used to accurately police
@@ -24,7 +25,7 @@ static enum hrtimer_restart on_enforcement_timeout(struct hrtimer *timer)
 	TRACE("enforcement timer fired.\n");
 	et->armed = 0;
 	/* activate scheduler */
-	set_tsk_need_resched(current);
+	litmus_reschedule_local();
 	local_irq_restore(flags);
 
 	return  HRTIMER_NORESTART;

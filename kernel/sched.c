@@ -3794,6 +3794,7 @@ asmlinkage void __sched schedule(void)
 
 need_resched:
 	preempt_disable();
+	sched_state_entered_schedule();
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch(cpu);
@@ -3872,7 +3873,7 @@ need_resched_nonpreemptible:
 
 	post_schedule(rq);
 
-	if (unlikely(reacquire_kernel_lock(prev)))
+	if (sched_state_validate_switch() || unlikely(reacquire_kernel_lock(prev)))
 		goto need_resched_nonpreemptible;
 
 	preempt_enable_no_resched();
