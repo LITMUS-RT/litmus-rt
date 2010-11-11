@@ -578,8 +578,14 @@ void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags)
 	 * A queue event has occurred, and we're going to schedule.  In
 	 * this case, we can save a useless back to back clock update.
 	 */
+	/* LITMUS^RT: turning off the clock update is buggy in Linux 2.6.36;
+	 * the scheduler can "forget" to renable the runqueue clock in some
+	 * cases. LITMUS^RT amplifies the effects of this problem. Hence, we
+	 * turn it off to avoid stalling clocks. */
+	/*
 	if (test_tsk_need_resched(p))
 		rq->skip_clock_update = 1;
+	*/
 }
 
 static inline int cpu_of(struct rq *rq)
