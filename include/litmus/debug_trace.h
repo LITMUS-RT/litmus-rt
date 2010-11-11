@@ -22,16 +22,4 @@ extern atomic_t __log_seq_no;
 #define TRACE_CUR(fmt, args...) \
 	TRACE_TASK(current, fmt, ## args)
 
-#define TRACE_BUG_ON(cond) \
-	do { if (cond) TRACE("BUG_ON(%s) at %s:%d " \
-			     "called from %p current=%s/%d state=%d " \
-			     "flags=%x partition=%d cpu=%d rtflags=%d"\
-			     " job=%u timeslice=%u\n",		\
-	#cond, __FILE__, __LINE__, __builtin_return_address(0), current->comm, \
-	current->pid, current->state, current->flags,  \
-	get_partition(current), smp_processor_id(), get_rt_flags(current), \
-	current->rt_param.job_params.job_no, \
-	current->rt.time_slice\
-	); } while(0);
-
 #endif

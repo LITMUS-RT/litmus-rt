@@ -210,11 +210,6 @@ static noinline void unlink(struct task_struct* t)
 {
     	cpu_entry_t *entry;
 
-	if (unlikely(!t)) {
-		TRACE_BUG_ON(!t);
-		return;
-	}
-
 	if (t->rt_param.linked_on != NO_CPU) {
 		/* unlink */
 		entry = &per_cpu(gsnedf_cpu_entries, t->rt_param.linked_on);
