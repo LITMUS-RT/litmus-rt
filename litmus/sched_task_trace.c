@@ -42,8 +42,8 @@ static int __init init_sched_task_trace(void)
 	struct local_buffer* buf;
 	int i, ok = 0;
 	printk("Allocated %u sched_trace_xxx() events per CPU "
-	       "(buffer size: %u bytes)\n",
-	       NO_EVENTS, sizeof(struct local_buffer));
+	       "(buffer size: %d bytes)\n",
+	       NO_EVENTS, (int) sizeof(struct local_buffer));
 	ftdev_init(&st_dev, THIS_MODULE);
 	for (i = 0; i < NR_CPUS; i++) {
 		buf = &per_cpu(st_event_buffer, i);
