@@ -2,7 +2,7 @@
  * sched_trace.c -- record scheduling events to a byte stream.
  */
 #include <linux/spinlock.h>
-#include <linux/semaphore.h>
+#include <linux/mutex.h>
 
 #include <linux/fs.h>
 #include <linux/slab.h>
@@ -19,7 +19,7 @@
 #define SCHED_TRACE_NAME "litmus/log"
 
 /* Allocate a buffer of about 32k per CPU */
-#define LITMUS_TRACE_BUF_PAGES 8
+#define LITMUS_TRACE_BUF_PAGES 64
 #define LITMUS_TRACE_BUF_SIZE (PAGE_SIZE * LITMUS_TRACE_BUF_PAGES * NR_CPUS)
 
 /* Max length of one read from the buffer */
@@ -28,123 +28,13 @@
 /* Max length for one write --- from kernel --- to the buffer */
 #define MSG_SIZE 255
 
-/* Inner ring buffer structure */
-typedef struct {
-	rwlock_t	del_lock;
 
-	/* the buffer */
-	struct kfifo	kfifo;
-} ring_buffer_t;
-
-/* Main buffer structure */
-typedef struct {
-	ring_buffer_t 		buf;
-	atomic_t		reader_cnt;
-	struct semaphore	reader_mutex;
-} trace_buffer_t;
+static DEFINE_MUTEX(reader_mutex);
+static atomic_t reader_cnt = ATOMIC_INIT(0);
+static DEFINE_KFIFO(debug_buffer, char, LITMUS_TRACE_BUF_SIZE);
 
 
-/*
- * Inner buffer management functions
- */
-void rb_init(ring_buffer_t* buf)
-{
-	rwlock_init(&buf->del_lock);
-}
-
-int rb_alloc_buf(ring_buffer_t* buf, unsigned int size)
-{
-	unsigned long flags;
-	int ret = 0;
-
-	write_lock_irqsave(&buf->del_lock, flags);
-
-	/* kfifo size must be a power of 2
-	 * atm kfifo alloc is automatically rounding the size
-	 */
-	ret = kfifo_alloc(&buf->kfifo, size, GFP_ATOMIC);
-
-	write_unlock_irqrestore(&buf->del_lock, flags);
-
-	if(ret < 0)
-		printk(KERN_ERR "kfifo_alloc failed\n");
-
-	return ret;
-}
-
-int rb_free_buf(ring_buffer_t* buf)
-{
-	unsigned long flags;
-
-	write_lock_irqsave(&buf->del_lock, flags);
-
-	BUG_ON(!kfifo_initialized(&buf->kfifo));
-	kfifo_free(&buf->kfifo);
-
-	write_unlock_irqrestore(&buf->del_lock, flags);
-
-	return 0;
-}
-
-/*
- * Assumption: concurrent writes are serialized externally
- *
- * Will only succeed if there is enough space for all len bytes.
- */
-int rb_put(ring_buffer_t* buf, char* mem, size_t len)
-{
-	unsigned long flags;
-	int error = 0;
-
-	read_lock_irqsave(&buf->del_lock, flags);
-
-	if (!kfifo_initialized(&buf->kfifo)) {
-		error = -ENODEV;
-		goto out;
-	}
-
-	if((kfifo_in(&buf->kfifo, mem, len)) < len) {
-		error = -ENOMEM;
-		goto out;
-	}
-
- out:
-	read_unlock_irqrestore(&buf->del_lock, flags);
-	return error;
-}
-
-/* Assumption: concurrent reads are serialized externally */
-int rb_get(ring_buffer_t* buf, char* mem, size_t len)
-{
-	unsigned long flags;
-	int error = 0;
-
-	read_lock_irqsave(&buf->del_lock, flags);
-	if (!kfifo_initialized(&buf->kfifo)) {
-		error = -ENODEV;
-		goto out;
-	}
-
-	error = kfifo_out(&buf->kfifo, (unsigned char*)mem, len);
-
- out:
-	read_unlock_irqrestore(&buf->del_lock, flags);
-	return error;
-}
-
-/*
- * Device Driver management
- */
 static DEFINE_RAW_SPINLOCK(log_buffer_lock);
-static trace_buffer_t log_buffer;
-
-static void init_log_buffer(void)
-{
-	rb_init(&log_buffer.buf);
-	atomic_set(&log_buffer.reader_cnt,0);
-	init_MUTEX(&log_buffer.reader_mutex);
-}
-
 static DEFINE_PER_CPU(char[MSG_SIZE], fmt_buffer);
 
 /*
@@ -163,6 +53,10 @@ void sched_trace_log_message(const char* fmt, ...)
 	size_t		len;
 	char*		buf;
 
+	if (!atomic_read(&reader_cnt))
+		/* early exit if nobody is listening */
+		return;
+
 	va_start(args, fmt);
 	local_irq_save(flags);
 
@@ -171,15 +65,16 @@ void sched_trace_log_message(const char* fmt, ...)
 	len = vscnprintf(buf, MSG_SIZE, fmt, args);
 
 	raw_spin_lock(&log_buffer_lock);
-	/* Don't copy the trailing null byte, we don't want null bytes
-	 * in a text file.
+	/* Don't copy the trailing null byte, we don't want null bytes in a
+	 * text file.
 	 */
-	rb_put(&log_buffer.buf, buf, len);
+	kfifo_in(&debug_buffer, buf, len);
 	raw_spin_unlock(&log_buffer_lock);
 
 	local_irq_restore(flags);
 	va_end(args);
 }
+
 
 /*
  * log_read - Read the trace buffer
@@ -187,16 +82,16 @@ void sched_trace_log_message(const char* fmt, ...)
  * This function is called as a file operation from userspace.
  * Readers can sleep. Access is serialized through reader_mutex
  */
-static ssize_t log_read(struct file *filp, char __user *to, size_t len,
-		      loff_t *f_pos)
+static ssize_t log_read(struct file *filp,
+			char __user *to, size_t len,
+			loff_t *f_pos)
 {
 	/* we ignore f_pos, this is strictly sequential */
 
 	ssize_t error = -EINVAL;
-	char*   mem;
-	trace_buffer_t *tbuf = filp->private_data;
+	char* mem;
 
-	if (down_interruptible(&tbuf->reader_mutex)) {
+	if (mutex_lock_interruptible(&reader_mutex)) {
 		error = -ERESTARTSYS;
 		goto out;
 	}
@@ -210,14 +105,14 @@ static ssize_t log_read(struct file *filp, char __user *to, size_t len,
 		goto out_unlock;
 	}
 
-	error = rb_get(&tbuf->buf, mem, len);
+	error = kfifo_out(&debug_buffer, mem, len);
 	while (!error) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(110);
 		if (signal_pending(current))
 			error = -ERESTARTSYS;
 		else
-			error = rb_get(&tbuf->buf, mem, len);
+			error = kfifo_out(&debug_buffer, mem, len);
 	}
 
 	if (error > 0 && copy_to_user(to, mem, error))
@@ -225,7 +120,7 @@ static ssize_t log_read(struct file *filp, char __user *to, size_t len,
 
 	kfree(mem);
  out_unlock:
-	up(&tbuf->reader_mutex);
+	mutex_unlock(&reader_mutex);
  out:
 	return error;
 }
@@ -243,36 +138,23 @@ extern int trace_recurse;
 static int log_open(struct inode *in, struct file *filp)
 {
 	int error = -EINVAL;
-	trace_buffer_t* tbuf;
 
-	tbuf = &log_buffer;
-
-	if (down_interruptible(&tbuf->reader_mutex)) {
+	if (mutex_lock_interruptible(&reader_mutex)) {
 		error = -ERESTARTSYS;
 		goto out;
 	}
 
-	/* first open must allocate buffers */
-	if (atomic_inc_return(&tbuf->reader_cnt) == 1) {
-		if ((error = rb_alloc_buf(&tbuf->buf, LITMUS_TRACE_BUF_SIZE)))
-		{
-			atomic_dec(&tbuf->reader_cnt);
-			goto out_unlock;
-		}
-	}
-
+	atomic_inc(&reader_cnt);
 	error = 0;
-	filp->private_data = tbuf;
 
 	printk(KERN_DEBUG
 	       "sched_trace kfifo with buffer starting at: 0x%p\n",
-	       (tbuf->buf.kfifo).buf);
+	       debug_buffer.buf);
 
 	/* override printk() */
 	trace_override++;
 
- out_unlock:
-	up(&tbuf->reader_mutex);
+	mutex_unlock(&reader_mutex);
  out:
 	return error;
 }
@@ -280,26 +162,20 @@ static int log_open(struct inode *in, struct file *filp)
 static int log_release(struct inode *in, struct file *filp)
 {
 	int error = -EINVAL;
-	trace_buffer_t* tbuf = filp->private_data;
 
-	BUG_ON(!filp->private_data);
-
-	if (down_interruptible(&tbuf->reader_mutex)) {
+	if (mutex_lock_interruptible(&reader_mutex)) {
 		error = -ERESTARTSYS;
 		goto out;
 	}
 
-	/* last release must deallocate buffers */
-	if (atomic_dec_return(&tbuf->reader_cnt) == 0) {
-		error = rb_free_buf(&tbuf->buf);
-	}
+	atomic_dec(&reader_cnt);
 
 	/* release printk() overriding */
 	trace_override--;
 
 	printk(KERN_DEBUG "sched_trace kfifo released\n");
 
-	up(&tbuf->reader_mutex);
+	mutex_unlock(&reader_mutex);
  out:
 	return error;
 }
@@ -333,7 +209,7 @@ void dump_trace_buffer(int max)
 	/* potential, but very unlikely, race... */
 	trace_recurse = 1;
 	while ((max == 0 || count++ < max) &&
-	       (len = rb_get(&log_buffer.buf, line, sizeof(line) - 1)) > 0) {
+	       (len = kfifo_out(&debug_buffer, line, sizeof(line - 1))) > 0) {
 		line[len] = '\0';
 		printk("%s", line);
 	}
@@ -355,7 +231,6 @@ static struct sysrq_key_op sysrq_dump_trace_buffer_op = {
 static int __init init_sched_trace(void)
 {
 	printk("Initializing TRACE() device\n");
-	init_log_buffer();
 
 #ifdef CONFIG_MAGIC_SYSRQ
 	/* offer some debugging help */
@@ -364,7 +239,6 @@ static int __init init_sched_trace(void)
 	else
 		printk("Could not register dump-trace-buffer(Y) magic sysrq.\n");
 #endif
-
 
 	return misc_register(&litmus_log_dev);
 }
