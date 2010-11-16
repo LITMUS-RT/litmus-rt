@@ -18,14 +18,14 @@
 
 #define SCHED_TRACE_NAME "litmus/log"
 
-/* Allocate a buffer of about 32k per CPU */
-#define LITMUS_TRACE_BUF_PAGES 64
-#define LITMUS_TRACE_BUF_SIZE (PAGE_SIZE * LITMUS_TRACE_BUF_PAGES * NR_CPUS)
+/* Compute size of TRACE() buffer */
+#define LITMUS_TRACE_BUF_SIZE (1 << CONFIG_SCHED_DEBUG_TRACE_SHIFT)
 
 /* Max length of one read from the buffer */
 #define MAX_READ_LEN (64 * 1024)
 
-/* Max length for one write --- from kernel --- to the buffer */
+/* Max length for one write --- by TRACE() --- to the buffer. This is used to
+ * allocate a per-cpu buffer for printf() formatting. */
 #define MSG_SIZE 255
 
 

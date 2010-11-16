@@ -149,6 +149,26 @@ config SCHED_DEBUG_TRACE
 	  Say Yes for debugging.
 	  Say No for overhead tracing.
 
+config SCHED_DEBUG_TRACE_SHIFT
+       int "Buffer size for TRACE() buffer"
+       depends on SCHED_DEBUG_TRACE
+       range 14 22
+       default 18
+       help
+
+	Select the amount of memory needed per CPU for the TRACE() buffer, as a
+	power of two. The TRACE() buffer is global and statically allocated. If
+	the buffer is too small, there will be holes in the TRACE() log if the
+	buffer-flushing task is starved.
+
+	The default should be sufficient for most systems. Increase the buffer
+	size if the log contains holes. Reduce the buffer size when running on
+	a memory-constrained system.
+
+	Examples: 14 =>  16KB
+		  18 => 256KB
+		  20 =>   1MB
+
 endmenu
 
 endmenu
