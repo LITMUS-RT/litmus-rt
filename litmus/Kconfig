@@ -156,7 +156,7 @@ config SCHED_DEBUG_TRACE_SHIFT
        default 18
        help
 
-	Select the amount of memory needed per CPU for the TRACE() buffer, as a
+	Select the amount of memory needed per for the TRACE() buffer, as a
 	power of two. The TRACE() buffer is global and statically allocated. If
 	the buffer is too small, there will be holes in the TRACE() log if the
 	buffer-flushing task is starved.
@@ -168,6 +168,11 @@ config SCHED_DEBUG_TRACE_SHIFT
 	Examples: 14 =>  16KB
 		  18 => 256KB
 		  20 =>   1MB
+
+        This buffer is exported to usespace using a misc device as
+        'litmus/log'. On a system with default udev rules, a corresponding
+        character device node should be created at /dev/litmus/log. The buffer
+        can be flushed using cat, e.g., 'cat /dev/litmus/log > my_log_file.txt'.
 
 endmenu
 
