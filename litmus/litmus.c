@@ -382,7 +382,8 @@ void litmus_exit_task(struct task_struct* tsk)
 /* IPI callback to synchronize plugin switching */
 static void synch_on_plugin_switch(void* info)
 {
-	while (atomic_read(&cannot_use_plugin))
+	atomic_inc(&cannot_use_plugin);
+	while (atomic_read(&cannot_use_plugin) > 0)
 		cpu_relax();
 }
 
@@ -402,6 +403,10 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	atomic_set(&cannot_use_plugin, 1);
 	/* send IPI to force other CPUs to synch with us */
 	smp_call_function(synch_on_plugin_switch, NULL, 0);
+
+	/* wait until all other CPUs have started synch */
+	while (atomic_read(&cannot_use_plugin) < num_online_cpus())
+		cpu_relax();
 
 	/* stop task transitions */
 	raw_spin_lock_irqsave(&task_transition_lock, flags);
