@@ -12,10 +12,20 @@ void dump_trace_buffer(int max);
 
 extern atomic_t __log_seq_no;
 
+#ifdef CONFIG_SCHED_DEBUG_TRACE_CALLER
+#define TRACE_PREFIX "%d P%d [%s@%s:%d]: "
+#define TRACE_ARGS  atomic_add_return(1, &__log_seq_no),	\
+		raw_smp_processor_id(),				\
+		__FUNCTION__, __FILE__, __LINE__
+#else
+#define TRACE_PREFIX "%d P%d: "
+#define TRACE_ARGS  atomic_add_return(1, &__log_seq_no), \
+		raw_smp_processor_id()
+#endif
+
 #define TRACE(fmt, args...)						\
-	sched_trace_log_message("%d P%d: " fmt,				\
-				atomic_add_return(1, &__log_seq_no),	\
-				raw_smp_processor_id(), ## args)
+	sched_trace_log_message(TRACE_PREFIX fmt,			\
+				TRACE_ARGS,  ## args)
 
 #define TRACE_TASK(t, fmt, args...)			\
 	TRACE("(%s/%d:%d) " fmt, (t)->comm, (t)->pid,	\
