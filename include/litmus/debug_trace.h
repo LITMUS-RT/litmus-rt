@@ -12,12 +12,14 @@ void dump_trace_buffer(int max);
 
 extern atomic_t __log_seq_no;
 
-#define TRACE(fmt, args...) \
-	sched_trace_log_message("%d P%d: " fmt, atomic_add_return(1, &__log_seq_no), \
+#define TRACE(fmt, args...)						\
+	sched_trace_log_message("%d P%d: " fmt,				\
+				atomic_add_return(1, &__log_seq_no),	\
 				raw_smp_processor_id(), ## args)
 
-#define TRACE_TASK(t, fmt, args...) \
-	TRACE("(%s/%d) " fmt, (t)->comm, (t)->pid, ##args)
+#define TRACE_TASK(t, fmt, args...)			\
+	TRACE("(%s/%d:%d) " fmt, (t)->comm, (t)->pid,	\
+	      (t)->rt_param.job_params.job_no,  ##args)
 
 #define TRACE_CUR(fmt, args...) \
 	TRACE_TASK(current, fmt, ## args)
