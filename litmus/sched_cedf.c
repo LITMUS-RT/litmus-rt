@@ -708,7 +708,8 @@ static long cedf_activate_plugin(void)
 				if (cpumask_test_cpu(cpu, cedf[j].cpu_map))
 					break;
 			/* if it is in a cluster go to next cpu */
-			if (cpumask_test_cpu(cpu, cedf[j].cpu_map))
+			if (j < num_clusters &&
+					cpumask_test_cpu(cpu, cedf[j].cpu_map))
 				continue;
 
 			/* this cpu isn't in any cluster */
