@@ -587,7 +587,9 @@ static void cedf_task_exit(struct task_struct * t)
 	raw_spin_lock_irqsave(&cluster->lock, flags);
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
-		cluster->cpus[tsk_rt(t)->scheduled_on]->scheduled = NULL;
+		cpu_entry_t *cpu;
+		cpu = &per_cpu(cedf_cpu_entries, tsk_rt(t)->scheduled_on);
+		cpu->scheduled = NULL;
 		tsk_rt(t)->scheduled_on = NO_CPU;
 	}
 	raw_spin_unlock_irqrestore(&cluster->lock, flags);
