@@ -45,14 +45,17 @@
 #include <litmus/litmus_proc.h>
 #include <linux/uaccess.h>
 
-/*
- * It makes sense only to cluster around L2 or L3, so if cluster_index = 2
- * (default) we cluster all the CPUs that shares a L2 cache, while
- * cluster_cache_index = 3 we cluster all CPs that shares a L3 cache
+/* Reference configuration variable. Determines which cache level is used to
+ * group CPUs into clusters.  GLOBAL_CLUSTER, which is the default, means that
+ * all CPUs form a single cluster (just like GSN-EDF).
  */
-int cluster_index = 2;
+static enum {
+	GLOBAL_CLUSTER = 0,
+	L1_CLUSTER     = 1,
+	L2_CLUSTER     = 2,
+	L3_CLUSTER     = 3
+} cluster_config = GLOBAL_CLUSTER;
 
-/* forward declaration... a funny thing with C ;) */
 struct clusterdomain;
 
 /* cpu_entry_t - maintain the linked and scheduled state
@@ -649,26 +652,25 @@ static long cedf_activate_plugin(void)
 	/* de-allocate old clusters, if any */
 	cleanup_cedf();
 
-	printk(KERN_INFO "C-EDF: Activate Plugin, cache index = %d\n",
-			cluster_index);
+	printk(KERN_INFO "C-EDF: Activate Plugin, cluster configuration = %d\n",
+			cluster_config);
 
 	/* need to get cluster_size first */
 	if(!zalloc_cpumask_var(&mask, GFP_ATOMIC))
 		return -ENOMEM;
 
-	if (unlikely(cluster_index == num_online_cpus())) {
-
+	if (unlikely(cluster_config == GLOBAL_CLUSTER)) {
 		cluster_size = num_online_cpus();
 	} else {
-
-		chk = get_shared_cpu_map(mask, 0, cluster_index);
+		chk = get_shared_cpu_map(mask, 0, cluster_config);
 		if (chk) {
 			/* if chk != 0 then it is the max allowed index */
-			printk(KERN_INFO "C-EDF: Cannot support cache index = %d\n",
-					cluster_index);
-			printk(KERN_INFO "C-EDF: Using cache index = %d\n",
-					chk);
-			cluster_index = chk;
+			printk(KERN_INFO "C-EDF: Cluster configuration = %d "
+			       "is not supported on this hardware.\n",
+			       cluster_config);
+			/* User should notice that the configuration failed, so
+			 * let's bail out. */
+			return -EINVAL;
 		}
 
 		cluster_size = cpumask_weight(mask);
@@ -716,10 +718,10 @@ static long cedf_activate_plugin(void)
 
 			/* this cpu isn't in any cluster */
 			/* get the shared cpus */
-			if (unlikely(cluster_index == num_online_cpus()))
+			if (unlikely(cluster_config == GLOBAL_CLUSTER))
 				cpumask_copy(mask, cpu_online_mask);
 			else
-				get_shared_cpu_map(mask, cpu, cluster_index);
+				get_shared_cpu_map(mask, cpu, cluster_config);
 
 			cpumask_copy(cedf[i].cpu_map, mask);
 #ifdef VERBOSE_INIT
@@ -776,11 +778,21 @@ static int proc_read_cluster_size(char *page, char **start,
 				  int *eof, void *data)
 {
 	int len;
-	if (cluster_index >= 1 && cluster_index <= 3)
-		len = snprintf(page, PAGE_SIZE, "L%d\n", cluster_index);
-	else
+	switch (cluster_config) {
+	case GLOBAL_CLUSTER:
 		len = snprintf(page, PAGE_SIZE, "ALL\n");
-
+		break;
+	case L1_CLUSTER:
+	case L2_CLUSTER:
+	case L3_CLUSTER:
+		len = snprintf(page, PAGE_SIZE, "L%d\n", cluster_config);
+		break;
+	default:
+		/* This should be impossible, but let's be paranoid. */
+		len = snprintf(page, PAGE_SIZE, "INVALID (%d)\n",
+			       cluster_config);
+		break;
+	}
 	return len;
 }
 
@@ -808,13 +820,13 @@ static int proc_write_cluster_size(struct file *file,
 
 	/* do a quick and dirty comparison to find the cluster size */
 	if (!strcmp(cache_name, "L2"))
-		cluster_index = 2;
+		cluster_config = L2_CLUSTER;
 	else if (!strcmp(cache_name, "L3"))
-		cluster_index = 3;
+		cluster_config = L3_CLUSTER;
 	else if (!strcmp(cache_name, "L1"))
-		cluster_index = 1;
+		cluster_config = L1_CLUSTER;
 	else if (!strcmp(cache_name, "ALL"))
-		cluster_index = num_online_cpus();
+		cluster_config = GLOBAL_CLUSTER;
 	else
 		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
 
