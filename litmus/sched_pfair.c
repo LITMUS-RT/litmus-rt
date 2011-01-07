@@ -23,6 +23,13 @@
 
 #include <litmus/bheap.h>
 
+/* to configure the cluster size */
+#include <litmus/litmus_proc.h>
+
+#include <litmus/clustered.h>
+
+static enum cache_level pfair_cluster_level = GLOBAL_CLUSTER;
+
 struct subtask {
 	/* measured in quanta relative to job release */
 	quanta_t release;
@@ -43,25 +50,28 @@ struct pfair_param   {
 
 	unsigned int	sporadic_release; /* On wakeup, new sporadic release? */
 
+	struct pfair_cluster* cluster; /* where this task is scheduled */
+
 	struct subtask subtasks[0];   /* allocate together with pfair_param */
 };
 
 #define tsk_pfair(tsk) ((tsk)->rt_param.pfair)
 
 struct pfair_state {
-	int cpu;
+	struct cluster_cpu topology;
+
 	volatile quanta_t cur_tick;    /* updated by the CPU that is advancing
 				        * the time */
 	volatile quanta_t local_tick;  /* What tick is the local CPU currently
 				        * executing? Updated only by the local
 				        * CPU. In QEMU, this may lag behind the
-					* current tick. In a real system, with
-					* proper timers and aligned quanta,
-					* that should only be the
-					* case for a very short time after the
-					* time advanced. With staggered quanta,
-					* it will lag for the duration of the
-					* offset.
+				        * current tick. In a real system, with
+				        * proper timers and aligned quanta,
+				        * that should only be the case for a
+				        * very short time after the time
+				        * advanced. With staggered quanta, it
+				        * will lag for the duration of the
+				        * offset.
 					*/
 
 	struct task_struct* linked;    /* the task that should be executing */
@@ -79,25 +89,56 @@ struct pfair_state {
  */
 #define PFAIR_MAX_PERIOD 2000
 
-/* This is the release queue wheel. It is indexed by pfair_time %
- * PFAIR_MAX_PERIOD.  Each heap is ordered by PFAIR priority, so that it can be
- * merged with the ready queue.
- */
-static struct bheap release_queue[PFAIR_MAX_PERIOD];
+struct pfair_cluster {
+	struct scheduling_cluster topology;
+
+	/* The "global" time in this cluster. */
+	quanta_t pfair_time; /* the "official" PFAIR clock */
+	quanta_t merge_time; /* Updated after the release queue has been
+			      * merged. Used by drop_all_references().
+			      */
+
+	/* The ready queue for this cluster. */
+	rt_domain_t pfair;
+
+	/* This is the release queue wheel for this cluster. It is indexed by
+	 * pfair_time % PFAIR_MAX_PERIOD.  Each heap is ordered by PFAIR
+	 * priority, so that it can be merged with the ready queue.
+	 */
+	struct bheap release_queue[PFAIR_MAX_PERIOD];
+};
+
+static inline struct pfair_cluster* cpu_cluster(struct pfair_state* state)
+{
+	return container_of(state->topology.cluster, struct pfair_cluster, topology);
+}
+
+static inline int cpu_id(struct pfair_state* state)
+{
+	return state->topology.id;
+}
+
+static inline struct pfair_state* from_cluster_list(struct list_head* pos)
+{
+	return list_entry(pos, struct pfair_state, topology.cluster_list);
+}
+
+static inline raw_spinlock_t* cluster_lock(struct pfair_cluster* cluster)
+{
+	/* The ready_lock is used to serialize all scheduling events. */
+	return &cluster->pfair.ready_lock;
+}
+
+static inline raw_spinlock_t* cpu_lock(struct pfair_state* state)
+{
+	return cluster_lock(cpu_cluster(state));
+}
 
 DEFINE_PER_CPU(struct pfair_state, pfair_state);
 struct pfair_state* *pstate; /* short cut */
 
-static quanta_t pfair_time = 0; /* the "official" PFAIR clock */
-static quanta_t merge_time = 0; /* Updated after the release queue has been
-				 * merged. Used by drop_all_references().
-				 */
-
-static rt_domain_t pfair;
-
-/* The pfair_lock is used to serialize all scheduling events.
- */
-#define pfair_lock pfair.ready_lock
+static struct pfair_cluster* pfair_clusters;
+static int num_pfair_clusters;
 
 /* Enable for lots of trace info.
  * #define PFAIR_DEBUG
@@ -197,9 +238,9 @@ int pfair_ready_order(struct bheap_node* a, struct bheap_node* b)
 }
 
 /* return the proper release queue for time t */
-static struct bheap* relq(quanta_t t)
+static struct bheap* relq(struct pfair_cluster* cluster, quanta_t t)
 {
-	struct bheap* rq = &release_queue[t % PFAIR_MAX_PERIOD];
+	struct bheap* rq = cluster->release_queue + (t % PFAIR_MAX_PERIOD);
 	return rq;
 }
 
@@ -215,17 +256,19 @@ static void __pfair_add_release(struct task_struct* t, struct bheap* queue)
 		    tsk_rt(t)->heap_node);
 }
 
-static void pfair_add_release(struct task_struct* t)
+static void pfair_add_release(struct pfair_cluster* cluster,
+			      struct task_struct* t)
 {
 	BUG_ON(bheap_node_in_heap(tsk_rt(t)->heap_node));
-	__pfair_add_release(t, relq(cur_release(t)));
+	__pfair_add_release(t, relq(cluster, cur_release(t)));
 }
 
 /* pull released tasks from the release queue */
-static void poll_releases(quanta_t time)
+static void poll_releases(struct pfair_cluster* cluster,
+			  quanta_t time)
 {
-	__merge_ready(&pfair, relq(time));
-	merge_time = time;
+	__merge_ready(&cluster->pfair, relq(cluster, time));
+	cluster->merge_time = time;
 }
 
 static void check_preempt(struct task_struct* t)
@@ -246,18 +289,20 @@ static void check_preempt(struct task_struct* t)
 	}
 }
 
-/* caller must hold pfair_lock */
+/* caller must hold pfair.ready_lock */
 static void drop_all_references(struct task_struct *t)
 {
         int cpu;
         struct pfair_state* s;
         struct bheap* q;
+	struct pfair_cluster* cluster;
         if (bheap_node_in_heap(tsk_rt(t)->heap_node)) {
                 /* figure out what queue the node is in */
-                if (time_before_eq(cur_release(t), merge_time))
-                        q = &pfair.ready_queue;
+		cluster = tsk_pfair(t)->cluster;
+                if (time_before_eq(cur_release(t), cluster->merge_time))
+                        q = &cluster->pfair.ready_queue;
                 else
-                        q = relq(cur_release(t));
+                        q = relq(cluster, cur_release(t));
                 bheap_delete(pfair_ready_order, q,
                             tsk_rt(t)->heap_node);
         }
@@ -301,22 +346,25 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 	return to_relq;
 }
 
-static void advance_subtasks(quanta_t time)
+static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 {
-	int cpu, missed;
+	int missed;
 	struct task_struct* l;
 	struct pfair_param* p;
+	struct list_head* pos;
+	struct pfair_state* cpu;
 
-	for_each_online_cpu(cpu) {
-		l = pstate[cpu]->linked;
-		missed = pstate[cpu]->linked != pstate[cpu]->local;
+	list_for_each(pos, &cluster->topology.cpus) {
+		cpu = from_cluster_list(pos);
+		l = cpu->linked;
+		missed = cpu->linked != cpu->local;
 		if (l) {
 			p = tsk_pfair(l);
 			p->last_quantum = time;
-			p->last_cpu     =  cpu;
-			if (advance_subtask(time, l, cpu)) {
-				pstate[cpu]->linked = NULL;
-				pfair_add_release(l);
+			p->last_cpu     =  cpu_id(cpu);
+			if (advance_subtask(time, l, cpu_id(cpu))) {
+				cpu->linked = NULL;
+				pfair_add_release(cluster, l);
 			}
 		}
 	}
@@ -350,8 +398,10 @@ static int pfair_link(quanta_t time, int cpu,
 	int target = target_cpu(time, t, cpu);
 	struct task_struct* prev  = pstate[cpu]->linked;
 	struct task_struct* other;
+	struct pfair_cluster* cluster = cpu_cluster(pstate[cpu]);
 
 	if (target != cpu) {
+		BUG_ON(pstate[target]->topology.cluster != pstate[cpu]->topology.cluster);
 		other = pstate[target]->linked;
 		pstate[target]->linked = t;
 		tsk_rt(t)->linked_on   = target;
@@ -365,14 +415,14 @@ static int pfair_link(quanta_t time, int cpu,
 			if (prev) {
 				/* prev got pushed back into the ready queue */
 				tsk_rt(prev)->linked_on = NO_CPU;
-				__add_ready(&pfair, prev);
+				__add_ready(&cluster->pfair, prev);
 			}
 			/* we are done with this cpu */
 			return 0;
 		} else {
 			/* re-add other, it's original CPU was not considered yet */
 			tsk_rt(other)->linked_on = NO_CPU;
-			__add_ready(&pfair, other);
+			__add_ready(&cluster->pfair, other);
 			/* reschedule this CPU */
 			return 1;
 		}
@@ -382,71 +432,77 @@ static int pfair_link(quanta_t time, int cpu,
 		if (prev) {
 			/* prev got pushed back into the ready queue */
 			tsk_rt(prev)->linked_on = NO_CPU;
-			__add_ready(&pfair, prev);
+			__add_ready(&cluster->pfair, prev);
 		}
 		/* we are done with this CPU */
 		return 0;
 	}
 }
 
-static void schedule_subtasks(quanta_t time)
+static void schedule_subtasks(struct pfair_cluster *cluster, quanta_t time)
 {
-	int cpu, retry;
+	int retry;
+	struct list_head *pos;
+	struct pfair_state *cpu_state;
 
-	for_each_online_cpu(cpu) {
+	list_for_each(pos, &cluster->topology.cpus) {
+		cpu_state = from_cluster_list(pos);
 		retry = 1;
 		while (retry) {
-			if (pfair_higher_prio(__peek_ready(&pfair),
-					      pstate[cpu]->linked))
-				retry = pfair_link(time, cpu,
-						   __take_ready(&pfair));
+			if (pfair_higher_prio(__peek_ready(&cluster->pfair),
+					      cpu_state->linked))
+				retry = pfair_link(time, cpu_id(cpu_state),
+						   __take_ready(&cluster->pfair));
 			else
 				retry = 0;
 		}
 	}
 }
 
-static void schedule_next_quantum(quanta_t time)
+static void schedule_next_quantum(struct pfair_cluster *cluster, quanta_t time)
 {
-	int cpu;
+	struct pfair_state *cpu;
+	struct list_head* pos;
 
 	/* called with interrupts disabled */
 	PTRACE("--- Q %lu at %llu PRE-SPIN\n",
 	       time, litmus_clock());
-	raw_spin_lock(&pfair_lock);
+	raw_spin_lock(cluster_lock(cluster));
 	PTRACE("<<< Q %lu at %llu\n",
 	       time, litmus_clock());
 
 	sched_trace_quantum_boundary();
 
-	advance_subtasks(time);
-	poll_releases(time);
-	schedule_subtasks(time);
+	advance_subtasks(cluster, time);
+	poll_releases(cluster, time);
+	schedule_subtasks(cluster, time);
 
-	for (cpu = 0; cpu < num_online_cpus(); cpu++)
-		if (pstate[cpu]->linked)
+	list_for_each(pos, &cluster->topology.cpus) {
+		cpu = from_cluster_list(pos);
+		if (cpu->linked)
 			PTRACE_TASK(pstate[cpu]->linked,
-				    " linked on %d.\n", cpu);
+				    " linked on %d.\n", cpu_id(cpu));
 		else
-			PTRACE("(null) linked on %d.\n", cpu);
-
+			PTRACE("(null) linked on %d.\n", cpu_id(cpu));
+	}
 	/* We are done. Advance time. */
 	mb();
-	for (cpu = 0; cpu < num_online_cpus(); cpu++) {
-		if (pstate[cpu]->local_tick != pstate[cpu]->cur_tick) {
+	list_for_each(pos, &cluster->topology.cpus) {
+		cpu = from_cluster_list(pos);
+		if (cpu->local_tick != cpu->cur_tick) {
 			TRACE("BAD Quantum not acked on %d "
 			      "(l:%lu c:%lu p:%lu)\n",
-			      cpu,
-			      pstate[cpu]->local_tick,
-			      pstate[cpu]->cur_tick,
-			      pfair_time);
-			pstate[cpu]->missed_quanta++;
+			      cpu_id(cpu),
+			      cpu->local_tick,
+			      cpu->cur_tick,
+			      cluster->pfair_time);
+			cpu->missed_quanta++;
 		}
-		pstate[cpu]->cur_tick = time;
+		cpu->cur_tick = time;
 	}
 	PTRACE(">>> Q %lu at %llu\n",
 	       time, litmus_clock());
-	raw_spin_unlock(&pfair_lock);
+	raw_spin_unlock(cluster_lock(cluster));
 }
 
 static noinline void wait_for_quantum(quanta_t q, struct pfair_state* state)
@@ -479,12 +535,12 @@ static void catchup_quanta(quanta_t from, quanta_t target,
 	while (time_before(cur, target)) {
 		wait_for_quantum(cur, state);
 		cur++;
-		time = cmpxchg(&pfair_time,
+		time = cmpxchg(&cpu_cluster(state)->pfair_time,
 			       cur - 1,   /* expected */
 			       cur        /* next     */
 			);
 		if (time == cur - 1)
-			schedule_next_quantum(cur);
+			schedule_next_quantum(cpu_cluster(state), cur);
 	}
 	TRACE("+++> catching up done\n");
 }
@@ -505,14 +561,14 @@ static void pfair_tick(struct task_struct* t)
 		/* Attempt to advance time. First CPU to get here
 		 * will prepare the next quantum.
 		 */
-		time = cmpxchg(&pfair_time,
+		time = cmpxchg(&cpu_cluster(state)->pfair_time,
 			       cur - 1,   /* expected */
 			       cur        /* next     */
 			);
 		if (time == cur - 1) {
 			/* exchange succeeded */
 			wait_for_quantum(cur - 1, state);
-			schedule_next_quantum(cur);
+			schedule_next_quantum(cpu_cluster(state), cur);
 			retry = 0;
 		} else if (time_before(time, cur - 1)) {
 			/* the whole system missed a tick !? */
@@ -562,59 +618,65 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	int blocks;
 	struct task_struct* next = NULL;
 
-	raw_spin_lock(&pfair_lock);
+	raw_spin_lock(cpu_lock(state));
 
 	blocks  = is_realtime(prev) && !is_running(prev);
 
-	if (state->local && safe_to_schedule(state->local, state->cpu))
+	if (state->local && safe_to_schedule(state->local, cpu_id(state)))
 		next = state->local;
 
 	if (prev != next) {
 		tsk_rt(prev)->scheduled_on = NO_CPU;
 		if (next)
-			tsk_rt(next)->scheduled_on = state->cpu;
+			tsk_rt(next)->scheduled_on = cpu_id(state);
 	}
 	sched_state_task_picked();
-	raw_spin_unlock(&pfair_lock);
+	raw_spin_unlock(cpu_lock(state));
 
 	if (next)
 		TRACE_TASK(next, "scheduled rel=%lu at %lu (%llu)\n",
-			   tsk_pfair(next)->release, pfair_time, litmus_clock());
+			   tsk_pfair(next)->release, cpu_cluster(state)->pfair_time, litmus_clock());
 	else if (is_realtime(prev))
-		TRACE("Becomes idle at %lu (%llu)\n", pfair_time, litmus_clock());
+		TRACE("Becomes idle at %lu (%llu)\n", cpu_cluster(state)->pfair_time, litmus_clock());
 
 	return next;
 }
 
 static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 {
-	unsigned long 		flags;
+	unsigned long flags;
+	struct pfair_cluster* cluster;
 
 	TRACE("pfair: task new %d state:%d\n", t->pid, t->state);
 
-	raw_spin_lock_irqsave(&pfair_lock, flags);
+	cluster = tsk_pfair(t)->cluster;
+
+	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 	if (running)
 		t->rt_param.scheduled_on = task_cpu(t);
 	else
 		t->rt_param.scheduled_on = NO_CPU;
 
-	prepare_release(t, pfair_time + 1);
+	prepare_release(t, cluster->pfair_time + 1);
 	tsk_pfair(t)->sporadic_release = 0;
-	pfair_add_release(t);
+	pfair_add_release(cluster, t);
 	check_preempt(t);
 
-	raw_spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 }
 
 static void pfair_task_wake_up(struct task_struct *t)
 {
 	unsigned long flags;
 	lt_t now;
+	struct pfair_cluster* cluster;
+
+	cluster = tsk_pfair(t)->cluster;
 
 	TRACE_TASK(t, "wakes at %llu, release=%lu, pfair_time:%lu\n",
-		   litmus_clock(), cur_release(t), pfair_time);
+		   litmus_clock(), cur_release(t), cluster->pfair_time);
 
-	raw_spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 
 	/* It is a little unclear how to deal with Pfair
 	 * tasks that block for a while and then wake. For now,
@@ -629,13 +691,13 @@ static void pfair_task_wake_up(struct task_struct *t)
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
 		/* FIXME: race with pfair_time advancing */
-		pfair_add_release(t);
+		pfair_add_release(cluster, t);
 		tsk_pfair(t)->sporadic_release = 0;
 	}
 
 	check_preempt(t);
 
-	raw_spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 	TRACE_TASK(t, "wake up done at %llu\n", litmus_clock());
 }
 
@@ -649,8 +711,11 @@ static void pfair_task_block(struct task_struct *t)
 static void pfair_task_exit(struct task_struct * t)
 {
 	unsigned long flags;
+	struct pfair_cluster *cluster;
 
 	BUG_ON(!is_realtime(t));
+
+	cluster = tsk_pfair(t)->cluster;
 
 	/* Remote task from release or ready queue, and ensure
 	 * that it is not the scheduled task for ANY CPU. We
@@ -659,12 +724,12 @@ static void pfair_task_exit(struct task_struct * t)
 	 * might not be the same as the CPU that the PFAIR scheduler
 	 * has chosen for it.
 	 */
-	raw_spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 
 	TRACE_TASK(t, "RIP, state:%d\n", t->state);
 	drop_all_references(t);
 
-	raw_spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 
 	kfree(t->rt_param.pfair);
 	t->rt_param.pfair = NULL;
@@ -676,27 +741,32 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 	unsigned long flags;
 	quanta_t release;
 
+	struct pfair_cluster *cluster;
+
+	cluster = tsk_pfair(task)->cluster;
+
 	BUG_ON(!is_realtime(task));
 
-	raw_spin_lock_irqsave(&pfair_lock, flags);
+	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 	release_at(task, start);
 	release = time2quanta(start, CEIL);
 
-	if (release - pfair_time >= PFAIR_MAX_PERIOD)
-		release = pfair_time + PFAIR_MAX_PERIOD;
+	/* FIXME: support arbitrary offsets. */
+	if (release - cluster->pfair_time >= PFAIR_MAX_PERIOD)
+		release = cluster->pfair_time + PFAIR_MAX_PERIOD;
 
 	TRACE_TASK(task, "sys release at %lu\n", release);
 
 	drop_all_references(task);
 	prepare_release(task, release);
-	pfair_add_release(task);
+	pfair_add_release(cluster, task);
 
 	/* Clear sporadic release flag, since this release subsumes any
 	 * sporadic release on wake.
 	 */
 	tsk_pfair(task)->sporadic_release = 0;
 
-	raw_spin_unlock_irqrestore(&pfair_lock, flags);
+	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 }
 
 static void init_subtask(struct subtask* sub, unsigned long i,
@@ -755,6 +825,11 @@ static long pfair_admit_task(struct task_struct* t)
 	struct pfair_param* param;
 	unsigned long i;
 
+	/* first check that the task is in the right cluster */
+	if (cpu_cluster(pstate[tsk_rt(t)->task_params.cpu]) !=
+	    cpu_cluster(pstate[task_cpu(t)]))
+		return -EINVAL;
+
 	/* Pfair is a tick-based method, so the time
 	 * of interest is jiffies. Calculate tick-based
 	 * times for everything.
@@ -798,6 +873,8 @@ static long pfair_admit_task(struct task_struct* t)
 	param->release = 0;
 	param->period  = period;
 
+	param->cluster = cpu_cluster(pstate[tsk_rt(t)->task_params.cpu]);
+
 	for (i = 0; i < quanta; i++)
 		init_subtask(param->subtasks + i, i, quanta, period);
 
@@ -813,24 +890,88 @@ static long pfair_admit_task(struct task_struct* t)
 	return 0;
 }
 
+static void pfair_init_cluster(struct pfair_cluster* cluster)
+{
+	int i;
+
+	/* initialize release queue */
+	for (i = 0; i < PFAIR_MAX_PERIOD; i++)
+		bheap_init(&cluster->release_queue[i]);
+	rt_domain_init(&cluster->pfair, pfair_ready_order, NULL, NULL);
+	INIT_LIST_HEAD(&cluster->topology.cpus);
+}
+
+static void cleanup_clusters(void)
+{
+	int i;
+
+	if (num_pfair_clusters)
+		kfree(pfair_clusters);
+	pfair_clusters = NULL;
+	num_pfair_clusters = 0;
+
+	/* avoid stale pointers */
+	for (i = 0; i < NR_CPUS; i++)
+		pstate[i]->topology.cluster = NULL;
+}
+
 static long pfair_activate_plugin(void)
 {
-	int cpu;
+	int err, i;
 	struct pfair_state* state;
+	struct pfair_cluster* cluster ;
+	quanta_t now;
+	int cluster_size;
+	struct cluster_cpu* cpus[NR_CPUS];
+	struct scheduling_cluster* clust[NR_CPUS];
 
-	state = &__get_cpu_var(pfair_state);
-	pfair_time = current_quantum(state);
+	cluster_size = get_cluster_size(pfair_cluster_level);
 
-	TRACE("Activating PFAIR at q=%lu\n", pfair_time);
+	if (cluster_size <= 0 || num_online_cpus() % cluster_size != 0)
+		return -EINVAL;
 
-	for (cpu = 0; cpu < num_online_cpus(); cpu++)  {
-		state = &per_cpu(pfair_state, cpu);
-		state->cur_tick   = pfair_time;
-		state->local_tick = pfair_time;
-		state->missed_quanta = 0;
-		state->offset     = cpu_stagger_offset(cpu);
+	num_pfair_clusters = num_online_cpus() / cluster_size;
+
+	pfair_clusters = kzalloc(num_pfair_clusters * sizeof(struct pfair_cluster), GFP_ATOMIC);
+	if (!pfair_clusters) {
+		num_pfair_clusters = 0;
+		printk(KERN_ERR "Could not allocate Pfair clusters!\n");
+		return -ENOMEM;
 	}
 
+	state = &__get_cpu_var(pfair_state);
+	now = current_quantum(state);
+	TRACE("Activating PFAIR at q=%lu\n", now);
+
+	for (i = 0; i < num_pfair_clusters; i++) {
+		cluster = &pfair_clusters[i];
+		pfair_init_cluster(cluster);
+		cluster->pfair_time = now;
+		clust[i] = &cluster->topology;
+	}
+
+	for (i = 0; i < num_online_cpus(); i++)  {
+		state = &per_cpu(pfair_state, i);
+		state->cur_tick   = now;
+		state->local_tick = now;
+		state->missed_quanta = 0;
+		state->offset     = cpu_stagger_offset(i);
+		printk(KERN_ERR "cpus[%d] set; %d\n", i, num_online_cpus());
+		cpus[i] = &state->topology;
+	}
+
+	err = assign_cpus_to_clusters(pfair_cluster_level, clust, num_pfair_clusters,
+				      cpus, num_online_cpus());
+
+	if (err < 0)
+		cleanup_clusters();
+
+	return err;
+}
+
+static long pfair_deactivate_plugin(void)
+{
+	cleanup_clusters();
 	return 0;
 }
 
@@ -847,30 +988,29 @@ static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.release_at		= pfair_release_at,
 	.complete_job		= complete_job,
 	.activate_plugin	= pfair_activate_plugin,
+	.deactivate_plugin	= pfair_deactivate_plugin,
 };
+
+
+static struct proc_dir_entry *cluster_file = NULL, *pfair_dir = NULL;
 
 static int __init init_pfair(void)
 {
-	int cpu, i;
+	int cpu, err, fs;
 	struct pfair_state *state;
-
 
 	/*
 	 * initialize short_cut for per-cpu pfair state;
 	 * there may be a problem here if someone removes a cpu
 	 * while we are doing this initialization... and if cpus
-	 * are added / removed later... is it a _real_ problem?
+	 * are added / removed later... but we don't support CPU hotplug atm anyway.
 	 */
 	pstate = kmalloc(sizeof(struct pfair_state*) * num_online_cpus(), GFP_KERNEL);
-
-	/* initialize release queue */
-	for (i = 0; i < PFAIR_MAX_PERIOD; i++)
-		bheap_init(&release_queue[i]);
 
 	/* initialize CPU state */
 	for (cpu = 0; cpu < num_online_cpus(); cpu++)  {
 		state = &per_cpu(pfair_state, cpu);
-		state->cpu 	  = cpu;
+		state->topology.id = cpu;
 		state->cur_tick   = 0;
 		state->local_tick = 0;
 		state->linked     = NULL;
@@ -881,13 +1021,29 @@ static int __init init_pfair(void)
 		pstate[cpu] = state;
 	}
 
-	rt_domain_init(&pfair, pfair_ready_order, NULL, NULL);
-	return register_sched_plugin(&pfair_plugin);
+	pfair_clusters = NULL;
+	num_pfair_clusters = 0;
+
+	err = register_sched_plugin(&pfair_plugin);
+	if (!err) {
+		fs = make_plugin_proc_dir(&pfair_plugin, &pfair_dir);
+		if (!fs)
+			cluster_file = create_cluster_file(pfair_dir, &pfair_cluster_level);
+		else
+			printk(KERN_ERR "Could not allocate PFAIR procfs dir.\n");
+	}
+
+	return err;
 }
 
 static void __exit clean_pfair(void)
 {
 	kfree(pstate);
+
+	if (cluster_file)
+		remove_proc_entry("cluster", pfair_dir);
+	if (pfair_dir)
+		remove_plugin_proc_dir(&pfair_plugin);
 }
 
 module_init(init_pfair);
