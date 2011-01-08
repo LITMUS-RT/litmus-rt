@@ -4,6 +4,7 @@
 #include <linux/cdev.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>
+#include <linux/device.h>
 
 #include <litmus/litmus.h>
 #include <litmus/feather_trace.h>
@@ -310,10 +311,11 @@ struct file_operations ftdev_fops = {
 };
 
 
-void ftdev_init(struct ftdev* ftdev, struct module* owner)
+void ftdev_init(struct ftdev* ftdev, struct module* owner, const char* name)
 {
-	int i;
+	int i, error;
 	cdev_init(&ftdev->cdev, &ftdev_fops);
+	ftdev->name = name;
 	ftdev->cdev.owner = owner;
 	ftdev->cdev.ops = &ftdev_fops;
 	ftdev->minor_cnt  = 0;
@@ -326,35 +328,62 @@ void ftdev_init(struct ftdev* ftdev, struct module* owner)
 	ftdev->alloc    = NULL;
 	ftdev->free     = NULL;
 	ftdev->can_open = NULL;
+
+	ftdev->class = class_create(owner, ftdev->name);
+	if (IS_ERR(ftdev->class)) {
+		error = PTR_ERR(ftdev->class);
+		printk(KERN_WARNING "ftdev(%s): "
+			"Could not create device class.\n",
+			name);
+	}
 }
 
-int register_ftdev(struct ftdev* ftdev, const char* name, int major)
+int register_ftdev(struct ftdev* ftdev)
 {
+	struct device **device;
 	dev_t   trace_dev;
-	int error = 0;
+	int error = 0, major, i;
 
-	if(major) {
-		trace_dev = MKDEV(major, 0);
-		error = register_chrdev_region(trace_dev, ftdev->minor_cnt,
-					       name);
-	} else {
-		error = alloc_chrdev_region(&trace_dev, 0, ftdev->minor_cnt,
-				name);
-		major = MAJOR(trace_dev);
-	}
+	error = alloc_chrdev_region(&trace_dev, 0, ftdev->minor_cnt,
+			ftdev->name);
+	major = MAJOR(trace_dev);
 	if (error)
 	{
 		printk(KERN_WARNING "ftdev(%s): "
 		       "Could not register major/minor number %d/%u\n",
-		       name, major, ftdev->minor_cnt);
-		return error;
+		       ftdev->name, major, ftdev->minor_cnt);
+		goto out;
 	}
 	error = cdev_add(&ftdev->cdev, trace_dev, ftdev->minor_cnt);
 	if (error) {
 		printk(KERN_WARNING "ftdev(%s): "
 		       "Could not add cdev for major/minor = %d/%u.\n",
-		       name, major, ftdev->minor_cnt);
-		return error;
+		       ftdev->name, major, ftdev->minor_cnt);
+		goto out;
 	}
+
+	/*
+	 * create all the minor devices
+	 */
+	for (i = 0; i < ftdev->minor_cnt; ++i)
+	{
+		trace_dev = MKDEV(major, i);
+		device = &(ftdev->minor[i].device);
+
+		*device = device_create(ftdev->class, NULL, trace_dev, NULL,
+				"%s%d", ftdev->name, i);
+		if (IS_ERR(*device)) {
+			error = PTR_ERR(*device);
+			printk(KERN_WARNING "ftdev(%s): "
+				"Could not create device major/minor number "
+				"%d/%d\n", ftdev->name, major, i);
+			printk(KERN_WARNING "ftdev(%s): "
+				"Will not continue creating devices. Tracing "
+				"may be in an inconsistent state.\n",
+				ftdev->name);
+			goto out;
+		}
+	}
+out:
 	return error;
 }

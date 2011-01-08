@@ -16,8 +16,6 @@
 #include <litmus/ftdev.h>
 
 
-/* set MAJOR to 0 to have it dynamically assigned */
-#define FT_TASK_TRACE_MAJOR	253
 #define NO_EVENTS		(1 << CONFIG_SCHED_TASK_TRACE_SHIFT)
 
 #define now() litmus_clock()
@@ -44,7 +42,7 @@ static int __init init_sched_task_trace(void)
 	printk("Allocated %u sched_trace_xxx() events per CPU "
 	       "(buffer size: %d bytes)\n",
 	       NO_EVENTS, (int) sizeof(struct local_buffer));
-	ftdev_init(&st_dev, THIS_MODULE);
+	ftdev_init(&st_dev, THIS_MODULE, "sched_trace");
 	for (i = 0; i < NR_CPUS; i++) {
 		buf = &per_cpu(st_event_buffer, i);
 		ok += init_ft_buffer(&buf->ftbuf, NO_EVENTS,
@@ -56,7 +54,7 @@ static int __init init_sched_task_trace(void)
 	if (ok == NR_CPUS) {
 		st_dev.minor_cnt = NR_CPUS;
 		st_dev.can_open = st_dev_can_open;
-		return register_ftdev(&st_dev, "sched_trace", FT_TASK_TRACE_MAJOR);
+		return register_ftdev(&st_dev);
 	} else {
 		return -EINVAL;
 	}

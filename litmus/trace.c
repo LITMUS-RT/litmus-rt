@@ -71,9 +71,6 @@ feather_callback void save_timestamp_cpu(unsigned long event,
  */
 #define NO_TIMESTAMPS (2 << 11)
 
-/* set MAJOR to 0 to have it dynamically assigned */
-#define FT_TRACE_MAJOR	252
-
 static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 {
 	unsigned int count = NO_TIMESTAMPS;
@@ -94,11 +91,11 @@ static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 static int __init init_ft_overhead_trace(void)
 {
 	printk("Initializing Feather-Trace overhead tracing device.\n");
-	ftdev_init(&overhead_dev, THIS_MODULE);
+	ftdev_init(&overhead_dev, THIS_MODULE, "ft_trace");
 	overhead_dev.minor_cnt = 1; /* only one buffer */
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
-	return register_ftdev(&overhead_dev, "ft_trace", FT_TRACE_MAJOR);
+	return register_ftdev(&overhead_dev);
 }
 
 module_init(init_ft_overhead_trace);

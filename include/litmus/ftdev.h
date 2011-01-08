@@ -28,10 +28,13 @@ struct ftdev_minor {
 	struct mutex		lock;
 	/* FIXME: filter for authorized events */
 	struct ftdev_event*	events;
+	struct device*		device;
 };
 
 struct ftdev {
 	struct cdev		cdev;
+	struct class*		class;
+	const char*		name;
 	/* FIXME: don't waste memory, allocate dynamically */
 	struct ftdev_minor	minor[MAX_FTDEV_MINORS];
 	unsigned int		minor_cnt;
@@ -43,7 +46,7 @@ struct ftdev {
 struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size);
 void free_ft_buffer(struct ft_buffer* buf);
 
-void ftdev_init(struct ftdev* ftdev, struct module* owner);
-int register_ftdev(struct ftdev* ftdev, const char* name, int major);
+void ftdev_init(struct ftdev* ftdev, struct module* owner, const char* name);
+int register_ftdev(struct ftdev* ftdev);
 
 #endif
