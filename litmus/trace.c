@@ -90,12 +90,33 @@ static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 
 static int __init init_ft_overhead_trace(void)
 {
+	int err;
+
 	printk("Initializing Feather-Trace overhead tracing device.\n");
-	ftdev_init(&overhead_dev, THIS_MODULE, "ft_trace");
-	overhead_dev.minor_cnt = 1; /* only one buffer */
+	err = ftdev_init(&overhead_dev, THIS_MODULE, 1, "ft_trace");
+	if (err)
+		goto err_out;
+
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
-	return register_ftdev(&overhead_dev);
+
+	err = register_ftdev(&overhead_dev);
+	if (err)
+		goto err_dealloc;
+
+	return 0;
+
+err_dealloc:
+	ftdev_exit(&overhead_dev);
+err_out:
+	printk(KERN_WARNING "Could not register ft_trace module.\n");
+	return err;
+}
+
+static void __exit exit_ft_overhead_trace(void)
+{
+	ftdev_exit(&overhead_dev);
 }
 
 module_init(init_ft_overhead_trace);
+module_exit(exit_ft_overhead_trace);

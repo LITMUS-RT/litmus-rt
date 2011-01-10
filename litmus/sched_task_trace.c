@@ -38,12 +38,17 @@ static int st_dev_can_open(struct ftdev *dev, unsigned int cpu)
 static int __init init_sched_task_trace(void)
 {
 	struct local_buffer* buf;
-	int i, ok = 0;
+	int i, ok = 0, err;
 	printk("Allocated %u sched_trace_xxx() events per CPU "
 	       "(buffer size: %d bytes)\n",
 	       NO_EVENTS, (int) sizeof(struct local_buffer));
-	ftdev_init(&st_dev, THIS_MODULE, "sched_trace");
-	for (i = 0; i < NR_CPUS; i++) {
+
+	err = ftdev_init(&st_dev, THIS_MODULE,
+			num_online_cpus(), "sched_trace");
+	if (err)
+		goto err_out;
+
+	for (i = 0; i < st_dev.minor_cnt; i++) {
 		buf = &per_cpu(st_event_buffer, i);
 		ok += init_ft_buffer(&buf->ftbuf, NO_EVENTS,
 				     sizeof(struct st_event_record),
@@ -51,16 +56,32 @@ static int __init init_sched_task_trace(void)
 				     buf->record);
 		st_dev.minor[i].buf = &buf->ftbuf;
 	}
-	if (ok == NR_CPUS) {
-		st_dev.minor_cnt = NR_CPUS;
+	if (ok == st_dev.minor_cnt) {
 		st_dev.can_open = st_dev_can_open;
-		return register_ftdev(&st_dev);
+		err = register_ftdev(&st_dev);
+		if (err)
+			goto err_dealloc;
 	} else {
-		return -EINVAL;
+		err = -EINVAL;
+		goto err_dealloc;
 	}
+
+	return 0;
+
+err_dealloc:
+	ftdev_exit(&st_dev);
+err_out:
+	printk(KERN_WARNING "Could not register sched_trace module\n");
+	return err;
+}
+
+static void __exit exit_sched_task_trace(void)
+{
+	ftdev_exit(&st_dev);
 }
 
 module_init(init_sched_task_trace);
+module_exit(exit_sched_task_trace);
 
 
 static inline struct st_event_record* get_record(u8 type, struct task_struct* t)

@@ -6,8 +6,6 @@
 #include <linux/mutex.h>
 #include <linux/cdev.h>
 
-#define MAX_FTDEV_MINORS NR_CPUS
-
 #define FTDEV_ENABLE_CMD 	0
 #define FTDEV_DISABLE_CMD 	1
 
@@ -32,11 +30,11 @@ struct ftdev_minor {
 };
 
 struct ftdev {
+	dev_t			major;
 	struct cdev		cdev;
 	struct class*		class;
 	const char*		name;
-	/* FIXME: don't waste memory, allocate dynamically */
-	struct ftdev_minor	minor[MAX_FTDEV_MINORS];
+	struct ftdev_minor*	minor;
 	unsigned int		minor_cnt;
 	ftdev_alloc_t		alloc;
 	ftdev_free_t		free;
@@ -46,7 +44,9 @@ struct ftdev {
 struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size);
 void free_ft_buffer(struct ft_buffer* buf);
 
-void ftdev_init(struct ftdev* ftdev, struct module* owner, const char* name);
+int ftdev_init(	struct ftdev* ftdev, struct module* owner,
+		const int minor_cnt, const char* name);
+void ftdev_exit(struct ftdev* ftdev);
 int register_ftdev(struct ftdev* ftdev);
 
 #endif
