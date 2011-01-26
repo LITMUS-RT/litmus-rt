@@ -34,7 +34,7 @@ struct st_release_data {	/* A job is was/is going to be released. */
 struct st_assigned_data {	/* A job was asigned to a CPU. 		 */
 	u64	when;
 	u8	target;		/* Where should it execute?	         */
-	u8	__unused[3];
+	u8	__unused[7];
 };
 
 struct st_switch_to_data {	/* A process was switched to on a given CPU.   */
@@ -54,7 +54,7 @@ struct st_completion_data {	/* A job completed. */
 				 * next task automatically; set to 0 otherwise.
 				 */
 	u8	__uflags:7;
-	u8	__unused[3];
+	u8	__unused[7];
 };
 
 struct st_block_data {		/* A task blocks. */
@@ -65,6 +65,12 @@ struct st_block_data {		/* A task blocks. */
 struct st_resume_data {		/* A task resumes. */
 	u64	when;
 	u64	__unused;
+};
+
+struct st_action_data {
+	u64	when;
+	u8	action;
+	u8	__unused[7];
 };
 
 struct st_sys_release_data {
@@ -85,7 +91,8 @@ typedef enum {
 	ST_COMPLETION,
 	ST_BLOCK,
 	ST_RESUME,
-	ST_SYS_RELEASE,
+	ST_ACTION,
+	ST_SYS_RELEASE
 } st_event_record_type_t;
 
 struct st_event_record {
@@ -102,8 +109,8 @@ struct st_event_record {
 		DATA(completion);
 		DATA(block);
 		DATA(resume);
+		DATA(action);
 		DATA(sys_release);
-
 	} data;
 };
 
@@ -140,8 +147,12 @@ feather_callback void do_sched_trace_task_block(unsigned long id,
 						struct task_struct* task);
 feather_callback void do_sched_trace_task_resume(unsigned long id,
 						 struct task_struct* task);
+feather_callback void do_sched_trace_action(unsigned long id,
+					    struct task_struct* task,
+					    unsigned long action);
 feather_callback void do_sched_trace_sys_release(unsigned long id,
 						 lt_t* start);
+
 #endif
 
 #else
@@ -172,9 +183,13 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 7, do_sched_trace_task_block, t)
 #define sched_trace_task_resume(t) \
 	SCHED_TRACE(SCHED_TRACE_BASE_ID + 8, do_sched_trace_task_resume, t)
+#define sched_trace_action(t, action) \
+	SCHED_TRACE2(SCHED_TRACE_BASE_ID + 9, do_sched_trace_action, t, \
+		     (unsigned long) action);
 /* when is a pointer, it does not need an explicit cast to unsigned long */
 #define sched_trace_sys_release(when) \
-	SCHED_TRACE(SCHED_TRACE_BASE_ID + 9, do_sched_trace_sys_release, when)
+	SCHED_TRACE(SCHED_TRACE_BASE_ID + 10, do_sched_trace_sys_release, when)
+
 
 #define sched_trace_quantum_boundary() /* NOT IMPLEMENTED */
 

@@ -224,3 +224,17 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 		put_record(rec);
 	}
 }
+
+feather_callback void do_sched_trace_action(unsigned long id,
+					    unsigned long _task,
+					    unsigned long action)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record* rec = get_record(ST_ACTION, t);
+
+	if (rec) {
+		rec->data.action.when   = now();
+		rec->data.action.action = action;
+		put_record(rec);
+	}
+}
