@@ -6,6 +6,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    preempt.o \
 	    litmus_proc.o \
 	    budget.o \
+	    clustered.o \
 	    jobs.o \
 	    sync.o \
 	    rt_domain.o \

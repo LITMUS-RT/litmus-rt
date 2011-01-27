@@ -19,4 +19,26 @@ const char* cache_level_name(enum cache_level level);
 struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
 					   enum cache_level* level);
 
+
+
+struct scheduling_cluster {
+	unsigned int id;
+	/* list of CPUs that are part of this cluster */
+	struct list_head cpus;
+};
+
+struct cluster_cpu {
+	unsigned int id; /* which CPU is this? */
+	struct list_head cluster_list; /* List of the CPUs in this cluster. */
+	struct scheduling_cluster* cluster; /* The cluster that this CPU belongs to. */
+};
+
+int get_cluster_size(enum cache_level level);
+
+int assign_cpus_to_clusters(enum cache_level level,
+			    struct scheduling_cluster* clusters[],
+			    unsigned int num_clusters,
+			    struct cluster_cpu* cpus[],
+			    unsigned int num_cpus);
+
 #endif
