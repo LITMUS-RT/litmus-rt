@@ -69,18 +69,9 @@ static int proc_write_curr(struct file *file,
 	char name[65];
 	struct sched_plugin* found;
 
-	if(count > 64)
-		len = 64;
-	else
-		len = count;
-
-	if(copy_from_user(name, buffer, len))
-		return -EFAULT;
-
-	name[len] = '\0';
-	/* chomp name */
-	if (len > 1 && name[len - 1] == '\n')
-		name[len - 1] = '\0';
+	len = copy_and_chomp(name, sizeof(name), buffer, count);
+	if (len < 0)
+		return len;
 
 	found = find_sched_plugin(name);
 
@@ -113,36 +104,28 @@ static int proc_write_release_master(struct file *file,
 				     unsigned long count,
 				     void *data)
 {
-	int cpu, err, online = 0;
+	int cpu, err, len, online = 0;
 	char msg[64];
 
-	if (count > 63)
-		return -EINVAL;
+	len = copy_and_chomp(msg, sizeof(msg), buffer, count);
 
-	if (copy_from_user(msg, buffer, count))
-		return -EFAULT;
+	if (len < 0)
+		return len;
 
-	/* terminate */
-	msg[count] = '\0';
-	/* chomp */
-	if (count > 1 && msg[count - 1] == '\n')
-		msg[count - 1] = '\0';
-
-	if (strcmp(msg, "NO_CPU") == 0) {
+	if (strcmp(msg, "NO_CPU") == 0)
 		atomic_set(&release_master_cpu, NO_CPU);
-		return count;
-	} else {
+	else {
 		err = sscanf(msg, "%d", &cpu);
 		if (err == 1 && cpu >= 0 && (online = cpu_online(cpu))) {
 			atomic_set(&release_master_cpu, cpu);
-			return count;
 		} else {
 			TRACE("invalid release master: '%s' "
 			      "(err:%d cpu:%d online:%d)\n",
 			      msg, err, cpu, online);
-			return -EINVAL;
+			len = -EINVAL;
 		}
 	}
+	return len;
 }
 #endif
 
@@ -256,4 +239,31 @@ void remove_plugin_proc_dir(struct sched_plugin* plugin)
 		return;
 	}
 	remove_proc_entry(plugin->plugin_name, plugs_dir);
+}
+
+
+
+/* misc. I/O helper functions */
+
+int copy_and_chomp(char *kbuf, unsigned long ksize,
+		   __user const char* ubuf, unsigned long ulength)
+{
+	/* caller must provide buffer space */
+	BUG_ON(!ksize);
+
+	ksize--; /* leave space for null byte */
+
+	if (ksize > ulength)
+		ksize = ulength;
+
+	if(copy_from_user(kbuf, ubuf, ksize))
+		return -EFAULT;
+
+	kbuf[ksize] = '\0';
+
+	/* chomp kbuf */
+	if (ksize > 0 && kbuf[ksize - 1] == '\n')
+		kbuf[ksize - 1] = '\0';
+
+	return ksize;
 }

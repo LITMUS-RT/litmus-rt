@@ -17,3 +17,9 @@ long make_plugin_proc_dir(struct sched_plugin* plugin,
  */
 void remove_plugin_proc_dir(struct sched_plugin* plugin);
 
+
+/* Copy at most size-1 bytes from ubuf into kbuf, null-terminate buf, and
+ * remove a '\n' if present. Returns the number of bytes that were read or
+ * -EFAULT. */
+int copy_and_chomp(char *kbuf, unsigned long ksize,
+		   __user const char* ubuf, unsigned long ulength);
