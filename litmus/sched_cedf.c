@@ -39,6 +39,8 @@
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
 
+#include <litmus/clustered.h>
+
 #include <litmus/bheap.h>
 
 /* to configure the cluster size */
@@ -49,12 +51,7 @@
  * group CPUs into clusters.  GLOBAL_CLUSTER, which is the default, means that
  * all CPUs form a single cluster (just like GSN-EDF).
  */
-static enum {
-	GLOBAL_CLUSTER = 0,
-	L1_CLUSTER     = 1,
-	L2_CLUSTER     = 2,
-	L3_CLUSTER     = 3
-} cluster_config = GLOBAL_CLUSTER;
+static enum cache_level cluster_config = GLOBAL_CLUSTER;
 
 struct clusterdomain;
 
@@ -770,72 +767,7 @@ static struct sched_plugin cedf_plugin __cacheline_aligned_in_smp = {
 	.activate_plugin	= cedf_activate_plugin,
 };
 
-
-/* proc file interface to configure the cluster size */
-
-static int proc_read_cluster_size(char *page, char **start,
-				  off_t off, int count,
-				  int *eof, void *data)
-{
-	int len;
-	switch (cluster_config) {
-	case GLOBAL_CLUSTER:
-		len = snprintf(page, PAGE_SIZE, "ALL\n");
-		break;
-	case L1_CLUSTER:
-	case L2_CLUSTER:
-	case L3_CLUSTER:
-		len = snprintf(page, PAGE_SIZE, "L%d\n", cluster_config);
-		break;
-	default:
-		/* This should be impossible, but let's be paranoid. */
-		len = snprintf(page, PAGE_SIZE, "INVALID (%d)\n",
-			       cluster_config);
-		break;
-	}
-	return len;
-}
-
-static int proc_write_cluster_size(struct file *file,
-				   const char *buffer,
-				   unsigned long count,
-				   void *data)
-{
-	int len;
-	/* L2, L3 */
-	char cache_name[33];
-
-	if(count > 32)
-		len = 32;
-	else
-		len = count;
-
-	if(copy_from_user(cache_name, buffer, len))
-		return -EFAULT;
-
-	cache_name[len] = '\0';
-	/* chomp name */
-	if (len > 1 && cache_name[len - 1] == '\n')
-		cache_name[len - 1] = '\0';
-
-	/* do a quick and dirty comparison to find the cluster size */
-	if (!strcmp(cache_name, "L2"))
-		cluster_config = L2_CLUSTER;
-	else if (!strcmp(cache_name, "L3"))
-		cluster_config = L3_CLUSTER;
-	else if (!strcmp(cache_name, "L1"))
-		cluster_config = L1_CLUSTER;
-	else if (!strcmp(cache_name, "ALL"))
-		cluster_config = GLOBAL_CLUSTER;
-	else
-		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
-
-	return len;
-}
-
-
 static struct proc_dir_entry *cluster_file = NULL, *cedf_dir = NULL;
-
 
 static int __init init_cedf(void)
 {
@@ -844,18 +776,10 @@ static int __init init_cedf(void)
 	err = register_sched_plugin(&cedf_plugin);
 	if (!err) {
 		fs = make_plugin_proc_dir(&cedf_plugin, &cedf_dir);
-		if (!fs) {
-			cluster_file = create_proc_entry("cluster", 0644, cedf_dir);
-			if (!cluster_file) {
-				printk(KERN_ERR "Could not allocate C-EDF/cluster "
-				       "procfs entry.\n");
-			} else {
-				cluster_file->read_proc = proc_read_cluster_size;
-				cluster_file->write_proc = proc_write_cluster_size;
-			}
-		} else {
+		if (!fs)
+			cluster_file = create_cluster_file(cedf_dir, &cluster_config);
+		else
 			printk(KERN_ERR "Could not allocate C-EDF procfs dir.\n");
-		}
 	}
 	return err;
 }

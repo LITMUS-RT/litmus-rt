@@ -8,6 +8,8 @@
 #include <litmus/litmus.h>
 #include <litmus/litmus_proc.h>
 
+#include <litmus/clustered.h>
+
 /* in litmus/litmus.c */
 extern atomic_t rt_task_count;
 
@@ -267,3 +269,79 @@ int copy_and_chomp(char *kbuf, unsigned long ksize,
 
 	return ksize;
 }
+
+/* helper functions for clustered plugins */
+static const char* cache_level_names[] = {
+	"ALL",
+	"L1",
+	"L2",
+	"L3",
+};
+
+int parse_cache_level(const char *cache_name, enum cache_level *level)
+{
+	int err = -EINVAL;
+	int i;
+	/* do a quick and dirty comparison to find the cluster size */
+	for (i = GLOBAL_CLUSTER; i <= L3_CLUSTER; i++)
+		if (!strcmp(cache_name, cache_level_names[i])) {
+			*level = (enum cache_level) i;
+			err = 0;
+			break;
+		}
+	return err;
+}
+
+const char* cache_level_name(enum cache_level level)
+{
+	int idx = level;
+
+	if (idx >= GLOBAL_CLUSTER && idx <= L3_CLUSTER)
+		return cache_level_names[idx];
+	else
+		return "INVALID";
+}
+
+
+/* proc file interface to configure the cluster size */
+static int proc_read_cluster_size(char *page, char **start,
+				  off_t off, int count,
+				  int *eof, void *data)
+{
+	return snprintf(page, PAGE_SIZE, "%s\n",
+			cache_level_name(*((enum cache_level*) data)));;
+}
+
+static int proc_write_cluster_size(struct file *file,
+				   const char *buffer,
+				   unsigned long count,
+				   void *data)
+{
+	int len;
+	char cache_name[8];
+
+	len = copy_and_chomp(cache_name, sizeof(cache_name), buffer, count);
+
+	if (len > 0 && parse_cache_level(cache_name, (enum cache_level*) data))
+		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
+
+	return len;
+}
+
+struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
+					   enum cache_level* level)
+{
+	struct proc_dir_entry* cluster_file;
+
+	cluster_file = create_proc_entry("cluster", 0644, parent);
+	if (!cluster_file) {
+		printk(KERN_ERR "Could not allocate %s/cluster "
+		       "procfs entry.\n", parent->name);
+	} else {
+		cluster_file->read_proc = proc_read_cluster_size;
+		cluster_file->write_proc = proc_write_cluster_size;
+		cluster_file->data = level;
+	}
+	return cluster_file;
+}
+
