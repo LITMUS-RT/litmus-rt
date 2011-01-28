@@ -108,7 +108,7 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 }
 
 
-static void* create_srp_semaphore(void)
+static void* create_srp_semaphore(obj_type_t type)
 {
 	struct srp_semaphore* sem;
 
@@ -152,7 +152,7 @@ static noinline int open_srp_semaphore(struct od_table_entry* entry, void* __use
 	return ret;
 }
 
-static void destroy_srp_semaphore(void* sem)
+static void destroy_srp_semaphore(obj_type_t type, void* sem)
 {
 	/* XXX invariants */
 	atomic_dec(&srp_objects_in_use);

@@ -20,7 +20,7 @@
 
 #ifdef CONFIG_FMLP
 
-static  void* create_fmlp_semaphore(void)
+static  void* create_fmlp_semaphore(obj_type_t type)
 {
 	struct pi_semaphore* sem;
 	int i;
@@ -45,7 +45,7 @@ static int open_fmlp_semaphore(struct od_table_entry* entry, void* __user arg)
 	return 0;
 }
 
-static void destroy_fmlp_semaphore(void* sem)
+static void destroy_fmlp_semaphore(obj_type_t type, void* sem)
 {
 	/* XXX assert invariants */
 	kfree(sem);

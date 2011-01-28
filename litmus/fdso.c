@@ -29,14 +29,14 @@ static const struct fdso_ops* fdso_ops[] = {
 static void* fdso_create(obj_type_t type)
 {
 	if (fdso_ops[type]->create)
-		return fdso_ops[type]->create();
+		return fdso_ops[type]->create(type);
 	else
 		return NULL;
 }
 
 static void fdso_destroy(obj_type_t type, void* obj)
 {
-	fdso_ops[type]->destroy(obj);
+	fdso_ops[type]->destroy(type, obj);
 }
 
 static int fdso_open(struct od_table_entry* entry, void* __user config)

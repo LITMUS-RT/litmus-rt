@@ -42,8 +42,8 @@ struct od_table_entry {
 };
 
 struct fdso_ops {
-	void* (*create)	(void);
-	void  (*destroy)(void*);
+	void* (*create)(obj_type_t type);
+	void  (*destroy)(obj_type_t type, void*);
 	int   (*open)	(struct od_table_entry*, void* __user);
 	int   (*close)	(struct od_table_entry*);
 };
