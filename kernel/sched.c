@@ -3887,8 +3887,7 @@ need_resched_nonpreemptible:
 	if (need_resched())
 		goto need_resched;
 
-	if (srp_active())
-		srp_ceiling_block();
+	srp_ceiling_block();
 }
 EXPORT_SYMBOL(schedule);
 

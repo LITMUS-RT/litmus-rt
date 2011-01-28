@@ -207,62 +207,8 @@ static void do_fmlp_up(struct pi_semaphore* sem)
 	spin_unlock_irqrestore(&sem->wait.lock, flags);
 }
 
-asmlinkage long sys_fmlp_down(int sem_od)
-{
-	long ret = 0;
-	struct pi_semaphore * sem;
-	int suspended = 0;
-
-	preempt_disable();
-	TS_PI_DOWN_START;
-
-	sem = lookup_fmlp_sem(sem_od);
-	if (sem)
-		suspended = do_fmlp_down(sem);
-	else
-		ret = -EINVAL;
-
-	if (!suspended) {
-		TS_PI_DOWN_END;
-		preempt_enable();
-	}
-
-	return ret;
-}
-
-asmlinkage long sys_fmlp_up(int sem_od)
-{
-	long ret = 0;
-	struct pi_semaphore * sem;
-
-	preempt_disable();
-	TS_PI_UP_START;
-
-	sem = lookup_fmlp_sem(sem_od);
-	if (sem)
-		do_fmlp_up(sem);
-	else
-		ret = -EINVAL;
-
-
-	TS_PI_UP_END;
-	preempt_enable();
-
-	return ret;
-}
-
 #else
 
 struct fdso_ops fmlp_sem_ops = {};
-
-asmlinkage long sys_fmlp_down(int sem_od)
-{
-	return -ENOSYS;
-}
-
-asmlinkage long sys_fmlp_up(int sem_od)
-{
-	return -ENOSYS;
-}
 
 #endif

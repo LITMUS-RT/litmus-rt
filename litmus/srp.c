@@ -189,55 +189,6 @@ static void do_srp_up(struct srp_semaphore* sem)
 	wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
 }
 
-/* Adjust the system-wide priority ceiling if resource is claimed. */
-asmlinkage long sys_srp_down(int sem_od)
-{
-	int cpu;
-	int ret = -EINVAL;
-	struct srp_semaphore* sem;
-
-	/* disabling preemptions is sufficient protection since
-	 * SRP is strictly per CPU and we don't interfere with any
-	 * interrupt handlers
-	 */
-	preempt_disable();
-	TS_SRP_DOWN_START;
-
-	cpu = smp_processor_id();
-	sem = lookup_srp_sem(sem_od);
-	if (sem && sem->cpu == cpu) {
-		do_srp_down(sem);
-		ret = 0;
-	}
-
-	TS_SRP_DOWN_END;
-	preempt_enable();
-	return ret;
-}
-
-/* Adjust the system-wide priority ceiling if resource is freed. */
-asmlinkage long sys_srp_up(int sem_od)
-{
-	int cpu;
-	int ret = -EINVAL;
-	struct srp_semaphore* sem;
-
-	preempt_disable();
-	TS_SRP_UP_START;
-
-	cpu = smp_processor_id();
-	sem = lookup_srp_sem(sem_od);
-
-	if (sem && sem->cpu == cpu) {
-		do_srp_up(sem);
-		ret = 0;
-	}
-
-	TS_SRP_UP_END;
-	preempt_enable();
-	return ret;
-}
-
 static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 		       void *key)
 {
@@ -302,16 +253,6 @@ void srp_ceiling_block(void)
 
 
 #else
-
-asmlinkage long sys_srp_down(int sem_od)
-{
-	return -ENOSYS;
-}
-
-asmlinkage long sys_srp_up(int sem_od)
-{
-	return -ENOSYS;
-}
 
 struct fdso_ops srp_sem_ops = {};
 

@@ -75,6 +75,7 @@ asmlinkage long sys_litmus_lock(int lock_od)
 	entry = get_entry_for_od(lock_od);
 	if (entry && is_lock(entry)) {
 		l = get_lock(entry);
+		TRACE_CUR("attempts to lock 0x%p\n", l);
 		err = l->ops->lock(l);
 	}
 
@@ -96,7 +97,8 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 	entry = get_entry_for_od(lock_od);
 	if (entry && is_lock(entry)) {
 		l = get_lock(entry);
-		err = l->ops->lock(l);
+		TRACE_CUR("attempts to unlock 0x%p\n", l);
+		err = l->ops->unlock(l);
 	}
 
 	/* Note: task my have been preempted in between!  Take this into

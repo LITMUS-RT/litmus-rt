@@ -384,14 +384,12 @@
 		CALL(sys_complete_job)
 		CALL(sys_od_open)
 		CALL(sys_od_close)
-/* 375 */	CALL(sys_fmlp_down)
-		CALL(sys_fmlp_up)
-		CALL(sys_srp_down)
-		CALL(sys_srp_up)
+/* 375 */	CALL(sys_litmus_lock)
+		CALL(sys_litmus_unlock)
 		CALL(sys_query_job_no)
-/* 380 */	CALL(sys_wait_for_job_release)
+		CALL(sys_wait_for_job_release)
 		CALL(sys_wait_for_ts_release)
-		CALL(sys_release_ts)
+/* 380 */	CALL(sys_release_ts)
 		CALL(sys_null_call)
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls

@@ -345,10 +345,8 @@ ENTRY(sys_call_table)
 	.long sys_complete_job
 	.long sys_od_open
 	.long sys_od_close
-	.long sys_fmlp_down
-	.long sys_fmlp_up
-	.long sys_srp_down
-	.long sys_srp_up
+	.long sys_litmus_lock
+	.long sys_litmus_unlock
 	.long sys_query_job_no
 	.long sys_wait_for_job_release
 	.long sys_wait_for_ts_release
