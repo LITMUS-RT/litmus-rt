@@ -121,23 +121,11 @@ static long litmus_dummy_deactivate_plugin(void)
 	return 0;
 }
 
-#ifdef CONFIG_FMLP
+#ifdef CONFIG_LITMUS_LOCKING
 
-static long litmus_dummy_inherit_priority(struct pi_semaphore *sem,
-					  struct task_struct *new_owner)
+static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type)
 {
-	return -ENOSYS;
-}
-
-static long litmus_dummy_return_priority(struct pi_semaphore *sem)
-{
-	return -ENOSYS;
-}
-
-static long litmus_dummy_pi_block(struct pi_semaphore *sem,
-				  struct task_struct *new_waiter)
-{
-	return -ENOSYS;
+	return -ENXIO;
 }
 
 #endif
@@ -158,10 +146,8 @@ struct sched_plugin linux_sched_plugin = {
 	.finish_switch = litmus_dummy_finish_switch,
 	.activate_plugin = litmus_dummy_activate_plugin,
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
-#ifdef CONFIG_FMLP
-	.inherit_priority = litmus_dummy_inherit_priority,
-	.return_priority = litmus_dummy_return_priority,
-	.pi_block = litmus_dummy_pi_block,
+#ifdef CONFIG_LITMUS_LOCKING
+	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
 	.admit_task = litmus_dummy_admit_task
 };
@@ -198,10 +184,8 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(complete_job);
 	CHECK(activate_plugin);
 	CHECK(deactivate_plugin);
-#ifdef CONFIG_FMLP
-	CHECK(inherit_priority);
-	CHECK(return_priority);
-	CHECK(pi_block);
+#ifdef CONFIG_LITMUS_LOCKING
+	CHECK(allocate_lock);
 #endif
 	CHECK(admit_task);
 

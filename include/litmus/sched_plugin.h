@@ -7,19 +7,9 @@
 
 #include <linux/sched.h>
 
-/* struct for semaphore with priority inheritance */
-struct pi_semaphore {
-	atomic_t count;
-	int sleepers;
-	wait_queue_head_t wait;
-	struct {
-		/* highest-prio holder/waiter */
-		struct task_struct *task;
-		struct task_struct* cpu_task[NR_CPUS];
-	} hp;
-	/* current lock holder */
-	struct task_struct *holder;
-};
+#ifdef CONFIG_LITMUS_LOCKING
+#include <litmus/locking.h>
+#endif
 
 /************************ setup/tear down ********************/
 
@@ -63,24 +53,9 @@ typedef void (*task_block_t)  (struct task_struct *task);
  */
 typedef void (*task_exit_t)    (struct task_struct *);
 
-/* Called when the new_owner is released from the wait queue
- * it should now inherit the priority from sem, _before_ it gets readded
- * to any queue
- */
-typedef long (*inherit_priority_t) (struct pi_semaphore *sem,
-				    struct task_struct *new_owner);
-
-/* Called when the current task releases a semahpore where it might have
- * inherited a piority from
- */
-typedef long (*return_priority_t) (struct pi_semaphore *sem);
-
-/* Called when a task tries to acquire a semaphore and fails. Check if its
- * priority is higher than that of the current holder.
- */
-typedef long (*pi_block_t) (struct pi_semaphore *sem, struct task_struct *t);
-
-
+/* Called when the current task attempts to create a new lock of a given
+ * protocol type. */
+typedef long (*allocate_lock_t) (struct litmus_lock **lock, int type);
 
 
 /********************* sys call backends  ********************/
@@ -100,10 +75,6 @@ struct sched_plugin {
 	activate_plugin_t	activate_plugin;
 	deactivate_plugin_t	deactivate_plugin;
 
-#ifdef CONFIG_SRP
-	unsigned int		srp_active;
-#endif
-
 	/* 	scheduler invocation 	*/
 	scheduler_tick_t        tick;
 	schedule_t 		schedule;
@@ -121,12 +92,9 @@ struct sched_plugin {
 	task_block_t		task_block;
 	task_exit_t 		task_exit;
 
-#ifdef CONFIG_FMLP
-	/*     priority inheritance 	*/
-	unsigned int		fmlp_active;
-	inherit_priority_t	inherit_priority;
-	return_priority_t	return_priority;
-	pi_block_t		pi_block;
+#ifdef CONFIG_LITMUS_LOCKING
+	/*	locking protocols	*/
+	allocate_lock_t		allocate_lock;
 #endif
 } __attribute__ ((__aligned__(SMP_CACHE_BYTES)));
 

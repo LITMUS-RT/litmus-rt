@@ -46,28 +46,19 @@ config NP_SECTION
           Note that plugins still need to explicitly support non-preemptivity.
           Currently, only GSN-EDF and PSN-EDF have such support.
 
-	  This is required to support the FMLP.
+	  This is required to support locking protocols such as the FMLP.
 	  If disabled, all tasks will be considered preemptable at all times.
 
-config SRP
-	bool "Stack Resource Policy (SRP)"
-	default n
-	help
-	  Include support for Baker's Stack Resource Policy.
-
-	  Say Yes if you want FMLP local long critical section
-	  synchronization support.
-
-config FMLP
-	bool "FMLP support"
+config LITMUS_LOCKING
+        bool "Support for real-time locking protocols"
 	depends on NP_SECTION
 	default n
 	help
-	  Include support for deterministic multiprocessor real-time
-	  synchronization support.
+	  Enable LITMUS^RT's deterministic multiprocessor real-time
+	  locking protocols.
 
-	  Say Yes if you want FMLP long critical section
-	  synchronization support.
+	  Say Yes if you want to include locking protocols such as the FMLP and
+	  Baker's SRP.
 
 endmenu
 
