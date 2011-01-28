@@ -22,6 +22,4 @@ int edf_ready_order(struct bheap_node* a, struct bheap_node* b);
 
 int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t);
 
-int edf_set_hp_task(struct pi_semaphore *sem);
-int edf_set_hp_cpu_task(struct pi_semaphore *sem, int cpu);
 #endif

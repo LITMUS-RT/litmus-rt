@@ -18,11 +18,10 @@
 
 #include <litmus/fdso.h>
 
-extern struct fdso_ops fmlp_sem_ops;
 extern struct fdso_ops generic_lock_ops;
 
 static const struct fdso_ops* fdso_ops[] = {
-	&fmlp_sem_ops,
+	&generic_lock_ops, /* FMLP_SEM */
 	&generic_lock_ops, /* SRP_SEM */
 };
 

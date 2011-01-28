@@ -13,7 +13,6 @@ obj-y     = sched_plugin.o litmus.o \
 	    fdso.o \
 	    locking.o \
 	    srp.o \
-	    fmlp.o \
 	    bheap.o \
 	    ctrldev.o \
 	    sched_gsn_edf.o \
