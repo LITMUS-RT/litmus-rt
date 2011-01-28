@@ -435,6 +435,45 @@ static long psnedf_return_priority(struct pi_semaphore *sem)
 
 #endif
 
+#ifdef CONFIG_LITMUS_LOCKING
+
+#include <litmus/fdso.h>
+#include <litmus/srp.h>
+
+static unsigned int psnedf_get_srp_prio(struct task_struct* t)
+{
+	/* assumes implicit deadlines */
+	return get_rt_period(t);
+}
+
+static long psnedf_activate_plugin(void)
+{
+	get_srp_prio = psnedf_get_srp_prio;
+	return 0;
+}
+
+static long psnedf_allocate_lock(struct litmus_lock **lock, int type)
+{
+	int err = -ENXIO;
+	struct srp_semaphore* srp;
+
+	switch (type) {
+	case SRP_SEM:
+		/* Baker's SRP */
+		srp = allocate_srp_semaphore();
+		if (srp) {
+			*lock = &srp->litmus_lock;
+			err = 0;
+		} else
+			err = -ENOMEM;
+		break;
+	};
+
+	return err;
+}
+
+#endif
+
 static long psnedf_admit_task(struct task_struct* tsk)
 {
 	return task_cpu(tsk) == tsk->rt_param.task_params.cpu ? 0 : -EINVAL;
@@ -450,7 +489,11 @@ static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.schedule		= psnedf_schedule,
 	.task_wake_up		= psnedf_task_wake_up,
 	.task_block		= psnedf_task_block,
-	.admit_task		= psnedf_admit_task
+	.admit_task		= psnedf_admit_task,
+#ifdef CONFIG_LITMUS_LOCKING
+	.allocate_lock		= psnedf_allocate_lock,
+	.activate_plugin	= psnedf_activate_plugin,
+#endif
 };
 
 

@@ -12,41 +12,24 @@
 #include <litmus/trace.h>
 
 
-#ifdef CONFIG_SRP
+#ifdef CONFIG_LITMUS_LOCKING
 
-struct srp_priority {
-	struct list_head	list;
-        unsigned int 		period;
-	pid_t			pid;
-};
+#include <litmus/srp.h>
 
-#define list2prio(l) list_entry(l, struct srp_priority, list)
-
-/* SRP task priority comparison function. Smaller periods have highest
- * priority, tie-break is PID. Special case: period == 0 <=> no priority
- */
-static int srp_higher_prio(struct srp_priority* first,
-			   struct srp_priority* second)
-{
-	if (!first->period)
-		return 0;
-	else
-		return  !second->period ||
-			first->period < second->period || (
-			first->period == second->period &&
-			first->pid < second->pid);
-}
+srp_prioritization_t get_srp_prio;
 
 struct srp {
 	struct list_head	ceiling;
 	wait_queue_head_t	ceiling_blocked;
 };
+#define system_ceiling(srp) list2prio(srp->ceiling.next)
+#define ceiling2sem(c) container_of(c, struct srp_semaphore, ceiling)
 
+#define UNDEF_SEM -2
 
 atomic_t srp_objects_in_use = ATOMIC_INIT(0);
 
 DEFINE_PER_CPU(struct srp, srp);
-
 
 /* Initialize SRP semaphores at boot time. */
 static int __init srp_init(void)
@@ -64,30 +47,35 @@ static int __init srp_init(void)
 }
 module_init(srp_init);
 
+/* SRP task priority comparison function. Smaller numeric values have higher
+ * priority, tie-break is PID. Special case: priority == 0 <=> no priority
+ */
+static int srp_higher_prio(struct srp_priority* first,
+			   struct srp_priority* second)
+{
+	if (!first->priority)
+		return 0;
+	else
+		return  !second->priority ||
+			first->priority < second->priority || (
+			first->priority == second->priority &&
+			first->pid < second->pid);
+}
 
-#define system_ceiling(srp) list2prio(srp->ceiling.next)
-
-
-#define UNDEF_SEM -2
-
-
-/* struct for uniprocessor SRP "semaphore" */
-struct srp_semaphore {
-	struct srp_priority ceiling;
-	struct task_struct* owner;
-	int cpu; /* cpu associated with this "semaphore" and resource */
-};
-
-#define ceiling2sem(c) container_of(c, struct srp_semaphore, ceiling)
 
 static int srp_exceeds_ceiling(struct task_struct* first,
 			       struct srp* srp)
 {
-	return list_empty(&srp->ceiling) ||
-	       get_rt_period(first) < system_ceiling(srp)->period ||
-	       (get_rt_period(first) == system_ceiling(srp)->period &&
-		first->pid < system_ceiling(srp)->pid) ||
-		ceiling2sem(system_ceiling(srp))->owner == first;
+	struct srp_priority prio;
+
+	if (list_empty(&srp->ceiling))
+		return 1;
+	else {
+		prio.pid = first->pid;
+		prio.priority = get_srp_prio(first);
+		return srp_higher_prio(&prio, system_ceiling(srp)) ||
+			ceiling2sem(system_ceiling(srp))->owner == first;
+	}
 }
 
 static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
@@ -108,7 +96,123 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 }
 
 
-static void* create_srp_semaphore(obj_type_t type)
+static int lock_srp_semaphore(struct litmus_lock* l)
+{
+	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
+
+	if (!is_realtime(current))
+		return -EPERM;
+
+	preempt_disable();
+
+	/* Update ceiling. */
+	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
+
+	/* SRP invariant: all resources available */
+	BUG_ON(sem->owner != NULL);
+
+	sem->owner = current;
+	TRACE_CUR("acquired srp 0x%p\n", sem);
+
+	preempt_enable();
+
+	return 0;
+}
+
+static int unlock_srp_semaphore(struct litmus_lock* l)
+{
+	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
+	int err = 0;
+
+	preempt_disable();
+
+	if (sem->owner != current) {
+		err = -EINVAL;
+	} else {
+		/* Determine new system priority ceiling for this CPU. */
+		BUG_ON(!in_list(&sem->ceiling.list));
+
+		list_del(&sem->ceiling.list);
+		sem->owner = NULL;
+
+		/* Wake tasks on this CPU, if they exceed current ceiling. */
+		TRACE_CUR("released srp 0x%p\n", sem);
+		wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
+	}
+
+	preempt_enable();
+	return err;
+}
+
+static int open_srp_semaphore(struct litmus_lock* l, void* __user arg)
+{
+	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
+	int err = 0;
+	struct task_struct* t = current;
+	struct srp_priority t_prio;
+
+	if (!is_realtime(t))
+		return -EPERM;
+
+	TRACE_CUR("opening SRP semaphore %p, cpu=%d\n", sem, sem->cpu);
+
+	preempt_disable();
+
+	if (sem->owner != NULL)
+		err = -EBUSY;
+
+	if (err == 0) {
+		if (sem->cpu == UNDEF_SEM)
+			sem->cpu = get_partition(t);
+		else if (sem->cpu != get_partition(t))
+			err = -EPERM;
+	}
+
+	if (err == 0) {
+		t_prio.priority = get_srp_prio(t);
+		t_prio.pid      = t->pid;
+		if (srp_higher_prio(&t_prio, &sem->ceiling)) {
+			sem->ceiling.priority = t_prio.priority;
+			sem->ceiling.pid      = t_prio.pid;
+		}
+	}
+
+	preempt_enable();
+
+	return err;
+}
+
+static int close_srp_semaphore(struct litmus_lock* l)
+{
+	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
+	int err = 0;
+
+	preempt_disable();
+
+	if (sem->owner == current)
+		unlock_srp_semaphore(l);
+
+	preempt_enable();
+
+	return err;
+}
+
+static void deallocate_srp_semaphore(struct litmus_lock* l)
+{
+	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
+	atomic_dec(&srp_objects_in_use);
+	kfree(sem);
+}
+
+static struct litmus_lock_ops srp_lock_ops = {
+	.open   = open_srp_semaphore,
+	.close  = close_srp_semaphore,
+	.lock   = lock_srp_semaphore,
+	.unlock = unlock_srp_semaphore,
+	.deallocate = deallocate_srp_semaphore,
+};
+
+struct srp_semaphore* allocate_srp_semaphore(void)
 {
 	struct srp_semaphore* sem;
 
@@ -117,76 +221,14 @@ static void* create_srp_semaphore(obj_type_t type)
 		return NULL;
 
 	INIT_LIST_HEAD(&sem->ceiling.list);
-	sem->ceiling.period = 0;
+	sem->ceiling.priority = 0;
 	sem->cpu     = UNDEF_SEM;
 	sem->owner   = NULL;
+
+	sem->litmus_lock.ops = &srp_lock_ops;
+
 	atomic_inc(&srp_objects_in_use);
 	return sem;
-}
-
-static noinline int open_srp_semaphore(struct od_table_entry* entry, void* __user arg)
-{
-	struct srp_semaphore* sem = (struct srp_semaphore*) entry->obj->obj;
-	int ret = 0;
-	struct task_struct* t = current;
-	struct srp_priority t_prio;
-
-	TRACE("opening SRP semaphore %p, cpu=%d\n", sem, sem->cpu);
-	if (!srp_active())
-		return -EBUSY;
-
-	if (sem->cpu == UNDEF_SEM)
-		sem->cpu = get_partition(t);
-	else if (sem->cpu != get_partition(t))
-		ret = -EPERM;
-
-	if (ret == 0) {
-		t_prio.period = get_rt_period(t);
-		t_prio.pid    = t->pid;
-		if (srp_higher_prio(&t_prio, &sem->ceiling)) {
-			sem->ceiling.period = t_prio.period;
-			sem->ceiling.pid    = t_prio.pid;
-		}
-	}
-
-	return ret;
-}
-
-static void destroy_srp_semaphore(obj_type_t type, void* sem)
-{
-	/* XXX invariants */
-	atomic_dec(&srp_objects_in_use);
-	kfree(sem);
-}
-
-struct fdso_ops srp_sem_ops = {
-	.create  = create_srp_semaphore,
-	.open    = open_srp_semaphore,
-	.destroy = destroy_srp_semaphore
-};
-
-
-static void do_srp_down(struct srp_semaphore* sem)
-{
-	/* Update ceiling. */
-	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
-	WARN_ON(sem->owner != NULL);
-	sem->owner = current;
-	TRACE_CUR("acquired srp 0x%p\n", sem);
-}
-
-static void do_srp_up(struct srp_semaphore* sem)
-{
-	/* Determine new system priority ceiling for this CPU. */
-	WARN_ON(!in_list(&sem->ceiling.list));
-	if (in_list(&sem->ceiling.list))
-		list_del(&sem->ceiling.list);
-
-	sem->owner = NULL;
-
-	/* Wake tasks on this CPU, if they exceed current ceiling. */
-	TRACE_CUR("released srp 0x%p\n", sem);
-	wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
 }
 
 static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
@@ -201,8 +243,6 @@ static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 		return default_wake_function(wait, mode, sync, key);
 	return 0;
 }
-
-
 
 static void do_ceiling_block(struct task_struct *tsk)
 {
@@ -223,6 +263,7 @@ static void do_ceiling_block(struct task_struct *tsk)
 }
 
 /* Wait for current task priority to exceed system-wide priority ceiling.
+ * FIXME: the hotpath should be inline.
  */
 void srp_ceiling_block(void)
 {
@@ -250,10 +291,5 @@ void srp_ceiling_block(void)
 		TRACE_CUR("is not priority ceiling blocked\n");
 	preempt_enable();
 }
-
-
-#else
-
-struct fdso_ops srp_sem_ops = {};
 
 #endif
