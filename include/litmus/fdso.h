@@ -33,12 +33,13 @@ struct inode_obj_id {
 	unsigned int		id;
 };
 
+struct fdso_ops;
 
 struct od_table_entry {
 	unsigned int		used;
 
 	struct inode_obj_id*	obj;
-	void*			extra;
+	const struct fdso_ops*	class;
 };
 
 struct fdso_ops {
@@ -51,14 +52,14 @@ struct fdso_ops {
 /* translate a userspace supplied od into the raw table entry
  * returns NULL if od is invalid
  */
-struct od_table_entry* __od_lookup(int od);
+struct od_table_entry* get_entry_for_od(int od);
 
 /* translate a userspace supplied od into the associated object
  * returns NULL if od is invalid
  */
 static inline void* od_lookup(int od, obj_type_t type)
 {
-	struct od_table_entry* e = __od_lookup(od);
+	struct od_table_entry* e = get_entry_for_od(od);
 	return e && e->obj->type == type ? e->obj->obj : NULL;
 }
 

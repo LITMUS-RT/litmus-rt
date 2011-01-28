@@ -190,7 +190,7 @@ static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 		entry->used = 0;
 	} else {
 		entry->obj   = obj;
-		entry->extra = NULL;
+		entry->class = fdso_ops[type];
 		idx = entry - current->od_table;
 	}
 
@@ -209,7 +209,7 @@ static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 }
 
 
-struct od_table_entry* __od_lookup(int od)
+struct od_table_entry* get_entry_for_od(int od)
 {
 	struct task_struct *t = current;
 
