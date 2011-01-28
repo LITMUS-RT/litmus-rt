@@ -48,8 +48,6 @@ struct pfair_param   {
 	quanta_t	last_quantum; /* when scheduled last */
 	int		last_cpu;     /* where scheduled last */
 
-	unsigned int	sporadic_release; /* On wakeup, new sporadic release? */
-
 	struct pfair_cluster* cluster; /* where this task is scheduled */
 
 	struct subtask subtasks[0];   /* allocate together with pfair_param */
@@ -334,7 +332,6 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
-			tsk_pfair(t)->sporadic_release = 1;
 			TRACE_TASK(t, "on %d advanced to subtask %lu (not present)\n",
 				   cpu, p->cur);
 			return 0;
@@ -658,7 +655,6 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 		t->rt_param.scheduled_on = NO_CPU;
 
 	prepare_release(t, cluster->pfair_time + 1);
-	tsk_pfair(t)->sporadic_release = 0;
 	pfair_add_release(cluster, t);
 	check_preempt(t);
 
@@ -678,21 +674,18 @@ static void pfair_task_wake_up(struct task_struct *t)
 
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 
-	/* It is a little unclear how to deal with Pfair
-	 * tasks that block for a while and then wake. For now,
-	 * if a task blocks and wakes before its next job release,
+	/* If a task blocks and wakes before its next job release,
 	 * then it may resume if it is currently linked somewhere
 	 * (as if it never blocked at all). Otherwise, we have a
 	 * new sporadic job release.
 	 */
-	if (tsk_pfair(t)->sporadic_release) {
-		now = litmus_clock();
+	now = litmus_clock();
+	if (lt_before(get_deadline(t), now)) {
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
 		/* FIXME: race with pfair_time advancing */
 		pfair_add_release(cluster, t);
-		tsk_pfair(t)->sporadic_release = 0;
 	}
 
 	check_preempt(t);
@@ -760,11 +753,6 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 	drop_all_references(task);
 	prepare_release(task, release);
 	pfair_add_release(cluster, task);
-
-	/* Clear sporadic release flag, since this release subsumes any
-	 * sporadic release on wake.
-	 */
-	tsk_pfair(task)->sporadic_release = 0;
 
 	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 }
