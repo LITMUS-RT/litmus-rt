@@ -69,7 +69,7 @@ asmlinkage long sys_litmus_lock(int lock_od)
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
 
-	TS_PI_DOWN_START;
+	TS_LOCK_START;
 
 	entry = get_entry_for_od(lock_od);
 	if (entry && is_lock(entry)) {
@@ -80,7 +80,7 @@ asmlinkage long sys_litmus_lock(int lock_od)
 
 	/* Note: task my have been suspended or preempted in between!  Take
 	 * this into account when computing overheads. */
-	TS_PI_DOWN_END;
+	TS_UNLOCK_END;
 
 	return err;
 }
@@ -91,7 +91,7 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
 
-	TS_PI_UP_START;
+	TS_UNLOCK_START;
 
 	entry = get_entry_for_od(lock_od);
 	if (entry && is_lock(entry)) {
@@ -102,7 +102,7 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 
 	/* Note: task my have been preempted in between!  Take this into
 	 * account when computing overheads. */
-	TS_PI_UP_END;
+	TS_UNLOCK_END;
 
 	return err;
 }
