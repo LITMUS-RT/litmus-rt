@@ -25,12 +25,12 @@ static const struct fdso_ops* fdso_ops[] = {
 	&generic_lock_ops, /* SRP_SEM */
 };
 
-static void* fdso_create(obj_type_t type)
+static int fdso_create(void** obj_ref, obj_type_t type, void* __user config)
 {
 	if (fdso_ops[type]->create)
-		return fdso_ops[type]->create(type);
+		return fdso_ops[type]->create(obj_ref, type, config);
 	else
-		return NULL;
+		return -EINVAL;
 }
 
 static void fdso_destroy(obj_type_t type, void* obj)
@@ -55,20 +55,27 @@ static int fdso_close(struct od_table_entry* entry)
 }
 
 /* inode must be locked already */
-static struct inode_obj_id* alloc_inode_obj(struct inode* inode,
-					    obj_type_t type,
-					    unsigned int id)
+static int alloc_inode_obj(struct inode_obj_id** obj_ref,
+			   struct inode* inode,
+			   obj_type_t type,
+			   unsigned int id,
+			   void* __user config)
 {
 	struct inode_obj_id* obj;
 	void* raw_obj;
-
-	raw_obj = fdso_create(type);
-	if (!raw_obj)
-		return NULL;
+	int err;
 
 	obj = kmalloc(sizeof(*obj), GFP_KERNEL);
-	if (!obj)
-		return NULL;
+	if (!obj) {
+		return -ENOMEM;
+	}
+
+	err = fdso_create(&raw_obj, type, config);
+	if (err != 0) {
+		kfree(obj);
+		return err;
+	}
+
 	INIT_LIST_HEAD(&obj->list);
 	atomic_set(&obj->count, 1);
 	obj->type  = type;
@@ -80,7 +87,9 @@ static struct inode_obj_id* alloc_inode_obj(struct inode* inode,
 	atomic_inc(&inode->i_count);
 
 	printk(KERN_DEBUG "alloc_inode_obj(%p, %d, %d): object created\n", inode, type, id);
-	return obj;
+
+	*obj_ref = obj;
+	return 0;
 }
 
 /* inode must be locked already */
@@ -169,7 +178,7 @@ void exit_od_table(struct task_struct* t)
 static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 			  void* __user config)
 {
-	int idx = 0, err;
+	int idx = 0, err = 0;
 	struct inode* inode;
 	struct inode_obj_id* obj = NULL;
 	struct od_table_entry* entry;
@@ -183,9 +192,10 @@ static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 	mutex_lock(&inode->i_obj_mutex);
 	obj = get_inode_obj(inode, type, id);
 	if (!obj)
-		obj = alloc_inode_obj(inode, type, id);
-	if (!obj) {
-		idx = -ENOMEM;
+		err = alloc_inode_obj(&obj, inode, type, id, config);
+	if (err != 0) {
+		obj = NULL;
+		idx = err;
 		entry->used = 0;
 	} else {
 		entry->obj   = obj;
@@ -195,12 +205,15 @@ static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 
 	mutex_unlock(&inode->i_obj_mutex);
 
-	err = fdso_open(entry, config);
+	/* open only if creation succeeded */
+	if (!err)
+		err = fdso_open(entry, config);
 	if (err < 0) {
 		/* The class rejected the open call.
 		 * We need to clean up and tell user space.
 		 */
-		put_od_entry(entry);
+		if (obj)
+			put_od_entry(entry);
 		idx = err;
 	}
 

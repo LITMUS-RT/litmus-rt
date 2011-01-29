@@ -5,7 +5,7 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/trace.h>
 
-static void* create_generic_lock(obj_type_t type);
+static int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg);
 static int open_generic_lock(struct od_table_entry* entry, void* __user arg);
 static int close_generic_lock(struct od_table_entry* entry);
 static void destroy_generic_lock(obj_type_t type, void* sem);
@@ -28,16 +28,15 @@ static inline struct litmus_lock* get_lock(struct od_table_entry* entry)
 	return (struct litmus_lock*) entry->obj->obj;
 }
 
-static  void* create_generic_lock(obj_type_t type)
+static  int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg)
 {
 	struct litmus_lock* lock;
 	int err;
 
-	err = litmus->allocate_lock(&lock, type);
+	err = litmus->allocate_lock(&lock, type, arg);
 	if (err == 0)
-		return lock;
-	else
-		return NULL;
+		*obj_ref = lock;
+	return err;
 }
 
 static int open_generic_lock(struct od_table_entry* entry, void* __user arg)

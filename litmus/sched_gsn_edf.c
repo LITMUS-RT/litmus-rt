@@ -895,7 +895,8 @@ static struct litmus_lock* gsnedf_new_fmlp(void)
 /* **** lock constructor **** */
 
 
-static long gsnedf_allocate_lock(struct litmus_lock **lock, int type)
+static long gsnedf_allocate_lock(struct litmus_lock **lock, int type,
+				 void* __user unused)
 {
 	int err = -ENXIO;
 

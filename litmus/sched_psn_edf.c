@@ -547,7 +547,8 @@ static struct litmus_lock* psnedf_new_fmlp(void)
 /* **** lock constructor **** */
 
 
-static long psnedf_allocate_lock(struct litmus_lock **lock, int type)
+static long psnedf_allocate_lock(struct litmus_lock **lock, int type,
+				 void* __user unused)
 {
 	int err = -ENXIO;
 	struct srp_semaphore* srp;

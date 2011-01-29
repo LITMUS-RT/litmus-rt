@@ -55,7 +55,8 @@ typedef void (*task_exit_t)    (struct task_struct *);
 
 /* Called when the current task attempts to create a new lock of a given
  * protocol type. */
-typedef long (*allocate_lock_t) (struct litmus_lock **lock, int type);
+typedef long (*allocate_lock_t) (struct litmus_lock **lock, int type,
+				 void* __user config);
 
 
 /********************* sys call backends  ********************/

@@ -123,7 +123,8 @@ static long litmus_dummy_deactivate_plugin(void)
 
 #ifdef CONFIG_LITMUS_LOCKING
 
-static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type)
+static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
+				       void* __user config)
 {
 	return -ENXIO;
 }
