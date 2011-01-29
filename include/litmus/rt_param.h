@@ -108,6 +108,13 @@ struct rt_param {
 	/* is the task present? (true if it can be scheduled) */
 	unsigned int		present:1;
 
+#ifdef CONFIG_LITMUS_LOCKING
+	/* Is the task being priority-boosted by a locking protocol? */
+	unsigned int		priority_boosted:1;
+	/* If so, when did this start? */
+	lt_t			boost_start_time;
+#endif
+
 	/* user controlled parameters */
 	struct rt_task 		task_params;
 

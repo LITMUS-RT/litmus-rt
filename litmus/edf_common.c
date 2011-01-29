@@ -33,22 +33,38 @@ int edf_higher_prio(struct task_struct* first,
 	}
 
 
+	/* check for NULL tasks */
+	if (!first || !second)
+		return first && !second;
+
+#ifdef CONFIG_LITMUS_LOCKING
+
 	/* Check for inherited priorities. Change task
 	 * used for comparison in such a case.
 	 */
-	if (first && first->rt_param.inh_task)
+	if (unlikely(first->rt_param.inh_task))
 		first_task = first->rt_param.inh_task;
-	if (second && second->rt_param.inh_task)
+	if (unlikely(second->rt_param.inh_task))
 		second_task = second->rt_param.inh_task;
 
-	return
-		/* it has to exist in order to have higher priority */
-		first_task && (
-		/* does the second task exist and is it a real-time task?  If
-		 * not, the first task (which is a RT task) has higher
-		 * priority.
-		 */
-		!second_task || !is_realtime(second_task)  ||
+	/* Check for priority boosting. Tie-break by start of boosting.
+	 */
+	if (unlikely(is_priority_boosted(first_task))) {
+		/* first_task is boosted, how about second_task? */
+		if (!is_priority_boosted(second_task) ||
+		    lt_before(get_boost_start(first_task),
+			      get_boost_start(second_task)))
+			return 1;
+		else
+			return 0;
+	} else if (unlikely(is_priority_boosted(second_task)))
+		/* second_task is boosted, first is not*/
+		return 0;
+
+#endif
+
+
+	return !is_realtime(second_task)  ||
 
 		/* is the deadline of the first task earlier?
 		 * Then it has higher priority.
@@ -65,7 +81,7 @@ int edf_higher_prio(struct task_struct* first,
 		 * priority wins.
 		 */
 		(first_task->pid == second_task->pid &&
-		 !second->rt_param.inh_task))));
+		 !second->rt_param.inh_task)));
 }
 
 int edf_ready_order(struct bheap_node* a, struct bheap_node* b)

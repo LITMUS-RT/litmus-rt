@@ -54,6 +54,9 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_class(t)		(tsk_rt(t)->task_params.cls)
 
+#define is_priority_boosted(t)	(tsk_rt(t)->priority_boosted)
+#define get_boost_start(t)	(tsk_rt(t)->boost_start_time)
+
 inline static int budget_exhausted(struct task_struct* t)
 {
 	return get_exec_time(t) >= get_exec_cost(t);
