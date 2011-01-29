@@ -108,6 +108,19 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 	return err;
 }
 
+struct task_struct* waitqueue_first(wait_queue_head_t *wq)
+{
+	wait_queue_t *q;
+
+	if (waitqueue_active(wq)) {
+		q = list_entry(wq->task_list.next,
+			       wait_queue_t, task_list);
+		return (struct task_struct*) q->private;
+	} else
+		return NULL;
+}
+
+
 #else
 
 struct fdso_ops generic_lock_ops = {};

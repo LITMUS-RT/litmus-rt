@@ -71,6 +71,66 @@ static void preempt(psnedf_domain_t *pedf)
 	preempt_if_preemptable(pedf->scheduled, pedf->cpu);
 }
 
+#ifdef CONFIG_LITMUS_LOCKING
+
+static void boost_priority(struct task_struct* t)
+{
+	unsigned long		flags;
+	psnedf_domain_t* 	pedf = task_pedf(t);
+	lt_t			now;
+
+	raw_spin_lock_irqsave(&pedf->slock, flags);
+	now = litmus_clock();
+
+	TRACE_TASK(t, "priority boosted at %llu\n", now);
+
+	tsk_rt(t)->priority_boosted = 1;
+	tsk_rt(t)->boost_start_time = now;
+
+	if (pedf->scheduled != t) {
+		/* holder may be queued: first stop queue changes */
+		raw_spin_lock(&pedf->domain.release_lock);
+		if (is_queued(t) &&
+		    /* If it is queued, then we need to re-order. */
+		    bheap_decrease(edf_ready_order, tsk_rt(t)->heap_node) &&
+		    /* If we bubbled to the top, then we need to check for preemptions. */
+		    edf_preemption_needed(&pedf->domain, pedf->scheduled))
+				preempt(pedf);
+		raw_spin_unlock(&pedf->domain.release_lock);
+	} /* else: nothing to do since the job is not queued while scheduled */
+
+	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+}
+
+static void unboost_priority(struct task_struct* t)
+{
+	unsigned long		flags;
+	psnedf_domain_t* 	pedf = task_pedf(t);
+	lt_t			now;
+
+	raw_spin_lock_irqsave(&pedf->slock, flags);
+	now = litmus_clock();
+
+	/* assumption: this only happens when the job is scheduled */
+	BUG_ON(pedf->scheduled != t);
+
+	TRACE_TASK(t, "priority restored at %llu\n", now);
+
+	/* priority boosted jobs must be scheduled */
+	BUG_ON(pedf->scheduled != t);
+
+	tsk_rt(t)->priority_boosted = 0;
+	tsk_rt(t)->boost_start_time = 0;
+
+	/* check if this changes anything */
+	if (edf_preemption_needed(&pedf->domain, pedf->scheduled))
+		preempt(pedf);
+
+	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+}
+
+#endif
+
 /* This check is trivial in partioned systems as we only have to consider
  * the CPU of the partition.
  */
@@ -252,15 +312,16 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
 	raw_spin_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(is_queued(task));
+	now = litmus_clock();
+	if (is_tardy(task, now)
+#ifdef CONFIG_LITMUS_LOCKING
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
 	 * a semaphore, it should never be treated as a new job release.
-	 *
-	 * FIXME: This should be done in some more predictable and userspace-controlled way.
 	 */
-	now = litmus_clock();
-	if (is_tardy(task, now) &&
-	    get_rt_flags(task) != RT_F_EXIT_SEM) {
+	    && !is_priority_boosted(task)
+#endif
+		) {
 		/* new sporadic release */
 		release_at(task, now);
 		sched_trace_task_release(task);
@@ -314,6 +375,8 @@ static void psnedf_task_exit(struct task_struct * t)
 #include <litmus/fdso.h>
 #include <litmus/srp.h>
 
+/* ******************** SRP support ************************ */
+
 static unsigned int psnedf_get_srp_prio(struct task_struct* t)
 {
 	/* assumes implicit deadlines */
@@ -326,14 +389,183 @@ static long psnedf_activate_plugin(void)
 	return 0;
 }
 
+/* ******************** FMLP support ********************** */
+
+/* struct for semaphore with priority inheritance */
+struct fmlp_semaphore {
+	struct litmus_lock litmus_lock;
+
+	/* current resource holder */
+	struct task_struct *owner;
+
+	/* FIFO queue of waiting tasks */
+	wait_queue_head_t wait;
+};
+
+static inline struct fmlp_semaphore* fmlp_from_lock(struct litmus_lock* lock)
+{
+	return container_of(lock, struct fmlp_semaphore, litmus_lock);
+}
+int psnedf_fmlp_lock(struct litmus_lock* l)
+{
+	struct task_struct* t = current;
+	struct fmlp_semaphore *sem = fmlp_from_lock(l);
+	wait_queue_t wait;
+	unsigned long flags;
+
+	if (!is_realtime(t))
+		return -EPERM;
+
+	spin_lock_irqsave(&sem->wait.lock, flags);
+
+	if (sem->owner) {
+		/* resource is not free => must suspend and wait */
+
+		init_waitqueue_entry(&wait, t);
+
+		/* FIXME: interruptible would be nice some day */
+		set_task_state(t, TASK_UNINTERRUPTIBLE);
+
+		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
+
+		/* release lock before sleeping */
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
+
+		/* We depend on the FIFO order.  Thus, we don't need to recheck
+		 * when we wake up; we are guaranteed to have the lock since
+		 * there is only one wake up per release.
+		 */
+
+		schedule();
+
+		/* Since we hold the lock, no other task will change
+		 * ->owner. We can thus check it without acquiring the spin
+		 * lock. */
+		BUG_ON(sem->owner != t);
+
+		/* FIXME: could we punt the dequeuing to the previous job,
+		 * which is holding the spinlock anyway? */
+		remove_wait_queue(&sem->wait, &wait);
+	} else {
+		/* it's ours now */
+		sem->owner = t;
+
+		/* mark the task as priority-boosted. */
+		boost_priority(t);
+
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
+	}
+
+	return 0;
+}
+
+int psnedf_fmlp_unlock(struct litmus_lock* l)
+{
+	struct task_struct *t = current, *next;
+	struct fmlp_semaphore *sem = fmlp_from_lock(l);
+	unsigned long flags;
+	int err = 0;
+
+	spin_lock_irqsave(&sem->wait.lock, flags);
+
+	if (sem->owner != t) {
+		err = -EINVAL;
+		goto out;
+	}
+
+	/* we lose the benefit of priority boosting */
+
+	unboost_priority(t);
+
+	/* check if there are jobs waiting for this resource */
+	next = waitqueue_first(&sem->wait);
+	if (next) {
+		/* boost next job */
+		boost_priority(next);
+
+		/* next becomes the resouce holder */
+		sem->owner = next;
+
+		/* wake up next */
+		wake_up_process(next);
+	} else
+		/* resource becomes available */
+		sem->owner = NULL;
+
+out:
+	spin_unlock_irqrestore(&sem->wait.lock, flags);
+	return err;
+}
+
+int psnedf_fmlp_close(struct litmus_lock* l)
+{
+	struct task_struct *t = current;
+	struct fmlp_semaphore *sem = fmlp_from_lock(l);
+	unsigned long flags;
+
+	int owner;
+
+	spin_lock_irqsave(&sem->wait.lock, flags);
+
+	owner = sem->owner == t;
+
+	spin_unlock_irqrestore(&sem->wait.lock, flags);
+
+	if (owner)
+		psnedf_fmlp_unlock(l);
+
+	return 0;
+}
+
+void psnedf_fmlp_free(struct litmus_lock* lock)
+{
+	kfree(fmlp_from_lock(lock));
+}
+
+static struct litmus_lock_ops psnedf_fmlp_lock_ops = {
+	.close  = psnedf_fmlp_close,
+	.lock   = psnedf_fmlp_lock,
+	.unlock = psnedf_fmlp_unlock,
+	.deallocate = psnedf_fmlp_free,
+};
+
+static struct litmus_lock* psnedf_new_fmlp(void)
+{
+	struct fmlp_semaphore* sem;
+
+	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
+	if (!sem)
+		return NULL;
+
+	sem->owner   = NULL;
+	init_waitqueue_head(&sem->wait);
+	sem->litmus_lock.ops = &psnedf_fmlp_lock_ops;
+
+	return &sem->litmus_lock;
+}
+
+/* **** lock constructor **** */
+
+
 static long psnedf_allocate_lock(struct litmus_lock **lock, int type)
 {
 	int err = -ENXIO;
 	struct srp_semaphore* srp;
 
+	/* PSN-EDF currently supports the SRP for local resources and the FMLP
+	 * for global resources. */
 	switch (type) {
+	case FMLP_SEM:
+		/* Flexible Multiprocessor Locking Protocol */
+		*lock = psnedf_new_fmlp();
+		if (*lock)
+			err = 0;
+		else
+			err = -ENOMEM;
+		break;
+
 	case SRP_SEM:
-		/* Baker's SRP */
+		/* Baker's Stack Resource Policy */
 		srp = allocate_srp_semaphore();
 		if (srp) {
 			*lock = &srp->litmus_lock;
