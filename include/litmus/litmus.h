@@ -74,11 +74,11 @@ inline static lt_t budget_remaining(struct task_struct* t)
 				      == PRECISE_ENFORCEMENT)
 
 #define is_hrt(t)     		\
-	(tsk_rt(t)->task_params.class == RT_CLASS_HARD)
+	(tsk_rt(t)->task_params.cls == RT_CLASS_HARD)
 #define is_srt(t)     		\
-	(tsk_rt(t)->task_params.class == RT_CLASS_SOFT)
+	(tsk_rt(t)->task_params.cls == RT_CLASS_SOFT)
 #define is_be(t)      		\
-	(tsk_rt(t)->task_params.class == RT_CLASS_BEST_EFFORT)
+	(tsk_rt(t)->task_params.cls == RT_CLASS_BEST_EFFORT)
 
 /* Our notion of time within LITMUS: kernel monotonic time. */
 static inline lt_t litmus_clock(void)
