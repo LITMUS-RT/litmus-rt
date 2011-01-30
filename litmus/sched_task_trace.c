@@ -131,6 +131,7 @@ feather_callback void do_sched_trace_task_param(unsigned long id, unsigned long 
 		rec->data.param.period    = get_rt_period(t);
 		rec->data.param.phase     = get_rt_phase(t);
 		rec->data.param.partition = get_partition(t);
+		rec->data.param.class     = get_class(t);
 		put_record(rec);
 	}
 }

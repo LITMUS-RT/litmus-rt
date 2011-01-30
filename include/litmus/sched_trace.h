@@ -23,7 +23,8 @@ struct st_param_data {		/* regular params */
 	u32	period;
 	u32	phase;
 	u8	partition;
-	u8	__unused[3];
+	u8	class;
+	u8	__unused[2];
 };
 
 struct st_release_data {	/* A job is was/is going to be released. */
@@ -40,6 +41,7 @@ struct st_assigned_data {	/* A job was asigned to a CPU. 		 */
 struct st_switch_to_data {	/* A process was switched to on a given CPU.   */
 	u64	when;		/* When did this occur?                        */
 	u32	exec_time;	/* Time the current job has executed.          */
+	u8	__unused[4];
 
 };
 
