@@ -2557,7 +2557,8 @@ void sched_fork(struct task_struct *p, int clone_flags)
 	 * Revert to default priority/policy on fork if requested.
 	 */
 	if (unlikely(p->sched_reset_on_fork)) {
-		if (p->policy == SCHED_FIFO || p->policy == SCHED_RR) {
+		if (p->policy == SCHED_FIFO || p->policy == SCHED_RR ||
+		    p->policy == SCHED_LITMUS) {
 			p->policy = SCHED_NORMAL;
 			p->normal_prio = p->static_prio;
 		}

@@ -292,9 +292,6 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 	 */
 	WARN_ON(p->rt_param.inh_task);
 
-	/* We need to restore the priority of the task. */
-//	__setscheduler(p, p->rt_param.old_policy, p->rt_param.old_prio); XXX why is this commented?
-
 	/* Cleanup everything else. */
 	memset(&p->rt_param, 0, sizeof(p->rt_param));
 
@@ -437,10 +434,12 @@ out:
  */
 void litmus_fork(struct task_struct* p)
 {
-	if (is_realtime(p))
+	if (is_realtime(p)) {
 		/* clean out any litmus related state, don't preserve anything */
 		reinit_litmus_state(p, 0);
-	else
+		/* Don't let the child be a real-time task.  */
+		p->sched_reset_on_fork = 1;
+	} else
 		/* non-rt tasks might have ctrl_page set */
 		tsk_rt(p)->ctrl_page = NULL;
 
