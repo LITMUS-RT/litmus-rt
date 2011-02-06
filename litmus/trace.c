@@ -61,6 +61,26 @@ feather_callback void save_timestamp_cpu(unsigned long event,
 	__save_timestamp_cpu(event, TSK_UNKNOWN, cpu);
 }
 
+feather_callback void save_task_latency(unsigned long event,
+					unsigned long when_ptr)
+{
+	lt_t now = litmus_clock();
+	lt_t *when = (lt_t*) when_ptr;
+	unsigned int seq_no;
+	int cpu = raw_smp_processor_id();
+	struct timestamp *ts;
+
+	seq_no = fetch_and_inc((int *) &ts_seq_no);
+	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
+		ts->event     = event;
+		ts->timestamp = now - *when;
+		ts->seq_no    = seq_no;
+		ts->cpu       = cpu;
+		ts->task_type = TSK_RT;
+		ft_buffer_finish_write(trace_ts_buf, ts);
+	}
+}
+
 /******************************************************************************/
 /*                        DEVICE FILE DRIVER                                  */
 /******************************************************************************/

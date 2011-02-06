@@ -55,12 +55,14 @@ static enum hrtimer_restart on_release_timer(struct hrtimer *timer)
 {
 	unsigned long flags;
 	struct release_heap* rh;
+	rh = container_of(timer, struct release_heap, timer);
+
+	TS_RELEASE_LATENCY(rh->release_time);
 
 	VTRACE("on_release_timer(0x%p) starts.\n", timer);
 
 	TS_RELEASE_START;
 
-	rh = container_of(timer, struct release_heap, timer);
 
 	raw_spin_lock_irqsave(&rh->dom->release_lock, flags);
 	VTRACE("CB has the release_lock 0x%p\n", &rh->dom->release_lock);

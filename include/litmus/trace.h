@@ -28,7 +28,7 @@ feather_callback void save_timestamp(unsigned long event);
 feather_callback void save_timestamp_def(unsigned long event, unsigned long type);
 feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr);
 feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu);
-
+feather_callback void save_task_latency(unsigned long event, unsigned long when_ptr);
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
@@ -40,6 +40,9 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
 #define CTIMESTAMP(id, cpu) \
 	ft_event1(id, save_timestamp_cpu, (unsigned long) cpu)
 
+#define LTIMESTAMP(id, task) \
+	ft_event1(id, save_task_latency, (unsigned long) task)
+
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
 #define TIMESTAMP(id)        /* no tracing */
@@ -49,6 +52,8 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
 #define TTIMESTAMP(id, task) /* no tracing */
 
 #define CTIMESTAMP(id, cpu)  /* no tracing */
+
+#define LTIMESTAMP(id, when_ptr) /* no tracing */
 
 #endif
 
@@ -60,6 +65,8 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
  * convention to measure execution times: The end time id of a code segment is
  * always the next number after the start time event id.
  */
+
+
 
 #define TS_SCHED_START			DTIMESTAMP(100, TSK_UNKNOWN) /* we only
 								      * care
@@ -102,5 +109,6 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
 #define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
 #define TS_SEND_RESCHED_END		DTIMESTAMP(191, TSK_UNKNOWN)
 
+#define TS_RELEASE_LATENCY(when)	LTIMESTAMP(208, &(when))
 
 #endif /* !_SYS_TRACE_H_ */
