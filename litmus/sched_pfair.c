@@ -445,6 +445,11 @@ static void schedule_subtasks(struct pfair_cluster *cluster, quanta_t time)
 	list_for_each(pos, &cluster->topology.cpus) {
 		cpu_state = from_cluster_list(pos);
 		retry = 1;
+#ifdef CONFIG_RELEASE_MASTER
+		/* skip release master */
+		if (cluster->pfair.release_master == cpu_id(cpu_state))
+			continue;
+#endif
 		while (retry) {
 			if (pfair_higher_prio(__peek_ready(&cluster->pfair),
 					      cpu_state->linked))
@@ -615,6 +620,14 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	int blocks;
 	struct task_struct* next = NULL;
 
+#ifdef CONFIG_RELEASE_MASTER
+	/* Bail out early if we are the release master.
+	 * The release master never schedules any real-time tasks.
+	 */
+	if (cpu_cluster(state)->pfair.release_master == cpu_id(state))
+		return NULL;
+#endif
+
 	raw_spin_lock(cpu_lock(state));
 
 	blocks  = is_realtime(prev) && !is_running(prev);
@@ -649,10 +662,16 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 	cluster = tsk_pfair(t)->cluster;
 
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
-	if (running)
+
+	if (running
+#ifdef CONFIG_RELEASE_MASTER
+		&& (task_cpu(t) != cluster->pfair.release_master)
+#endif
+	   ) {
 		t->rt_param.scheduled_on = task_cpu(t);
-	else
+	} else {
 		t->rt_param.scheduled_on = NO_CPU;
+	}
 
 	prepare_release(t, cluster->pfair_time + 1);
 	pfair_add_release(cluster, t);
@@ -936,6 +955,9 @@ static long pfair_activate_plugin(void)
 		pfair_init_cluster(cluster);
 		cluster->pfair_time = now;
 		clust[i] = &cluster->topology;
+#ifdef CONFIG_RELEASE_MASTER
+		cluster->pfair.release_master = atomic_read(&release_master_cpu);
+#endif
 	}
 
 	for (i = 0; i < num_online_cpus(); i++)  {
