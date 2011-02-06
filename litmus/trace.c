@@ -69,7 +69,7 @@ feather_callback void save_timestamp_cpu(unsigned long event,
  * should be 8M; it is the max we can ask to buddy system allocator (MAX_ORDER)
  * and we might not get as much
  */
-#define NO_TIMESTAMPS (2 << 11)
+#define NO_TIMESTAMPS (2 << 16)
 
 static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 {
