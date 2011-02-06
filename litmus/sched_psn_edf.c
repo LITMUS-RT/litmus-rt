@@ -20,6 +20,7 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
+#include <litmus/trace.h>
 
 typedef struct {
 	rt_domain_t 		domain;
@@ -422,6 +423,8 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 
 		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
 
+		TS_LOCK_SUSPEND;
+
 		/* release lock before sleeping */
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 
@@ -431,6 +434,8 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 		 */
 
 		schedule();
+
+		TS_LOCK_RESUME;
 
 		/* Since we hold the lock, no other task will change
 		 * ->owner. We can thus check it without acquiring the spin

@@ -18,6 +18,7 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>
+#include <litmus/trace.h>
 
 #include <litmus/preempt.h>
 
@@ -799,6 +800,8 @@ int gsnedf_fmlp_lock(struct litmus_lock* l)
 				set_priority_inheritance(sem->owner, sem->hp_waiter);
 		}
 
+		TS_LOCK_SUSPEND;
+
 		/* release lock before sleeping */
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 
@@ -808,6 +811,8 @@ int gsnedf_fmlp_lock(struct litmus_lock* l)
 		 */
 
 		schedule();
+
+		TS_LOCK_RESUME;
 
 		/* Since we hold the lock, no other task will change
 		 * ->owner. We can thus check it without acquiring the spin

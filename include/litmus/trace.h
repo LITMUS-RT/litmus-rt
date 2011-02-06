@@ -92,9 +92,12 @@ feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu)
 #define TS_EXIT_NP_END			TIMESTAMP(151)
 
 #define TS_LOCK_START			TIMESTAMP(170)
-#define TS_LOCK_END			TIMESTAMP(171)
-#define TS_UNLOCK_START			TIMESTAMP(172)
-#define TS_UNLOCK_END			TIMESTAMP(173)
+#define TS_LOCK_SUSPEND			TIMESTAMP(171)
+#define TS_LOCK_RESUME			TIMESTAMP(172)
+#define TS_LOCK_END			TIMESTAMP(173)
+
+#define TS_UNLOCK_START			TIMESTAMP(180)
+#define TS_UNLOCK_END			TIMESTAMP(181)
 
 #define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
 #define TS_SEND_RESCHED_END		DTIMESTAMP(191, TSK_UNKNOWN)
