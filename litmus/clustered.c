@@ -102,7 +102,7 @@ int assign_cpus_to_clusters(enum cache_level level,
 			cpus[i]->cluster = cpus[low_cpu]->cluster;
 		}
 		/* enqueue in cpus list */
-		list_add(&cpus[i]->cluster_list, &cpus[i]->cluster->cpus);
+		list_add_tail(&cpus[i]->cluster_list, &cpus[i]->cluster->cpus);
 		printk(KERN_INFO "Assigning CPU%u to cluster %u\n.", i, cpus[i]->cluster->id);
 	}
 out:
