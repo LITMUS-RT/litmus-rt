@@ -77,8 +77,9 @@ struct pfair_state {
 	struct task_struct* local;     /* the local copy of linked          */
 	struct task_struct* scheduled; /* what is actually scheduled        */
 
-	unsigned long missed_quanta;
 	lt_t offset;			/* stagger offset */
+	unsigned int missed_updates;
+	unsigned int missed_quanta;
 };
 
 struct pfair_cluster {
@@ -289,6 +290,15 @@ static void drop_all_references(struct task_struct *t)
         }
 }
 
+static void pfair_prepare_next_period(struct task_struct* t)
+{
+	struct pfair_param* p = tsk_pfair(t);
+
+	prepare_for_next_period(t);
+	get_rt_flags(t) = RT_F_RUNNING;
+	p->release += p->period;
+}
+
 /* returns 1 if the task needs to go the release queue */
 static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 {
@@ -297,10 +307,8 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 	p->cur = (p->cur + 1) % p->quanta;
 	if (!p->cur) {
 		if (tsk_rt(t)->present) {
-			/* we start a new job */
-			prepare_for_next_period(t);
-			get_rt_flags(t) = RT_F_RUNNING;
-			p->release += p->period;
+			/* The job overran; we start a new budget allocation. */
+			pfair_prepare_next_period(t);
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
@@ -310,14 +318,13 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		}
 	}
 	to_relq = time_after(cur_release(t), time);
-	TRACE_TASK(t, "on %d advanced to subtask %lu -> to_relq=%d\n",
-		   cpu, p->cur, to_relq);
+	TRACE_TASK(t, "on %d advanced to subtask %lu -> to_relq=%d (cur_release:%lu time:%lu)\n",
+		   cpu, p->cur, to_relq, cur_release(t), time);
 	return to_relq;
 }
 
 static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 {
-	int missed;
 	struct task_struct* l;
 	struct pfair_param* p;
 	struct list_head* pos;
@@ -326,15 +333,17 @@ static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 	list_for_each(pos, &cluster->topology.cpus) {
 		cpu = from_cluster_list(pos);
 		l = cpu->linked;
-		missed = cpu->linked != cpu->local;
+		cpu->missed_updates += cpu->linked != cpu->local;
 		if (l) {
 			p = tsk_pfair(l);
 			p->last_quantum = time;
 			p->last_cpu     =  cpu_id(cpu);
 			if (advance_subtask(time, l, cpu_id(cpu))) {
-				cpu->linked = NULL;
-				sched_trace_task_release(l);
-				add_release(&cluster->pfair, l);
+				//cpu->linked = NULL;
+				PTRACE_TASK(l, "should go to release queue. "
+					    "scheduled_on=%d present=%d\n",
+					    tsk_rt(l)->scheduled_on,
+					    tsk_rt(l)->present);
 			}
 		}
 	}
@@ -455,7 +464,7 @@ static void schedule_next_quantum(struct pfair_cluster *cluster, quanta_t time)
 	list_for_each(pos, &cluster->topology.cpus) {
 		cpu = from_cluster_list(pos);
 		if (cpu->linked)
-			PTRACE_TASK(pstate[cpu]->linked,
+			PTRACE_TASK(cpu->linked,
 				    " linked on %d.\n", cpu_id(cpu));
 		else
 			PTRACE("(null) linked on %d.\n", cpu_id(cpu));
@@ -590,23 +599,40 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 static struct task_struct* pfair_schedule(struct task_struct * prev)
 {
 	struct pfair_state* state = &__get_cpu_var(pfair_state);
-	int blocks;
+	struct pfair_cluster* cluster = cpu_cluster(state);
+	int blocks, completion, out_of_time;
 	struct task_struct* next = NULL;
 
 #ifdef CONFIG_RELEASE_MASTER
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
-	if (cpu_cluster(state)->pfair.release_master == cpu_id(state))
+	if (unlikely(cluster->pfair.release_master == cpu_id(state)))
 		return NULL;
 #endif
 
 	raw_spin_lock(cpu_lock(state));
 
-	if (is_realtime(prev) && get_rt_flags(prev) == RT_F_SLEEP)
-		sched_trace_task_completion(prev, 0);
+	blocks      = is_realtime(prev) && !is_running(prev);
+	completion  = is_realtime(prev) && get_rt_flags(prev) == RT_F_SLEEP;
+	out_of_time = is_realtime(prev) && time_after(cur_release(prev),
+						      state->local_tick);
 
-	blocks  = is_realtime(prev) && !is_running(prev);
+	if (is_realtime(prev))
+	    PTRACE_TASK(prev, "blocks:%d completion:%d out_of_time:%d\n",
+			blocks, completion, out_of_time);
+
+	if (completion) {
+		sched_trace_task_completion(prev, 0);
+		pfair_prepare_next_period(prev);
+		prepare_release(prev, cur_release(prev));
+	}
+
+	if (!blocks && (completion || out_of_time)) {
+		drop_all_references(prev);
+		sched_trace_task_release(prev);
+		add_release(&cluster->pfair, prev);
+	}
 
 	if (state->local && safe_to_schedule(state->local, cpu_id(state)))
 		next = state->local;
@@ -679,8 +705,11 @@ static void pfair_task_wake_up(struct task_struct *t)
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
-		__add_ready(&cluster->pfair, t);
 	}
+
+	/* only add to ready queue if the task isn't still linked somewhere */
+	if (tsk_rt(t)->linked_on == NO_CPU)
+		__add_ready(&cluster->pfair, t);
 
 	check_preempt(t);
 
@@ -879,8 +908,11 @@ static void cleanup_clusters(void)
 	num_pfair_clusters = 0;
 
 	/* avoid stale pointers */
-	for (i = 0; i < num_online_cpus(); i++)
+	for (i = 0; i < num_online_cpus(); i++) {
 		pstate[i]->topology.cluster = NULL;
+		printk("P%d missed %u updates and %u quanta.\n", cpu_id(pstate[i]),
+		       pstate[i]->missed_updates, pstate[i]->missed_quanta);
+	}
 }
 
 static long pfair_activate_plugin(void)
@@ -926,6 +958,7 @@ static long pfair_activate_plugin(void)
 		state->cur_tick   = now;
 		state->local_tick = now;
 		state->missed_quanta = 0;
+		state->missed_updates = 0;
 		state->offset     = cpu_stagger_offset(i);
 		printk(KERN_ERR "cpus[%d] set; %d\n", i, num_online_cpus());
 		cpus[i] = &state->topology;
