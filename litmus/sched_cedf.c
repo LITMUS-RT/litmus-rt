@@ -411,6 +411,14 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
+#ifdef CONFIG_RELEASE_MASTER
+	/* Bail out early if we are the release master.
+	 * The release master never schedules any real-time tasks.
+	 */
+	if (cluster->domain.release_master == entry->cpu)
+		return NULL;
+#endif
+
 	raw_spin_lock(&cluster->lock);
 	clear_will_schedule();
 
@@ -546,8 +554,18 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 		entry = &per_cpu(cedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
 
-		entry->scheduled = t;
-		tsk_rt(t)->scheduled_on = task_cpu(t);
+#ifdef CONFIG_RELEASE_MASTER
+		if (entry->cpu != cluster->domain.release_master) {
+#endif
+			entry->scheduled = t;
+			tsk_rt(t)->scheduled_on = task_cpu(t);
+#ifdef CONFIG_RELEASE_MASTER
+		} else {
+			/* do not schedule on release master */
+			preempt(entry); /* force resched */
+			tsk_rt(t)->scheduled_on = NO_CPU;
+		}
+#endif
 	} else {
 		t->rt_param.scheduled_on = NO_CPU;
 	}
@@ -731,6 +749,9 @@ static long cedf_activate_plugin(void)
 
 		if(!zalloc_cpumask_var(&cedf[i].cpu_map, GFP_ATOMIC))
 			return -ENOMEM;
+#ifdef CONFIG_RELEASE_MASTER
+		cedf[i].domain.release_master = atomic_read(&release_master_cpu);
+#endif
 	}
 
 	/* cycle through cluster and add cpus to them */
@@ -773,7 +794,11 @@ static long cedf_activate_plugin(void)
 
 				entry->linked = NULL;
 				entry->scheduled = NULL;
-				update_cpu_position(entry);
+#ifdef CONFIG_RELEASE_MASTER
+				/* only add CPUs that should schedule jobs */
+				if (entry->cpu != entry->cluster->domain.release_master)
+#endif
+					update_cpu_position(entry);
 			}
 			/* done with this cluster */
 			break;
