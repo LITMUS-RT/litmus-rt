@@ -383,12 +383,6 @@ static unsigned int psnedf_get_srp_prio(struct task_struct* t)
 	return get_rt_period(t);
 }
 
-static long psnedf_activate_plugin(void)
-{
-	get_srp_prio = psnedf_get_srp_prio;
-	return 0;
-}
-
 /* ******************** FMLP support ********************** */
 
 /* struct for semaphore with priority inheritance */
@@ -577,9 +571,35 @@ static long psnedf_allocate_lock(struct litmus_lock **lock, int type,
 
 #endif
 
+
+static long psnedf_activate_plugin(void)
+{
+#ifdef CONFIG_RELEASE_MASTER
+	int cpu;
+
+	for_each_online_cpu(cpu) {
+		remote_edf(cpu)->release_master = atomic_read(&release_master_cpu);
+	}
+#endif
+
+#ifdef CONFIG_LITMUS_LOCKING
+	get_srp_prio = psnedf_get_srp_prio;
+#endif
+
+	return 0;
+}
+
 static long psnedf_admit_task(struct task_struct* tsk)
 {
-	return task_cpu(tsk) == tsk->rt_param.task_params.cpu ? 0 : -EINVAL;
+	if (task_cpu(tsk) == tsk->rt_param.task_params.cpu
+#ifdef CONFIG_RELEASE_MASTER
+	    /* don't allow tasks on release master CPU */
+	     && task_cpu(tsk) != remote_edf(task_cpu(tsk))->release_master
+#endif
+		)
+		return 0;
+	else
+		return -EINVAL;
 }
 
 /*	Plugin object	*/
@@ -593,9 +613,9 @@ static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.task_wake_up		= psnedf_task_wake_up,
 	.task_block		= psnedf_task_block,
 	.admit_task		= psnedf_admit_task,
+	.activate_plugin	= psnedf_activate_plugin,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock		= psnedf_allocate_lock,
-	.activate_plugin	= psnedf_activate_plugin,
 #endif
 };
 
