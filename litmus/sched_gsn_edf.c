@@ -374,8 +374,10 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
-	if (gsnedf.release_master == entry->cpu)
+	if (gsnedf.release_master == entry->cpu) {
+		sched_state_task_picked();
 		return NULL;
+	}
 #endif
 
 	raw_spin_lock(&gsnedf_lock);
