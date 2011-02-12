@@ -607,8 +607,10 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
-	if (unlikely(cluster->pfair.release_master == cpu_id(state)))
+	if (unlikely(cluster->pfair.release_master == cpu_id(state))) {
+		sched_state_task_picked();
 		return NULL;
+	}
 #endif
 
 	raw_spin_lock(cpu_lock(state));
