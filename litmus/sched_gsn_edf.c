@@ -776,8 +776,6 @@ int gsnedf_fmlp_lock(struct litmus_lock* l)
 		 * ->owner. We can thus check it without acquiring the spin
 		 * lock. */
 		BUG_ON(sem->owner != t);
-
-		remove_wait_queue(&sem->wait, &wait);
 	} else {
 		/* it's ours now */
 		sem->owner = t;
@@ -803,7 +801,7 @@ int gsnedf_fmlp_unlock(struct litmus_lock* l)
 	}
 
 	/* check if there are jobs waiting for this resource */
-	next = waitqueue_first(&sem->wait);
+	next = __waitqueue_remove_first(&sem->wait);
 	if (next) {
 		/* next becomes the resouce holder */
 		sem->owner = next;

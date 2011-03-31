@@ -442,10 +442,6 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 		 * ->owner. We can thus check it without acquiring the spin
 		 * lock. */
 		BUG_ON(sem->owner != t);
-
-		/* FIXME: could we punt the dequeuing to the previous job,
-		 * which is holding the spinlock anyway? */
-		remove_wait_queue(&sem->wait, &wait);
 	} else {
 		/* it's ours now */
 		sem->owner = t;
@@ -478,7 +474,7 @@ int psnedf_fmlp_unlock(struct litmus_lock* l)
 	unboost_priority(t);
 
 	/* check if there are jobs waiting for this resource */
-	next = waitqueue_first(&sem->wait);
+	next = __waitqueue_remove_first(&sem->wait);
 	if (next) {
 		/* boost next job */
 		boost_priority(next);

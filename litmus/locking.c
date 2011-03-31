@@ -107,16 +107,18 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 	return err;
 }
 
-struct task_struct* waitqueue_first(wait_queue_head_t *wq)
+struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq)
 {
-	wait_queue_t *q;
+	wait_queue_t* q;
+	struct task_struct* t = NULL;
 
 	if (waitqueue_active(wq)) {
 		q = list_entry(wq->task_list.next,
 			       wait_queue_t, task_list);
-		return (struct task_struct*) q->private;
-	} else
-		return NULL;
+		t = (struct task_struct*) q->private;
+		__remove_wait_queue(wq, q);
+	}
+	return(t);
 }
 
 

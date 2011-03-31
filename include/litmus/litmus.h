@@ -26,7 +26,7 @@ static inline int in_list(struct list_head* list)
 		);
 }
 
-struct task_struct* waitqueue_first(wait_queue_head_t *wq);
+struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq);
 
 #define NO_CPU			0xffffffff
 
