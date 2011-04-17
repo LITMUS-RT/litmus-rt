@@ -110,6 +110,14 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		       "because wcet > period\n", pid);
 		goto out_unlock;
 	}
+	if (	tp.cls != RT_CLASS_HARD &&
+		tp.cls != RT_CLASS_SOFT &&
+		tp.cls != RT_CLASS_BEST_EFFORT)
+	{
+		printk(KERN_INFO "litmus: real-time task %d rejected "
+				 "because its class is invalid\n");
+		goto out_unlock;
+	}
 	if (tp.budget_policy != NO_ENFORCEMENT &&
 	    tp.budget_policy != QUANTUM_ENFORCEMENT &&
 	    tp.budget_policy != PRECISE_ENFORCEMENT)
