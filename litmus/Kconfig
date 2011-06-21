@@ -62,6 +62,25 @@ config LITMUS_LOCKING
 
 endmenu
 
+menu "Performance Enhancements"
+
+config SCHED_CPU_AFFINITY
+	bool "Local Migration Affinity"
+	depends on X86
+	default y
+	help
+	  Rescheduled tasks prefer CPUs near to their previously used CPU.  This
+	  may improve performance through possible preservation of cache affinity.
+
+	  Warning: May make bugs harder to find since tasks may migrate less often.
+
+	  NOTES:
+	  	* Feature is not utilized by PFair/PD^2.
+
+	  Say Yes if unsure.
+
+endmenu
+
 menu "Tracing"
 
 config FEATHER_TRACE

@@ -23,6 +23,10 @@
 
 #include <litmus/bheap.h>
 
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+#include <litmus/affinity.h>
+#endif
+
 #include <linux/module.h>
 
 /* Overview of GSN-EDF operations.
@@ -253,21 +257,52 @@ static noinline void requeue(struct task_struct* task)
 	}
 }
 
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+static cpu_entry_t* gsnedf_get_nearest_available_cpu(cpu_entry_t* start)
+{
+	cpu_entry_t* affinity;
+
+	get_nearest_available_cpu(affinity, start, gsnedf_cpu_entries,
+#ifdef CONFIG_RELEASE_MASTER
+			gsnedf.release_master
+#else
+			-1
+#endif
+			);
+
+	return(affinity);
+}
+#endif
+
 /* check for any necessary preemptions */
 static void check_for_preemptions(void)
 {
 	struct task_struct *task;
 	cpu_entry_t* last;
 
-	for(last = lowest_prio_cpu();
-	    edf_preemption_needed(&gsnedf, last->linked);
-	    last = lowest_prio_cpu()) {
+	for (last = lowest_prio_cpu();
+	     edf_preemption_needed(&gsnedf, last->linked);
+	     last = lowest_prio_cpu()) {
 		/* preemption necessary */
 		task = __take_ready(&gsnedf);
 		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
+
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+		{
+			cpu_entry_t* affinity =
+					gsnedf_get_nearest_available_cpu(
+						&per_cpu(gsnedf_cpu_entries, task_cpu(task)));
+			if (affinity)
+				last = affinity;
+			else if (last->linked)
+				requeue(last->linked);
+		}
+#else
 		if (last->linked)
 			requeue(last->linked);
+#endif
+
 		link_task_to_cpu(task, last);
 		preempt(last);
 	}

@@ -17,6 +17,10 @@
 #include <litmus/litmus_proc.h>
 #include <litmus/sched_trace.h>
 
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+#include <litmus/affinity.h>
+#endif
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 static DEFINE_RAW_SPINLOCK(task_transition_lock);
@@ -539,6 +543,10 @@ static int __init _init_litmus(void)
 #endif
 
 	init_litmus_proc();
+
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+	init_topology();
+#endif
 
 	return 0;
 }

@@ -43,6 +43,10 @@
 
 #include <litmus/bheap.h>
 
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+#include <litmus/affinity.h>
+#endif
+
 /* to configure the cluster size */
 #include <litmus/litmus_proc.h>
 #include <linux/uaccess.h>
@@ -257,6 +261,23 @@ static noinline void requeue(struct task_struct* task)
 	}
 }
 
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+static cpu_entry_t* cedf_get_nearest_available_cpu(
+				cedf_domain_t *cluster, cpu_entry_t* start)
+{
+	cpu_entry_t* affinity;
+
+	get_nearest_available_cpu(affinity, start, cedf_cpu_entries, -1);
+
+	/* make sure CPU is in our cluster */
+	if (affinity && cpu_isset(affinity->cpu, *cluster->cpu_map))
+		return(affinity);
+	else
+		return(NULL);
+}
+#endif
+
+
 /* check for any necessary preemptions */
 static void check_for_preemptions(cedf_domain_t *cluster)
 {
@@ -270,8 +291,20 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 		task = __take_ready(&cluster->domain);
 		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
+#ifdef CONFIG_SCHED_CPU_AFFINITY
+		{
+			cpu_entry_t* affinity =
+					cedf_get_nearest_available_cpu(cluster,
+						&per_cpu(cedf_cpu_entries, task_cpu(task)));
+			if(affinity)
+				last = affinity;
+			else if(last->linked)
+				requeue(last->linked);
+		}
+#else
 		if (last->linked)
 			requeue(last->linked);
+#endif
 		link_task_to_cpu(task, last);
 		preempt(last);
 	}
