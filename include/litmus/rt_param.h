@@ -30,7 +30,7 @@ typedef enum {
 typedef enum {
 	NO_ENFORCEMENT,      /* job may overrun unhindered */
 	QUANTUM_ENFORCEMENT, /* budgets are only checked on quantum boundaries */
-	PRECISE_ENFORCEMENT  /* NOT IMPLEMENTED - enforced with hrtimers */
+	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
 struct rt_task {
