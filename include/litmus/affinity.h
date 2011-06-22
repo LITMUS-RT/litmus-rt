@@ -24,12 +24,12 @@ void init_topology(void); /* called by Litmus module's _init_litmus() */
 
 /* Works like:
 void get_nearest_available_cpu(
-	cpu_entry_t* nearest,
-	cpu_entry_t* start,
-	cpu_entry_t* entries,
+	cpu_entry_t **nearest,
+	cpu_entry_t *start,
+	cpu_entry_t *entries,
 	int release_master)
 
-Set release_master = -1 for no RM.
+Set release_master = NO_CPU for no Release Master.
 
 We use a macro here to exploit the fact that C-EDF and G-EDF
 have similar structures for their cpu_entry_t structs, even though
@@ -48,13 +48,14 @@ dissertation.)
 	} else { \
 		int __level; \
 		int __cpu; \
-		struct neighborhood* __neighbors = &neigh_info[(start)->cpu]; \
+		int __release_master = ((release_master) == NO_CPU) ? -1 : (release_master); \
+		struct neighborhood *__neighbors = &neigh_info[(start)->cpu]; \
 		\
 		for (__level = 0; (__level < NUM_CACHE_LEVELS) && !(nearest); ++__level) { \
 			if (__neighbors->size[__level] > 1) { \
 				for_each_cpu(__cpu, __neighbors->neighbors[__level]) { \
-					if (__cpu != (release_master)) { \
-						cpu_entry_t* __entry = &per_cpu((entries), __cpu); \
+					if (__cpu != __release_master) { \
+						cpu_entry_t *__entry = &per_cpu((entries), __cpu); \
 						if (!__entry->linked) { \
 							(nearest) = __entry; \
 							break; \

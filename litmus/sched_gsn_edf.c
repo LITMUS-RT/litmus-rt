@@ -258,15 +258,15 @@ static noinline void requeue(struct task_struct* task)
 }
 
 #ifdef CONFIG_SCHED_CPU_AFFINITY
-static cpu_entry_t* gsnedf_get_nearest_available_cpu(cpu_entry_t* start)
+static cpu_entry_t* gsnedf_get_nearest_available_cpu(cpu_entry_t *start)
 {
-	cpu_entry_t* affinity;
+	cpu_entry_t *affinity;
 
 	get_nearest_available_cpu(affinity, start, gsnedf_cpu_entries,
 #ifdef CONFIG_RELEASE_MASTER
 			gsnedf.release_master
 #else
-			-1
+			NO_CPU
 #endif
 			);
 
@@ -278,7 +278,7 @@ static cpu_entry_t* gsnedf_get_nearest_available_cpu(cpu_entry_t* start)
 static void check_for_preemptions(void)
 {
 	struct task_struct *task;
-	cpu_entry_t* last;
+	cpu_entry_t *last;
 
 	for (last = lowest_prio_cpu();
 	     edf_preemption_needed(&gsnedf, last->linked);
@@ -290,7 +290,7 @@ static void check_for_preemptions(void)
 
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 		{
-			cpu_entry_t* affinity =
+			cpu_entry_t *affinity =
 					gsnedf_get_nearest_available_cpu(
 						&per_cpu(gsnedf_cpu_entries, task_cpu(task)));
 			if (affinity)

@@ -263,11 +263,17 @@ static noinline void requeue(struct task_struct* task)
 
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 static cpu_entry_t* cedf_get_nearest_available_cpu(
-				cedf_domain_t *cluster, cpu_entry_t* start)
+				cedf_domain_t *cluster, cpu_entry_t *start)
 {
-	cpu_entry_t* affinity;
+	cpu_entry_t *affinity;
 
-	get_nearest_available_cpu(affinity, start, cedf_cpu_entries, -1);
+	get_nearest_available_cpu(affinity, start, cedf_cpu_entries,
+#ifdef CONFIG_RELEASE_MASTER
+		cluster->domain.release_master
+#else
+		NO_CPU
+#endif
+		);
 
 	/* make sure CPU is in our cluster */
 	if (affinity && cpu_isset(affinity->cpu, *cluster->cpu_map))
@@ -282,7 +288,7 @@ static cpu_entry_t* cedf_get_nearest_available_cpu(
 static void check_for_preemptions(cedf_domain_t *cluster)
 {
 	struct task_struct *task;
-	cpu_entry_t* last;
+	cpu_entry_t *last;
 
 	for(last = lowest_prio_cpu(cluster);
 	    edf_preemption_needed(&cluster->domain, last->linked);
@@ -293,7 +299,7 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 		      task->pid, last->cpu);
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 		{
-			cpu_entry_t* affinity =
+			cpu_entry_t *affinity =
 					cedf_get_nearest_available_cpu(cluster,
 						&per_cpu(cedf_cpu_entries, task_cpu(task)));
 			if(affinity)

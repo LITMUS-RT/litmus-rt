@@ -16,8 +16,6 @@ void init_topology(void) {
 
 	for_each_online_cpu(cpu) {
 		for (i = 0; i < depth; ++i) {
-			long unsigned int firstbits;
-
 			chk = get_shared_cpu_map((struct cpumask *)&neigh_info[cpu].neighbors[i], cpu, i);
 			if (chk) {
 				/* failed */
@@ -27,9 +25,9 @@ void init_topology(void) {
 				neigh_info[cpu].size[i] =
 					cpumask_weight((struct cpumask *)&neigh_info[cpu].neighbors[i]);
 			}
-			firstbits = *neigh_info[cpu].neighbors[i]->bits;
 			printk("CPU %d has %d neighbors at level %d. (mask = %lx)\n",
-							cpu, neigh_info[cpu].size[i], i, firstbits);
+							cpu, neigh_info[cpu].size[i], i, 
+							*cpumask_bits(neigh_info[cpu].neighbors[i]));
 		}
 
 		/* set data for non-existent levels */
