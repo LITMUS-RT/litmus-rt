@@ -250,64 +250,47 @@ out:
 	return err;
 }
 
-typedef uint32_t cmd_t;
-
-static ssize_t ftdev_write(struct file *filp, const char __user *from,
-			   size_t len, loff_t *f_pos)
+static long ftdev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	long err = -ENOIOCTLCMD;
 	struct ftdev_minor* ftdm = filp->private_data;
-	ssize_t err = -EINVAL;
-	cmd_t cmd;
-	cmd_t id;
-
-	if (len % sizeof(cmd) || len < 2 * sizeof(cmd))
-		goto out;
-
-	if (copy_from_user(&cmd, from, sizeof(cmd))) {
-		err = -EFAULT;
-	        goto out;
-	}
-	len  -= sizeof(cmd);
-	from += sizeof(cmd);
-
-	if (cmd != FTDEV_ENABLE_CMD && cmd != FTDEV_DISABLE_CMD)
-		goto out;
 
 	if (mutex_lock_interruptible(&ftdm->lock)) {
 		err = -ERESTARTSYS;
 		goto out;
 	}
 
-	err = sizeof(cmd);
-	while (len) {
-		if (copy_from_user(&id, from, sizeof(cmd))) {
-			err = -EFAULT;
-			goto out_unlock;
-		}
-		/* FIXME: check id against list of acceptable events */
-		len  -= sizeof(cmd);
-		from += sizeof(cmd);
-		if (cmd == FTDEV_DISABLE_CMD)
-			deactivate(&ftdm->events, id);
-		else if (activate(&ftdm->events, id) != 0) {
-			err = -ENOMEM;
-			goto out_unlock;
-		}
-		err += sizeof(cmd);
-	}
+	/* FIXME: check id against list of acceptable events */
 
-out_unlock:
+	switch (cmd) {
+	case  FTDEV_ENABLE_CMD:
+		if (activate(&ftdm->events, arg))
+			err = -ENOMEM;
+		else
+			err = 0;
+		break;
+
+	case FTDEV_DISABLE_CMD:
+		deactivate(&ftdm->events, arg);
+		err = 0;
+		break;
+
+	default:
+		printk(KERN_DEBUG "ftdev: strange ioctl (%u, %lu)\n", cmd, arg);
+	};
+
 	mutex_unlock(&ftdm->lock);
 out:
 	return err;
 }
 
+
 struct file_operations ftdev_fops = {
 	.owner   = THIS_MODULE,
 	.open    = ftdev_open,
 	.release = ftdev_release,
-	.write   = ftdev_write,
 	.read    = ftdev_read,
+	.unlocked_ioctl = ftdev_ioctl,
 };
 
 int ftdev_init(	struct ftdev* ftdev, struct module* owner,
