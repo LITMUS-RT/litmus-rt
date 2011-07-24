@@ -1,5 +1,6 @@
 #include <linux/sched.h>
 #include <linux/module.h>
+#include <linux/uaccess.h>
 
 #include <litmus/ftdev.h>
 #include <litmus/litmus.h>
@@ -27,6 +28,18 @@ static inline void __save_timestamp_cpu(unsigned long event,
 		ts->seq_no    = seq_no;
 		ts->cpu       = cpu;
 		ts->task_type = type;
+		ft_buffer_finish_write(trace_ts_buf, ts);
+	}
+}
+
+static void __add_timestamp_user(struct timestamp *pre_recorded)
+{
+	unsigned int seq_no;
+	struct timestamp *ts;
+	seq_no = fetch_and_inc((int *) &ts_seq_no);
+	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
+		*ts = *pre_recorded;
+		ts->seq_no = seq_no;
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
 }
@@ -108,6 +121,32 @@ static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 	ftdev->minor[idx].buf = NULL;
 }
 
+static ssize_t write_timestamp_from_user(struct ft_buffer* buf, size_t len,
+					 const char __user *from)
+{
+	ssize_t consumed = 0;
+	struct timestamp ts;
+
+	/* don't give us partial timestamps */
+	if (len % sizeof(ts))
+		return -EINVAL;
+
+	while (len >= sizeof(ts)) {
+		if (copy_from_user(&ts, from, sizeof(ts))) {
+			consumed = -EFAULT;
+			goto out;
+		}
+		len  -= sizeof(ts);
+		from += sizeof(ts);
+		consumed += sizeof(ts);
+
+		__add_timestamp_user(&ts);
+	}
+
+out:
+	return consumed;
+}
+
 static int __init init_ft_overhead_trace(void)
 {
 	int err;
@@ -119,6 +158,7 @@ static int __init init_ft_overhead_trace(void)
 
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
+	overhead_dev.write = write_timestamp_from_user;
 
 	err = register_ftdev(&overhead_dev);
 	if (err)
