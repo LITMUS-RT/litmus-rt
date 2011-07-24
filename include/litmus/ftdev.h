@@ -16,7 +16,8 @@ typedef int  (*ftdev_can_open_t)(struct ftdev* dev, unsigned int buf_no);
 /* return 0 on success, otherwise -$REASON */
 typedef int  (*ftdev_alloc_t)(struct ftdev* dev, unsigned int buf_no);
 typedef void (*ftdev_free_t)(struct ftdev* dev, unsigned int buf_no);
-
+/* Let devices handle writes from userspace. No synchronization provided. */
+typedef ssize_t (*ftdev_write_t)(struct ft_buffer* buf, size_t len, const char __user *from);
 
 struct ftdev_event;
 
@@ -27,6 +28,7 @@ struct ftdev_minor {
 	/* FIXME: filter for authorized events */
 	struct ftdev_event*	events;
 	struct device*		device;
+	struct ftdev*		ftdev;
 };
 
 struct ftdev {
@@ -39,6 +41,7 @@ struct ftdev {
 	ftdev_alloc_t		alloc;
 	ftdev_free_t		free;
 	ftdev_can_open_t	can_open;
+	ftdev_write_t		write;
 };
 
 struct ft_buffer* alloc_ft_buffer(unsigned int count, size_t size);

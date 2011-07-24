@@ -114,6 +114,7 @@ static int ftdev_open(struct inode *in, struct file *filp)
 		goto out;
 
 	ftdm = ftdev->minor + buf_idx;
+	ftdm->ftdev = ftdev;
 	filp->private_data = ftdm;
 
 	if (mutex_lock_interruptible(&ftdm->lock)) {
@@ -284,11 +285,25 @@ out:
 	return err;
 }
 
+static ssize_t ftdev_write(struct file *filp, const char __user *from,
+			   size_t len, loff_t *f_pos)
+{
+	struct ftdev_minor* ftdm = filp->private_data;
+	ssize_t err = -EINVAL;
+	struct ftdev* ftdev = ftdm->ftdev;
+
+	/* dispatch write to buffer-specific code, if available */
+	if (ftdev->write)
+		err = ftdev->write(ftdm->buf, len, from);
+
+	return err;
+}
 
 struct file_operations ftdev_fops = {
 	.owner   = THIS_MODULE,
 	.open    = ftdev_open,
 	.release = ftdev_release,
+	.write   = ftdev_write,
 	.read    = ftdev_read,
 	.unlocked_ioctl = ftdev_ioctl,
 };
@@ -308,6 +323,7 @@ int ftdev_init(	struct ftdev* ftdev, struct module* owner,
 	ftdev->alloc    = NULL;
 	ftdev->free     = NULL;
 	ftdev->can_open = NULL;
+	ftdev->write	= NULL;
 
 	ftdev->minor = kcalloc(ftdev->minor_cnt, sizeof(*ftdev->minor),
 			GFP_KERNEL);
