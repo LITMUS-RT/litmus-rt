@@ -230,13 +230,20 @@ static ssize_t ftdev_read(struct file *filp,
 			 * here with copied data because that data would get
 			 * lost if the task is interrupted (e.g., killed).
 			 */
+			mutex_unlock(&ftdm->lock);
 			set_current_state(TASK_INTERRUPTIBLE);
+
 			schedule_timeout(50);
+
 			if (signal_pending(current)) {
 				if (err == 0)
 					/* nothing read yet, signal problem */
 					err = -ERESTARTSYS;
-				break;
+				goto out;
+			}
+			if (mutex_lock_interruptible(&ftdm->lock)) {
+				err = -ERESTARTSYS;
+				goto out;
 			}
 		} else if (copied < 0) {
 			/* page fault */
