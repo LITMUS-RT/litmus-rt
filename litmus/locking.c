@@ -80,7 +80,7 @@ asmlinkage long sys_litmus_lock(int lock_od)
 
 	/* Note: task my have been suspended or preempted in between!  Take
 	 * this into account when computing overheads. */
-	TS_UNLOCK_END;
+	TS_LOCK_END;
 
 	return err;
 }
