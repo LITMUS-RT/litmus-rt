@@ -42,6 +42,16 @@ struct rt_task {
 	budget_policy_t budget_policy; /* ignored by pfair */
 };
 
+union np_flag {
+	uint32_t raw;
+	struct {
+		/* Is the task currently in a non-preemptive section? */
+		uint32_t flag:31;
+		/* Should the task call into the scheduler? */
+		uint32_t preempt:1;
+	} np;
+};
+
 /* The definition of the data that is shared between the kernel and real-time
  * tasks via a shared page (see litmus/ctrldev.c).
  *
@@ -57,11 +67,7 @@ struct rt_task {
  * determining preemption/migration overheads).
  */
 struct control_page {
-	/* Is the task currently in a non-preemptive section? */
-	int np_flag;
-	/* Should the task call into the kernel when it leaves
-	 * its non-preemptive section? */
-	int delayed_preemption;
+	volatile union np_flag sched;
 
 	/* to be extended */
 };

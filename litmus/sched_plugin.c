@@ -35,29 +35,18 @@ void preempt_if_preemptable(struct task_struct* t, int cpu)
 			/* local CPU case */
 			/* check if we need to poke userspace */
 			if (is_user_np(t))
-				/* yes, poke it */
+				/* Yes, poke it. This doesn't have to be atomic since
+				 * the task is definitely not executing. */
 				request_exit_np(t);
 			else if (!is_kernel_np(t))
 				/* only if we are allowed to preempt the
 				 * currently-executing task */
 				reschedule = 1;
 		} else {
-			/* remote CPU case */
-			if (is_user_np(t)) {
-				/* need to notify user space of delayed
-				 * preemption */
-
-				/* to avoid a race, set the flag, then test
-				 * again */
-				request_exit_np(t);
-				/* make sure it got written */
-				mb();
-			}
-			/* Only send an ipi if remote task might have raced our
-			 * request, i.e., send an IPI to make sure in case it
-			 * exited its critical section.
-			 */
-			reschedule = !is_np(t) && !is_kernel_np(t);
+			/* Remote CPU case.  Only notify if it's not a kernel
+			 * NP section and if we didn't set the userspace
+			 * flag. */
+			reschedule = !(is_kernel_np(t) || request_exit_np_atomic(t));
 		}
 	}
 	if (likely(reschedule))
