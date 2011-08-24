@@ -98,11 +98,6 @@
 #define REBOOT_VECTOR			0xf8
 
 /*
- * LITMUS^RT pull timers IRQ vector
- */
-#define PULL_TIMERS_VECTOR		0xee
-
-/*
  * Generic system vector for platform specific use
  */
 #define X86_PLATFORM_IPI_VECTOR		0xf7
@@ -139,6 +134,13 @@
 #define INVALIDATE_TLB_VECTOR_END	(0xee)
 #define INVALIDATE_TLB_VECTOR_START	\
 	(INVALIDATE_TLB_VECTOR_END-NUM_INVALIDATE_TLB_VECTORS+1)
+
+/*
+ * LITMUS^RT pull timers IRQ vector
+ * Make sure it's below the above max 32 vectors.
+ */
+#define PULL_TIMERS_VECTOR		0xce
+
 
 #define NR_VECTORS			 256
 
