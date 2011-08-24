@@ -2661,7 +2661,12 @@ static void ttwu_queue(struct task_struct *p, int cpu)
 	struct rq *rq = cpu_rq(cpu);
 
 #if defined(CONFIG_SMP)
-	if (sched_feat(TTWU_QUEUE) && cpu != smp_processor_id()) {
+	/*
+	 * LITMUS^RT: whether to send an IPI to the remote CPU
+	 * is plugin specific.
+	 */
+	if (!is_realtime(p) &&
+			sched_feat(TTWU_QUEUE) && cpu != smp_processor_id()) {
 		sched_clock_cpu(cpu); /* sync clocks x-cpu */
 		ttwu_queue_remote(p, cpu);
 		return;
