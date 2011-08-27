@@ -252,12 +252,12 @@ static void task_tick_litmus(struct rq *rq, struct task_struct *p, int queued)
 	return;
 }
 
-static void switched_to_litmus(struct rq *rq, struct task_struct *p, int running)
+static void switched_to_litmus(struct rq *rq, struct task_struct *p)
 {
 }
 
 static void prio_changed_litmus(struct rq *rq, struct task_struct *p,
-				int oldprio, int running)
+				int oldprio)
 {
 }
 
@@ -283,8 +283,8 @@ static void set_curr_task_litmus(struct rq *rq)
  * We don't care about the scheduling domain; can gets called from
  * exec, fork, wakeup.
  */
-static int select_task_rq_litmus(struct rq *rq, struct task_struct *p,
-		int sd_flag, int flags)
+static int
+select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
 {
 	/* preemption is already disabled.
 	 * We don't want to change cpu here

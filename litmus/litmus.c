@@ -115,7 +115,7 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		tp.cls != RT_CLASS_BEST_EFFORT)
 	{
 		printk(KERN_INFO "litmus: real-time task %d rejected "
-				 "because its class is invalid\n");
+				 "because its class is invalid\n", pid);
 		goto out_unlock;
 	}
 	if (tp.budget_policy != NO_ENFORCEMENT &&

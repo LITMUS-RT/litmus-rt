@@ -403,7 +403,7 @@
 #define __NR_sendmmsg			(__NR_SYSCALL_BASE+374)
 #define __NR_setns			(__NR_SYSCALL_BASE+375)
 
-#define __NR_LITMUS (__NR_SYSCALL_BASE+370)
+#define __NR_LITMUS (__NR_SYSCALL_BASE+376)
 #include <litmus/unistd_32.h>
 
 /*

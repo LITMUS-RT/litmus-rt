@@ -682,7 +682,7 @@ __SYSCALL(__NR_sendmmsg, sys_sendmmsg)
 #define __NR_setns				308
 __SYSCALL(__NR_setns, sys_setns)
 
-#define __NR_LITMUS				303
+#define __NR_LITMUS				309
 
 #include "litmus/unistd_64.h"
 
