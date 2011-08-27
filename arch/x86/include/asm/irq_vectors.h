@@ -1,6 +1,7 @@
 #ifndef _ASM_X86_IRQ_VECTORS_H
 #define _ASM_X86_IRQ_VECTORS_H
 
+#include <linux/threads.h>
 /*
  * Linux IRQ vector layout.
  *
@@ -16,8 +17,8 @@
  *  Vectors   0 ...  31 : system traps and exceptions - hardcoded events
  *  Vectors  32 ... 127 : device interrupts
  *  Vector  128         : legacy int80 syscall interface
- *  Vectors 129 ... 237 : device interrupts
- *  Vectors 238 ... 255 : special interrupts
+ *  Vectors 129 ... INVALIDATE_TLB_VECTOR_START-1 : device interrupts
+ *  Vectors INVALIDATE_TLB_VECTOR_START ... 255 : special interrupts
  *
  * 64-bit x86 has per CPU IDT tables, 32-bit has one shared IDT table.
  *
@@ -96,18 +97,6 @@
 #define THRESHOLD_APIC_VECTOR		0xf9
 #define REBOOT_VECTOR			0xf8
 
-/* f0-f7 used for spreading out TLB flushes: */
-#define INVALIDATE_TLB_VECTOR_END	0xf7
-#define INVALIDATE_TLB_VECTOR_START	0xf0
-#define NUM_INVALIDATE_TLB_VECTORS	   8
-
-/*
- * Local APIC timer IRQ vector is on a different priority level,
- * to work around the 'lost local interrupt if more than 2 IRQ
- * sources per level' errata.
- */
-#define LOCAL_TIMER_VECTOR		0xef
-
 /*
  * LITMUS^RT pull timers IRQ vector
  */
@@ -116,22 +105,40 @@
 /*
  * Generic system vector for platform specific use
  */
-#define X86_PLATFORM_IPI_VECTOR		0xed
+#define X86_PLATFORM_IPI_VECTOR		0xf7
 
 /*
- * Performance monitoring pending work vector:
+ * IRQ work vector:
  */
-#define LOCAL_PENDING_VECTOR		0xec
+#define IRQ_WORK_VECTOR			0xf6
 
-#define UV_BAU_MESSAGE			0xea
+#define UV_BAU_MESSAGE			0xf5
 
 /*
  * Self IPI vector for machine checks
  */
-#define MCE_SELF_VECTOR			0xeb
+#define MCE_SELF_VECTOR			0xf4
 
 /* Xen vector callback to receive events in a HVM domain */
-#define XEN_HVM_EVTCHN_CALLBACK		0xe9
+#define XEN_HVM_EVTCHN_CALLBACK		0xf3
+
+/*
+ * Local APIC timer IRQ vector is on a different priority level,
+ * to work around the 'lost local interrupt if more than 2 IRQ
+ * sources per level' errata.
+ */
+#define LOCAL_TIMER_VECTOR		0xef
+
+/* up to 32 vectors used for spreading out TLB flushes: */
+#if NR_CPUS <= 32
+# define NUM_INVALIDATE_TLB_VECTORS	(NR_CPUS)
+#else
+# define NUM_INVALIDATE_TLB_VECTORS	(32)
+#endif
+
+#define INVALIDATE_TLB_VECTOR_END	(0xee)
+#define INVALIDATE_TLB_VECTOR_START	\
+	(INVALIDATE_TLB_VECTOR_END-NUM_INVALIDATE_TLB_VECTORS+1)
 
 #define NR_VECTORS			 256
 

@@ -30,6 +30,21 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Alexander Shishkin");
 
+/*
+ * ETM tracer state
+ */
+struct tracectx {
+	unsigned int	etb_bufsz;
+	void __iomem	*etb_regs;
+	void __iomem	*etm_regs;
+	unsigned long	flags;
+	int		ncmppairs;
+	int		etm_portsz;
+	struct device	*dev;
+	struct clk	*emu_clk;
+	struct mutex	mutex;
+};
+
 static struct tracectx tracer;
 
 static inline bool trace_isrunning(struct tracectx *t)
@@ -314,6 +329,7 @@ static const struct file_operations etb_fops = {
 	.read = etb_read,
 	.open = etb_open,
 	.release = etb_release,
+	.llseek = no_llseek,
 };
 
 static struct miscdevice etb_miscdev = {
@@ -322,7 +338,7 @@ static struct miscdevice etb_miscdev = {
 	.fops = &etb_fops,
 };
 
-static int __init etb_probe(struct amba_device *dev, struct amba_id *id)
+static int __devinit etb_probe(struct amba_device *dev, const struct amba_id *id)
 {
 	struct tracectx *t = &tracer;
 	int ret = 0;
@@ -514,7 +530,7 @@ static ssize_t trace_mode_store(struct kobject *kobj,
 static struct kobj_attribute trace_mode_attr =
 	__ATTR(trace_mode, 0644, trace_mode_show, trace_mode_store);
 
-static int __init etm_probe(struct amba_device *dev, struct amba_id *id)
+static int __devinit etm_probe(struct amba_device *dev, const struct amba_id *id)
 {
 	struct tracectx *t = &tracer;
 	int ret = 0;

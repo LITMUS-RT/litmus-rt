@@ -340,15 +340,21 @@ ENTRY(sys_call_table)
 	.long sys_fanotify_init
 	.long sys_fanotify_mark
 	.long sys_prlimit64		/* 340 */
-	.long sys_set_rt_task_param	/* LITMUS^RT 341 */
+	.long sys_name_to_handle_at
+	.long sys_open_by_handle_at
+	.long sys_clock_adjtime
+	.long sys_syncfs
+	.long sys_sendmmsg		/* 345 */
+	.long sys_setns
+	.long sys_set_rt_task_param	/* LITMUS^RT 347 */
 	.long sys_get_rt_task_param
 	.long sys_complete_job
 	.long sys_od_open
 	.long sys_od_close
-	.long sys_litmus_lock
+	.long sys_litmus_lock		/* +5 */
 	.long sys_litmus_unlock
 	.long sys_query_job_no
 	.long sys_wait_for_job_release
 	.long sys_wait_for_ts_release
-	.long sys_release_ts
+	.long sys_release_ts		/* +10 */
 	.long sys_null_call
