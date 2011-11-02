@@ -421,7 +421,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
 	 */
-	if (cluster->domain.release_master == entry->cpu) {
+	if (unlikely(cluster->domain.release_master == entry->cpu)) {
 		sched_state_task_picked();
 		return NULL;
 	}
