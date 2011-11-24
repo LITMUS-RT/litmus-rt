@@ -30,8 +30,10 @@ void sched_state_will_schedule(struct task_struct* tsk)
 		/* Litmus tasks should never be subject to a remote
 		 * set_tsk_need_resched(). */
 		BUG_ON(is_realtime(tsk));
+#ifdef CONFIG_PREEMPT_STATE_TRACE
 	TRACE_TASK(tsk, "set_tsk_need_resched() ret:%p\n",
 		   __builtin_return_address(0));
+#endif
 }
 
 /* Called by the IPI handler after another CPU called smp_send_resched(). */

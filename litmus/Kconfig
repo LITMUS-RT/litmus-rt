@@ -199,6 +199,20 @@ config SCHED_DEBUG_TRACE_CALLER
 
 	 If unsure, say No.
 
+config PREEMPT_STATE_TRACE
+       bool "Trace preemption state machine transitions"
+       depends on SCHED_DEBUG_TRACE
+       default n
+       help
+         With this option enabled, each CPU will log when it transitions
+	 states in the preemption state machine. This state machine is
+	 used to determine how to react to IPIs (avoid races with in-flight IPIs).
+
+	 Warning: this creates a lot of information in the debug trace. Only
+	 recommended when you are debugging preemption-related races.
+
+	 If unsure, say No.
+
 endmenu
 
 endmenu

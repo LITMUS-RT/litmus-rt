@@ -10,7 +10,7 @@
 
 extern DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, resched_state);
 
-#ifdef CONFIG_DEBUG_KERNEL
+#ifdef CONFIG_PREEMPT_STATE_TRACE
 const char* sched_state_name(int s);
 #define TRACE_STATE(fmt, args...) TRACE("SCHED_STATE " fmt, args)
 #else
