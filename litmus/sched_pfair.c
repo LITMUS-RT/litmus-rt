@@ -98,6 +98,8 @@ struct pfair_cluster {
 	raw_spinlock_t release_lock;
 };
 
+#define RT_F_REQUEUE 0x2
+
 static inline struct pfair_cluster* cpu_cluster(struct pfair_state* state)
 {
 	return container_of(state->topology.cluster, struct pfair_cluster, topology);
@@ -288,6 +290,8 @@ static void drop_all_references(struct task_struct *t)
                 if (s->scheduled  == t)
                         s->scheduled = NULL;
         }
+	/* make sure we don't have a stale linked_on field */
+	tsk_rt(t)->linked_on = NO_CPU;
 }
 
 static void pfair_prepare_next_period(struct task_struct* t)
@@ -312,6 +316,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
+			tsk_rt(t)->flags = RT_F_REQUEUE;
 			TRACE_TASK(t, "on %d advanced to subtask %lu (not present)\n",
 				   cpu, p->cur);
 			return 0;
@@ -688,6 +693,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 {
 	unsigned long flags;
 	lt_t now;
+	int requeue = 0;
 	struct pfair_cluster* cluster;
 
 	cluster = tsk_pfair(t)->cluster;
@@ -702,16 +708,21 @@ static void pfair_task_wake_up(struct task_struct *t)
 	 * (as if it never blocked at all). Otherwise, we have a
 	 * new sporadic job release.
 	 */
+	requeue = tsk_rt(t)->flags == RT_F_REQUEUE;
 	now = litmus_clock();
 	if (lt_before(get_deadline(t), now)) {
+		TRACE_TASK(t, "sporadic release!\n");
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
 	}
 
 	/* only add to ready queue if the task isn't still linked somewhere */
-	if (tsk_rt(t)->linked_on == NO_CPU)
+	if (requeue) {
+		TRACE_TASK(t, "requeueing required\n");
+		tsk_rt(t)->flags = RT_F_RUNNING;
 		__add_ready(&cluster->pfair, t);
+	}
 
 	check_preempt(t);
 
