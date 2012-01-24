@@ -20,7 +20,9 @@ struct timestamp {
 	uint32_t		seq_no;
 	uint8_t			cpu;
 	uint8_t			event;
-	uint8_t			task_type;
+	uint8_t			task_type:2;
+	uint8_t			irq_flag:1;
+	uint8_t			irq_count:5;
 };
 
 /* tracing callbacks */
