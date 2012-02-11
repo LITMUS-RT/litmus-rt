@@ -80,13 +80,13 @@
 #include "workqueue_sched.h"
 #include "sched_autogroup.h"
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/sched.h>
+
 #include <litmus/sched_trace.h>
 #include <litmus/trace.h>
 
 static void litmus_tick(struct rq*, struct task_struct*);
-
-#define CREATE_TRACE_POINTS
-#include <trace/events/sched.h>
 
 /*
  * Convert user-nice values [ -20 ... 0 ... 19 ]
