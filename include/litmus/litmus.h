@@ -211,7 +211,7 @@ static inline void request_exit_np(struct task_struct *t)
 	BUG();
 }
 
-static inline int request_exist_np_atomic(struct task_struct *t)
+static inline int request_exit_np_atomic(struct task_struct *t)
 {
 	return 0;
 }
