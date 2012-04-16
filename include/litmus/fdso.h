@@ -24,7 +24,9 @@ typedef enum  {
 	MPCP_VS_SEM	= 3,
 	DPCP_SEM	= 4,
 
-	MAX_OBJ_TYPE	= 4
+	PCP_SEM         = 5,
+
+	MAX_OBJ_TYPE	= 5
 } obj_type_t;
 
 struct inode_obj_id {

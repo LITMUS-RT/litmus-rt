@@ -950,6 +950,8 @@ static struct litmus_lock* pfp_new_mpcp(int vspin)
 
 
 struct pcp_semaphore {
+	struct litmus_lock litmus_lock;
+
 	struct list_head ceiling;
 
 	/* current resource holder */
@@ -961,6 +963,12 @@ struct pcp_semaphore {
 	/* on which processor is this PCP semaphore allocated? */
 	int on_cpu;
 };
+
+static inline struct pcp_semaphore* pcp_from_lock(struct litmus_lock* lock)
+{
+	return container_of(lock, struct pcp_semaphore, litmus_lock);
+}
+
 
 struct pcp_state {
 	struct list_head system_ceiling;
@@ -1203,6 +1211,123 @@ static void pcp_init_semaphore(struct pcp_semaphore* sem, int cpu)
 	sem->on_cpu = cpu;
 }
 
+int pfp_pcp_lock(struct litmus_lock* l)
+{
+	struct task_struct* t = current;
+	struct pcp_semaphore *sem = pcp_from_lock(l);
+
+	int eprio = effective_agent_priority(get_priority(t));
+	int from  = get_partition(t);
+	int to    = sem->on_cpu;
+
+	if (!is_realtime(t) || from != to)
+		return -EPERM;
+
+	preempt_disable();
+
+	pcp_raise_ceiling(sem, eprio);
+
+	preempt_enable();
+
+	return 0;
+}
+
+int pfp_pcp_unlock(struct litmus_lock* l)
+{
+	struct task_struct *t = current;
+	struct pcp_semaphore *sem = pcp_from_lock(l);
+
+	int err = 0;
+
+	preempt_disable();
+
+	if (sem->on_cpu != smp_processor_id() || sem->owner != t) {
+		err = -EINVAL;
+		goto out;
+	}
+
+	/* give it back */
+	pcp_lower_ceiling(sem);
+
+out:
+	preempt_enable();
+
+	return err;
+}
+
+int pfp_pcp_open(struct litmus_lock* l, void* __user config)
+{
+	struct task_struct *t = current;
+	struct pcp_semaphore *sem = pcp_from_lock(l);
+
+	int cpu, eprio;
+
+	if (!is_realtime(t))
+		/* we need to know the real-time priority */
+		return -EPERM;
+
+	if (get_user(cpu, (int*) config))
+		return -EFAULT;
+
+	/* make sure the resource location matches */
+	if (cpu != sem->on_cpu)
+		return -EINVAL;
+
+	eprio = effective_agent_priority(get_priority(t));
+
+	pcp_update_prio_ceiling(sem, eprio);
+
+	return 0;
+}
+
+int pfp_pcp_close(struct litmus_lock* l)
+{
+	struct task_struct *t = current;
+	struct pcp_semaphore *sem = pcp_from_lock(l);
+
+	int owner = 0;
+
+	preempt_disable();
+
+	if (sem->on_cpu == smp_processor_id())
+		owner = sem->owner == t;
+
+	preempt_enable();
+
+	if (owner)
+		pfp_pcp_unlock(l);
+
+	return 0;
+}
+
+void pfp_pcp_free(struct litmus_lock* lock)
+{
+	kfree(pcp_from_lock(lock));
+}
+
+
+static struct litmus_lock_ops pfp_pcp_lock_ops = {
+	.close  = pfp_pcp_close,
+	.lock   = pfp_pcp_lock,
+	.open	= pfp_pcp_open,
+	.unlock = pfp_pcp_unlock,
+	.deallocate = pfp_pcp_free,
+};
+
+
+static struct litmus_lock* pfp_new_pcp(int on_cpu)
+{
+	struct pcp_semaphore* sem;
+
+	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
+	if (!sem)
+		return NULL;
+
+	sem->litmus_lock.ops = &pfp_pcp_lock_ops;
+	pcp_init_semaphore(sem, on_cpu);
+
+	return &sem->litmus_lock;
+}
 
 /* ******************** DPCP support ********************** */
 
@@ -1457,6 +1582,21 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 			*lock = &srp->litmus_lock;
 			err = 0;
 		} else
+			err = -ENOMEM;
+		break;
+
+        case PCP_SEM:
+		/* Priority Ceiling Protocol */
+		if (get_user(cpu, (int*) config))
+			return -EFAULT;
+
+		if (!cpu_online(cpu))
+			return -EINVAL;
+
+		*lock = pfp_new_pcp(cpu);
+		if (*lock)
+			err = 0;
+		else
 			err = -ENOMEM;
 		break;
 	};

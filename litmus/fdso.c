@@ -26,6 +26,7 @@ static const struct fdso_ops* fdso_ops[] = {
 	&generic_lock_ops, /* MPCP_SEM */
 	&generic_lock_ops, /* MPCP_VS_SEM */
 	&generic_lock_ops, /* DPCP_SEM */
+	&generic_lock_ops, /* PCP_SEM */
 };
 
 static int fdso_create(void** obj_ref, obj_type_t type, void* __user config)
