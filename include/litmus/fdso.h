@@ -12,7 +12,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 
-#define MAX_OBJECT_DESCRIPTORS 32
+#define MAX_OBJECT_DESCRIPTORS 85
 
 typedef enum  {
 	MIN_OBJ_TYPE 	= 0,
@@ -20,7 +20,11 @@ typedef enum  {
 	FMLP_SEM	= 0,
 	SRP_SEM		= 1,
 
-	MAX_OBJ_TYPE	= 1
+	MPCP_SEM	= 2,
+	MPCP_VS_SEM	= 3,
+	DPCP_SEM	= 4,
+
+	MAX_OBJ_TYPE	= 4
 } obj_type_t;
 
 struct inode_obj_id {

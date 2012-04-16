@@ -4,6 +4,7 @@
 
 #include <litmus/sched_plugin.h>
 #include <litmus/trace.h>
+#include <litmus/wait.h>
 
 static int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg);
 static int open_generic_lock(struct od_table_entry* entry, void* __user arg);
@@ -121,6 +122,37 @@ struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq)
 	return(t);
 }
 
+unsigned int __add_wait_queue_prio_exclusive(
+	wait_queue_head_t* head,
+	prio_wait_queue_t *new)
+{
+	struct list_head *pos;
+	unsigned int passed = 0;
+
+	new->wq.flags |= WQ_FLAG_EXCLUSIVE;
+
+	/* find a spot where the new entry is less than the next */
+	list_for_each(pos, &head->task_list) {
+		prio_wait_queue_t* queued = list_entry(pos, prio_wait_queue_t,
+						       wq.task_list);
+
+		if (unlikely(lt_before(new->priority, queued->priority) ||
+			     (new->priority == queued->priority &&
+			      new->tie_breaker < queued->tie_breaker))) {
+			/* pos is not less than new, thus insert here */
+			__list_add(&new->wq.task_list, pos->prev, pos);
+			goto out;
+		}
+		passed++;
+	}
+
+	/* if we get to this point either the list is empty or every entry
+	 * queued element is less than new.
+	 * Let's add new to the end. */
+	list_add_tail(&new->wq.task_list, &head->task_list);
+out:
+	return passed;
+}
 
 #else
 

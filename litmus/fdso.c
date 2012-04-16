@@ -23,6 +23,9 @@ extern struct fdso_ops generic_lock_ops;
 static const struct fdso_ops* fdso_ops[] = {
 	&generic_lock_ops, /* FMLP_SEM */
 	&generic_lock_ops, /* SRP_SEM */
+	&generic_lock_ops, /* MPCP_SEM */
+	&generic_lock_ops, /* MPCP_VS_SEM */
+	&generic_lock_ops, /* DPCP_SEM */
 };
 
 static int fdso_create(void** obj_ref, obj_type_t type, void* __user config)

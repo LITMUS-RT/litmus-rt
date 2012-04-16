@@ -33,11 +33,14 @@ typedef enum {
 	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
+#define LITMUS_MAX_PRIORITY 512
+
 struct rt_task {
 	lt_t 		exec_cost;
 	lt_t 		period;
 	lt_t		phase;
 	unsigned int	cpu;
+	unsigned int	priority;
 	task_class_t	cls;
 	budget_policy_t budget_policy; /* ignored by pfair */
 };
