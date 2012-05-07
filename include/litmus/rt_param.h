@@ -225,6 +225,8 @@ struct rt_param {
 
 	/* Pointer to the page shared between userspace and kernel. */
 	struct control_page * ctrl_page;
+
+	lt_t max_exec_time;
 };
 
 /*	Possible RT flags	*/

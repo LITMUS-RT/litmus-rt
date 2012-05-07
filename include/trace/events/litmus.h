@@ -275,6 +275,28 @@ TRACE_EVENT(litmus_sys_release,
 );
 
 /*
+ * Trace task exit
+ */
+TRACE_EVENT(litmus_task_exit,
+
+	TP_PROTO(struct task_struct *t),
+
+	TP_ARGS(t),
+
+	TP_STRUCT__entry(
+		__field( pid_t, pid )
+		__field( unsigned long long, max_exec_time )
+	),
+
+	TP_fast_assign(
+		__entry->pid = t ? t->pid : 0;
+		__entry->max_exec_time = t ? t->rt_param.max_exec_time : 0;
+	),
+
+	TP_printk("(%u) exit\n", __entry->pid)
+);
+
+/*
  * Containers
  */
 TRACE_EVENT(litmus_container_param,
