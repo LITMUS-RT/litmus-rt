@@ -81,8 +81,8 @@ struct st_sys_release_data {
 };
 
 struct st_task_exit_data {
+	u64     when;
 	u64     max_exec_time;
-	u64     __unused;
 };
 
 #define DATA(x) struct st_ ## x ## _data x;

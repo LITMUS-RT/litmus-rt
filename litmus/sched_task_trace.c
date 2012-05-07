@@ -234,6 +234,7 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 
 	struct st_event_record *rec = get_record(ST_TASK_EXIT, t);
 	if (rec) {
+		rec->data.task_exit.when          = now();
 		rec->data.task_exit.max_exec_time = max_exec_time;
 		put_record(rec);
 	}
