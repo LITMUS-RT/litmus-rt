@@ -227,6 +227,7 @@ struct rt_param {
 	struct control_page * ctrl_page;
 
 	lt_t max_exec_time;
+	lt_t tot_exec_time;
 };
 
 /*	Possible RT flags	*/

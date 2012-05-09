@@ -231,10 +231,11 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	const lt_t max_exec_time = tsk_rt(t)->max_exec_time;
+	const lt_t avg_exec_time = tsk_rt(t)->tot_exec_time / (get_rt_job(t) - 1);
 
 	struct st_event_record *rec = get_record(ST_TASK_EXIT, t);
 	if (rec) {
-		rec->data.task_exit.when          = now();
+		rec->data.task_exit.avg_exec_time = avg_exec_time;
 		rec->data.task_exit.max_exec_time = max_exec_time;
 		put_record(rec);
 	}

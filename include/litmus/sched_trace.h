@@ -81,7 +81,7 @@ struct st_sys_release_data {
 };
 
 struct st_task_exit_data {
-	u64     when;
+	u64     avg_exec_time;
 	u64     max_exec_time;
 };
 

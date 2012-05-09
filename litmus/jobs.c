@@ -8,13 +8,14 @@
 
 static inline void setup_release(struct task_struct *t, lt_t release)
 {
-	/* prepare next release */
-	t->rt_param.job_params.release = release;
-	t->rt_param.job_params.deadline = release + get_rt_relative_deadline(t);
-	t->rt_param.job_params.exec_time = 0;
+	tsk_rt(t)->tot_exec_time += tsk_rt(t)->job_params.exec_time;
 
+	/* prepare next release */
+	tsk_rt(t)->job_params.release   = tsk_rt(t)->job_params.deadline;
+	tsk_rt(t)->job_params.deadline += get_rt_period(t);
+	tsk_rt(t)->job_params.exec_time = 0;
 	/* update job sequence number */
-	t->rt_param.job_params.job_no++;
+	tsk_rt(t)->job_params.job_no++;
 
 	/* don't confuse Linux */
 	t->rt.time_slice = 1;
