@@ -186,7 +186,7 @@ feather_callback void do_sched_trace_task_completion(unsigned long id,
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_COMPLETION, t);
 	if (rec) {
-		rec->data.completion.when   = now();
+		rec->data.completion.when   = get_exec_time(t);
 		rec->data.completion.forced = forced;
 		put_record(rec);
 	}
