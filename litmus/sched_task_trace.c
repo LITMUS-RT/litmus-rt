@@ -227,7 +227,7 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 }
 
 feather_callback void do_sched_trace_task_exit(unsigned long id,
-						 unsigned long _task)
+					       unsigned long _task)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	const lt_t max_exec_time = tsk_rt(t)->max_exec_time;
@@ -237,6 +237,19 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 	if (rec) {
 		rec->data.task_exit.avg_exec_time = avg_exec_time;
 		rec->data.task_exit.max_exec_time = max_exec_time;
+		put_record(rec);
+	}
+}
+
+feather_callback void do_sched_trace_task_tardy(unsigned long id,
+					       unsigned long _task)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record *rec = get_record(ST_TASK_TARDY, t);
+	if (rec) {
+		rec->data.task_tardy.max_tardy = tsk_rt(t)->max_tardy;
+		rec->data.task_tardy.total_tardy = tsk_rt(t)->total_tardy;
+		rec->data.task_tardy.missed = tsk_rt(t)->missed;
 		put_record(rec);
 	}
 }

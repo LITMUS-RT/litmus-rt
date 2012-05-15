@@ -85,6 +85,12 @@ struct st_task_exit_data {
 	u64     max_exec_time;
 };
 
+struct st_task_tardy_data {
+	u64	total_tardy;
+	u32	max_tardy;
+	u32	missed;
+};
+
 #define DATA(x) struct st_ ## x ## _data x;
 
 typedef enum {
@@ -101,6 +107,7 @@ typedef enum {
 	ST_ACTION,
 	ST_SYS_RELEASE,
 	ST_TASK_EXIT,
+	ST_TASK_TARDY,
 } st_event_record_type_t;
 
 struct st_event_record {
@@ -120,6 +127,7 @@ struct st_event_record {
 		DATA(action);
 		DATA(sys_release);
 		DATA(task_exit);
+		DATA(task_tardy);
 	} data;
 };
 
@@ -163,6 +171,8 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 						 lt_t* start);
 feather_callback void do_sched_trace_task_exit(unsigned long id,
 						     struct task_struct* task);
+feather_callback void do_sched_trace_task_tardy(unsigned long id,
+						     struct task_struct* task);
 
 #endif
 
@@ -189,6 +199,7 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 #define trace_litmus_task_resume(t)
 #define trace_litmus_sys_release(start)
 #define trace_litmus_task_exit(t)
+#define trace_litmus_task_tardy(t)
 
 #define trace_litmus_container_param(cid, name)
 #define trace_litmus_server_param(sid, cid, wcet, time)
@@ -290,6 +301,14 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 11,			\
 			do_sched_trace_task_exit, t);			\
 		trace_litmus_task_exit(t);				\
+	} while (0)
+
+
+#define sched_trace_task_tardy(t)					\
+	do {								\
+		SCHED_TRACE(SCHED_TRACE_BASE_ID + 12,			\
+			do_sched_trace_task_tardy, t);			\
+		trace_litmus_task_tardy(t);				\
 	} while (0)
 
 #define QT_START lt_t _qt_start = litmus_clock()
