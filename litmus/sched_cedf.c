@@ -305,11 +305,11 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 						&per_cpu(cedf_cpu_entries, task_cpu(task)));
 			if(affinity)
 				last = affinity;
-			else if(last->linked)
+			else if(requeue_preempted_job(last->linked))
 				requeue(last->linked);
 		}
 #else
-		if (last->linked)
+		if (requeue_preempted_job(last->linked))
 			requeue(last->linked);
 #endif
 		link_task_to_cpu(task, last);
@@ -479,9 +479,9 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	/* Any task that is preemptable and either exhausts its execution
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this. Don't do a job completion if we block (can't have timers running
-	 * for blocked jobs). Preemption go first for the same reason.
+	 * for blocked jobs).
 	 */
-	if (!np && (out_of_time || sleep) && !blocks && !preempt)
+	if (!np && (out_of_time || sleep) && !blocks)
 		job_completion(entry->scheduled, !sleep);
 
 	/* Link pending task if we became unlinked.
