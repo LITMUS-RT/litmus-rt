@@ -5,4 +5,23 @@
  * the next task. */
 void update_enforcement_timer(struct task_struct* t);
 
+inline static int budget_exhausted(struct task_struct* t)
+{
+	return get_exec_time(t) >= get_exec_cost(t);
+}
+
+inline static lt_t budget_remaining(struct task_struct* t)
+{
+	if (!budget_exhausted(t))
+		return get_exec_cost(t) - get_exec_time(t);
+	else
+		/* avoid overflow */
+		return 0;
+}
+
+#define budget_enforced(t) (tsk_rt(t)->task_params.budget_policy != NO_ENFORCEMENT)
+
+#define budget_precisely_enforced(t) (tsk_rt(t)->task_params.budget_policy \
+				      == PRECISE_ENFORCEMENT)
+
 #endif

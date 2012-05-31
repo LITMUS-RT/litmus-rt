@@ -35,6 +35,7 @@
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 #include <litmus/preempt.h>
+#include <litmus/budget.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/edf_common.h>
 #include <litmus/sched_trace.h>

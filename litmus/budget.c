@@ -5,6 +5,8 @@
 #include <litmus/litmus.h>
 #include <litmus/preempt.h>
 
+#include <litmus/budget.h>
+
 struct enforcement_timer {
 	/* The enforcement timer is used to accurately police
 	 * slice budgets. */

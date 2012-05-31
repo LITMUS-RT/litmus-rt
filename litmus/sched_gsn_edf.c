@@ -21,6 +21,7 @@
 #include <litmus/trace.h>
 
 #include <litmus/preempt.h>
+#include <litmus/budget.h>
 
 #include <litmus/bheap.h>
 
