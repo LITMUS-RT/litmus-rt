@@ -24,4 +24,12 @@ inline static lt_t budget_remaining(struct task_struct* t)
 #define budget_precisely_enforced(t) (tsk_rt(t)->task_params.budget_policy \
 				      == PRECISE_ENFORCEMENT)
 
+static inline int requeue_preempted_job(struct task_struct* t)
+{
+	/* Add task to ready queue only if not subject to budget enforcement or
+	 * if the job has budget remaining. t may be NULL.
+	 */
+	return t && (!budget_exhausted(t) || !budget_enforced(t));
+}
+
 #endif

@@ -297,11 +297,11 @@ static void check_for_preemptions(void)
 						&per_cpu(gsnedf_cpu_entries, task_cpu(task)));
 			if (affinity)
 				last = affinity;
-			else if (last->linked)
+			else if (requeue_preempted_job(last->linked))
 				requeue(last->linked);
 		}
 #else
-		if (last->linked)
+		if (requeue_preempted_job(last->linked))
 			requeue(last->linked);
 #endif
 
@@ -427,9 +427,8 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
 	blocks      = exists && !is_running(entry->scheduled);
-	out_of_time = exists &&
-				  budget_enforced(entry->scheduled) &&
-				  budget_exhausted(entry->scheduled);
+	out_of_time = exists && budget_enforced(entry->scheduled)
+		&& budget_exhausted(entry->scheduled);
 	np 	    = exists && is_np(entry->scheduled);
 	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
 	preempt     = entry->scheduled != entry->linked;
@@ -467,9 +466,9 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	/* Any task that is preemptable and either exhausts its execution
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this. Don't do a job completion if we block (can't have timers running
-	 * for blocked jobs). Preemption go first for the same reason.
+	 * for blocked jobs).
 	 */
-	if (!np && (out_of_time || sleep) && !blocks && !preempt)
+	if (!np && (out_of_time || sleep) && !blocks)
 		job_completion(entry->scheduled, !sleep);
 
 	/* Link pending task if we became unlinked.
