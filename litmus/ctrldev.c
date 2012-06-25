@@ -30,27 +30,19 @@ static int alloc_ctrl_page(struct task_struct *t)
 static int map_ctrl_page(struct task_struct *t, struct vm_area_struct* vma)
 {
 	int err;
-	unsigned long pfn;
 
 	struct page* ctrl = virt_to_page(tsk_rt(t)->ctrl_page);
 
-	/* Increase ref count. Is decreased when vma is destroyed. */
-	get_page(ctrl);
-
-	/* compute page frame number */
-	pfn = page_to_pfn(ctrl);
-
 	TRACE_CUR(CTRL_NAME
-		  ": mapping %p (pfn:%lx, %lx) to 0x%lx (prot:%lx)\n",
-		  tsk_rt(t)->ctrl_page, pfn, page_to_pfn(ctrl), vma->vm_start,
+		  ": mapping %p (pfn:%lx) to 0x%lx (prot:%lx)\n",
+		  tsk_rt(t)->ctrl_page,page_to_pfn(ctrl), vma->vm_start,
 		  vma->vm_page_prot);
 
-	/* Map it into the vma. Make sure to use PAGE_SHARED, otherwise
-	 * userspace actually gets a copy-on-write page. */
-	err = remap_pfn_range(vma, vma->vm_start, pfn, PAGE_SIZE, PAGE_SHARED);
+	/* Map it into the vma. */
+	err = vm_insert_page(vma, vma->vm_start, ctrl);
 
 	if (err)
-		TRACE_CUR(CTRL_NAME ": remap_pfn_range() failed (%d)\n", err);
+		TRACE_CUR(CTRL_NAME ": vm_insert_page() failed (%d)\n", err);
 
 	return err;
 }
