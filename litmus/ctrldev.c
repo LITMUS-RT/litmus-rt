@@ -55,19 +55,19 @@ static void litmus_ctrl_vm_close(struct vm_area_struct* vma)
 	TRACE_CUR(CTRL_NAME
 		  ": %p:%p vma:%p vma->vm_private_data:%p closed.\n",
 		  (void*) vma->vm_start, (void*) vma->vm_end, vma,
-		  vma->vm_private_data, current->comm,
-		  current->pid);
+		  vma->vm_private_data);
 }
 
 static int litmus_ctrl_vm_fault(struct vm_area_struct* vma,
 				      struct vm_fault* vmf)
 {
-	/* This function should never be called, since
-	 * all pages should have been mapped by mmap()
-	 * already. */
-	TRACE_CUR("%s flags=0x%x\n", __FUNCTION__, vma->vm_flags);
+	TRACE_CUR("%s flags=0x%x (off:%ld)\n", __FUNCTION__,
+		  vma->vm_flags, vmf->pgoff);
 
-	/* nope, you only get one page */
+	/* This function should never be called, since all pages should have
+	 * been mapped by mmap() already. */
+	WARN_ONCE(1, "Page faults should be impossible in the control page\n");
+
 	return VM_FAULT_SIGBUS;
 }
 
