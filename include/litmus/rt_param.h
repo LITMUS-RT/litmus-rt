@@ -33,7 +33,25 @@ typedef enum {
 	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
-#define LITMUS_MAX_PRIORITY 512
+/* We use the common priority interpretation "lower index == higher priority",
+ * which is commonly used in fixed-priority schedulability analysis papers.
+ * So, a numerically lower priority value implies higher scheduling priority,
+ * with priority 1 being the highest priority. Priority 0 is reserved for
+ * priority boosting. LITMUS_MAX_PRIORITY denotes the maximum priority value
+ * range.
+ */
+
+#define LITMUS_MAX_PRIORITY     512
+#define LITMUS_HIGHEST_PRIORITY   1
+#define LITMUS_LOWEST_PRIORITY    (LITMUS_MAX_PRIORITY - 1)
+
+/* Provide generic comparison macros for userspace,
+ * in case that we change this later. */
+#define litmus_higher_fixed_prio(a, b)	(a < b)
+#define litmus_lower_fixed_prio(a, b)	(a > b)
+#define litmus_is_valid_fixed_prio(p)		\
+	((p) >= LITMUS_HIGHEST_PRIORITY &&	\
+	 (p) <= LITMUS_LOWEST_PRIORITY)
 
 struct rt_task {
 	lt_t 		exec_cost;
