@@ -1613,7 +1613,7 @@ static long pfp_admit_task(struct task_struct* tsk)
 	    /* don't allow tasks on release master CPU */
 	    task_cpu(tsk) != remote_dom(task_cpu(tsk))->release_master &&
 #endif
-	    get_priority(tsk) > 0)
+	    litmus_is_valid_fixed_prio(get_priority(tsk)))
 		return 0;
 	else
 		return -EINVAL;
