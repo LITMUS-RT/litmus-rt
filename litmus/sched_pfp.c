@@ -1621,9 +1621,11 @@ static long pfp_admit_task(struct task_struct* tsk)
 
 static long pfp_activate_plugin(void)
 {
-#ifdef CONFIG_RELEASE_MASTER
+#if defined(CONFIG_RELEASE_MASTER) || defined(CONFIG_LITMUS_LOCKING)
 	int cpu;
+#endif
 
+#ifdef CONFIG_RELEASE_MASTER
 	for_each_online_cpu(cpu) {
 		remote_dom(cpu)->release_master = atomic_read(&release_master_cpu);
 	}
