@@ -102,21 +102,25 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		goto out_unlock;
 	}
 
+	/* set relative deadline to be implicit if left unspecified */
+	if (tp.relative_deadline == 0)
+		tp.relative_deadline = tp.period;
+
 	if (tp.exec_cost <= 0)
 		goto out_unlock;
 	if (tp.period <= 0)
 		goto out_unlock;
 	if (!cpu_online(tp.cpu))
 		goto out_unlock;
-	if (tp.period < tp.exec_cost)
+	if (min(tp.relative_deadline, tp.period) < tp.exec_cost) /*density check*/
 	{
 		printk(KERN_INFO "litmus: real-time task %d rejected "
-		       "because wcet > period\n", pid);
+		       "because task density > 1.0\n", pid);
 		goto out_unlock;
 	}
-	if (	tp.cls != RT_CLASS_HARD &&
-		tp.cls != RT_CLASS_SOFT &&
-		tp.cls != RT_CLASS_BEST_EFFORT)
+	if (tp.cls != RT_CLASS_HARD &&
+	    tp.cls != RT_CLASS_SOFT &&
+	    tp.cls != RT_CLASS_BEST_EFFORT)
 	{
 		printk(KERN_INFO "litmus: real-time task %d rejected "
 				 "because its class is invalid\n", pid);
@@ -321,11 +325,14 @@ long litmus_admit_task(struct task_struct* tsk)
 
 	BUG_ON(is_realtime(tsk));
 
-	if (get_rt_period(tsk) == 0 ||
-	    get_exec_cost(tsk) > get_rt_period(tsk)) {
-		TRACE_TASK(tsk, "litmus admit: invalid task parameters "
-			   "(%lu, %lu)\n",
-		           get_exec_cost(tsk), get_rt_period(tsk));
+	if (get_rt_relative_deadline(tsk) == 0 ||
+	    get_exec_cost(tsk) >
+			min(get_rt_relative_deadline(tsk), get_rt_period(tsk)) ) {
+		TRACE_TASK(tsk,
+			"litmus admit: invalid task parameters "
+			"(e = %lu, p = %lu, d = %lu)\n",
+			get_exec_cost(tsk), get_rt_period(tsk),
+			get_rt_relative_deadline(tsk));
 		retval = -EINVAL;
 		goto out;
 	}

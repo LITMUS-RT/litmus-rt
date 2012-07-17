@@ -56,6 +56,7 @@ typedef enum {
 struct rt_task {
 	lt_t 		exec_cost;
 	lt_t 		period;
+	lt_t		relative_deadline;
 	lt_t		phase;
 	unsigned int	cpu;
 	unsigned int	priority;

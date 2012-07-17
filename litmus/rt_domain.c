@@ -300,9 +300,11 @@ void rt_domain_init(rt_domain_t *rt,
  */
 void __add_ready(rt_domain_t* rt, struct task_struct *new)
 {
-	TRACE("rt: adding %s/%d (%llu, %llu) rel=%llu to ready queue at %llu\n",
-	      new->comm, new->pid, get_exec_cost(new), get_rt_period(new),
-	      get_release(new), litmus_clock());
+	TRACE("rt: adding %s/%d (%llu, %llu, %llu) rel=%llu "
+		"to ready queue at %llu\n",
+		new->comm, new->pid,
+		get_exec_cost(new), get_rt_period(new), get_rt_relative_deadline(new),
+		get_release(new), litmus_clock());
 
 	BUG_ON(bheap_node_in_heap(tsk_rt(new)->heap_node));
 
