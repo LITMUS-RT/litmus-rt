@@ -1593,6 +1593,211 @@ static struct litmus_lock* pfp_new_dpcp(int on_cpu)
 }
 
 
+/* ******************** DFLP support ********************** */
+
+struct dflp_semaphore {
+	struct litmus_lock litmus_lock;
+
+	/* current resource holder */
+	struct task_struct *owner;
+	int owner_cpu;
+
+	/* FIFO queue of waiting tasks */
+	wait_queue_head_t wait;
+
+	/* where is the resource assigned to */
+	int on_cpu;
+};
+
+static inline struct dflp_semaphore* dflp_from_lock(struct litmus_lock* lock)
+{
+	return container_of(lock, struct dflp_semaphore, litmus_lock);
+}
+
+int pfp_dflp_lock(struct litmus_lock* l)
+{
+	struct task_struct* t = current;
+	struct dflp_semaphore *sem = dflp_from_lock(l);
+	int from  = get_partition(t);
+	int to    = sem->on_cpu;
+	unsigned long flags;
+	wait_queue_t wait;
+	lt_t time_of_request;
+
+	if (!is_realtime(t))
+		return -EPERM;
+
+	preempt_disable();
+
+	/* tie-break by this point in time */
+	time_of_request = litmus_clock();
+
+	/* Priority-boost ourself *before* we suspend so that
+	 * our priority is boosted when we resume. */
+	boost_priority(t, time_of_request);
+
+	pfp_migrate_to(to);
+
+	/* Now on the right CPU, preemptions still disabled. */
+
+	spin_lock_irqsave(&sem->wait.lock, flags);
+
+	if (sem->owner) {
+		/* resource is not free => must suspend and wait */
+
+		init_waitqueue_entry(&wait, t);
+
+		/* FIXME: interruptible would be nice some day */
+		set_task_state(t, TASK_UNINTERRUPTIBLE);
+
+		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
+
+		TS_LOCK_SUSPEND;
+
+		/* release lock before sleeping */
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
+
+		/* We depend on the FIFO order.  Thus, we don't need to recheck
+		 * when we wake up; we are guaranteed to have the lock since
+		 * there is only one wake up per release.
+		 */
+
+		preempt_enable_no_resched();
+
+		schedule();
+
+		preempt_disable();
+
+		TS_LOCK_RESUME;
+
+		/* Since we hold the lock, no other task will change
+		 * ->owner. We can thus check it without acquiring the spin
+		 * lock. */
+		BUG_ON(sem->owner != t);
+	} else {
+		/* it's ours now */
+		sem->owner = t;
+
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
+	}
+
+	sem->owner_cpu = from;
+
+	preempt_enable();
+
+	return 0;
+}
+
+int pfp_dflp_unlock(struct litmus_lock* l)
+{
+	struct task_struct *t = current, *next;
+	struct dflp_semaphore *sem = dflp_from_lock(l);
+	int err = 0;
+	int home;
+	unsigned long flags;
+
+	preempt_disable();
+
+	spin_lock_irqsave(&sem->wait.lock, flags);
+
+	if (sem->owner != t) {
+		err = -EINVAL;
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
+		goto out;
+	}
+
+	/* check if there are jobs waiting for this resource */
+	next = __waitqueue_remove_first(&sem->wait);
+	if (next) {
+		/* next becomes the resouce holder */
+		sem->owner = next;
+
+		/* Wake up next. The waiting job is already priority-boosted. */
+		wake_up_process(next);
+	} else
+		/* resource becomes available */
+		sem->owner = NULL;
+
+	home = sem->owner_cpu;
+
+	spin_unlock_irqrestore(&sem->wait.lock, flags);
+
+	/* we lose the benefit of priority boosting */
+	unboost_priority(t);
+
+	pfp_migrate_to(home);
+
+out:
+	preempt_enable();
+
+	return err;
+}
+
+int pfp_dflp_open(struct litmus_lock* l, void* __user config)
+{
+	struct dflp_semaphore *sem = dflp_from_lock(l);
+	int cpu;
+
+	if (get_user(cpu, (int*) config))
+		return -EFAULT;
+
+	/* make sure the resource location matches */
+	if (cpu != sem->on_cpu)
+		return -EINVAL;
+
+	return 0;
+}
+
+int pfp_dflp_close(struct litmus_lock* l)
+{
+	struct task_struct *t = current;
+	struct dflp_semaphore *sem = dflp_from_lock(l);
+	int owner = 0;
+
+	preempt_disable();
+
+	if (sem->on_cpu == smp_processor_id())
+		owner = sem->owner == t;
+
+	preempt_enable();
+
+	if (owner)
+		pfp_dflp_unlock(l);
+
+	return 0;
+}
+
+void pfp_dflp_free(struct litmus_lock* lock)
+{
+	kfree(dflp_from_lock(lock));
+}
+
+static struct litmus_lock_ops pfp_dflp_lock_ops = {
+	.close  = pfp_dflp_close,
+	.lock   = pfp_dflp_lock,
+	.open	= pfp_dflp_open,
+	.unlock = pfp_dflp_unlock,
+	.deallocate = pfp_dflp_free,
+};
+
+static struct litmus_lock* pfp_new_dflp(int on_cpu)
+{
+	struct dflp_semaphore* sem;
+
+	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
+	if (!sem)
+		return NULL;
+
+	sem->litmus_lock.ops = &pfp_dflp_lock_ops;
+	sem->owner_cpu = NO_CPU;
+	sem->owner   = NULL;
+	sem->on_cpu  = on_cpu;
+	init_waitqueue_head(&sem->wait);
+
+	return &sem->litmus_lock;
+}
+
+
 /* **** lock constructor **** */
 
 
@@ -1641,6 +1846,21 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 			return -EINVAL;
 
 		*lock = pfp_new_dpcp(cpu);
+		if (*lock)
+			err = 0;
+		else
+			err = -ENOMEM;
+		break;
+
+	case DFLP_SEM:
+		/* Distributed FIFO Locking Protocol */
+		if (get_user(cpu, (int*) config))
+			return -EFAULT;
+
+		if (!cpu_online(cpu))
+			return -EINVAL;
+
+		*lock = pfp_new_dflp(cpu);
 		if (*lock)
 			err = 0;
 		else
