@@ -46,6 +46,22 @@ static void demo_requeue(struct task_struct *tsk, struct demo_cpu_state *cpu_sta
 	}
 }
 
+static int demo_check_for_preemption_on_release(rt_domain_t *local_queues)
+{
+	struct demo_cpu_state *state = container_of(local_queues, struct demo_cpu_state,
+						    local_queues);
+
+	/* Because this is a callback from rt_domain_t we already hold
+	 * the necessary lock for the ready queue.
+	 */
+
+	if (edf_preemption_needed(local_queues, state->scheduled)) {
+		preempt_if_preemptable(state->scheduled, state->cpu);
+		return 1;
+	} else
+		return 0;
+}
+
 static struct task_struct* demo_schedule(struct task_struct * prev)
 {
 	struct demo_cpu_state *local_state = local_cpu_state();
@@ -145,7 +161,11 @@ static void demo_task_resume(struct task_struct  *tsk)
 	 * the scheduler "noticed" that it resumed. That is, the wake up may
 	 * race with the call to schedule(). */
 	if (state->scheduled != tsk)
+	{
 		demo_requeue(tsk, state);
+		if (edf_preemption_needed(&state->local_queues, state->scheduled))
+			preempt_if_preemptable(state->scheduled, state->cpu);
+	}
 
 	raw_spin_unlock_irqrestore(&state->local_queues.ready_lock, flags);
 }
@@ -185,6 +205,9 @@ static void demo_task_new(struct task_struct *tsk, int on_runqueue,
 		demo_requeue(tsk, state);
 	}
 
+	if (edf_preemption_needed(&state->local_queues, state->scheduled))
+		preempt_if_preemptable(state->scheduled, state->cpu);
+
 	raw_spin_unlock_irqrestore(&state->local_queues.ready_lock, flags);
 }
 
@@ -219,7 +242,9 @@ static long demo_activate_plugin(void)
 
 		state->cpu = cpu;
 		state->scheduled = NULL;
-		edf_domain_init(&state->local_queues, NULL, NULL);
+		edf_domain_init(&state->local_queues,
+				demo_check_for_preemption_on_release,
+				NULL);
 	}
 
 	return 0;
