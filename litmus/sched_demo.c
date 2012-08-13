@@ -2,6 +2,7 @@
 
 #include <litmus/sched_plugin.h>
 #include <litmus/preempt.h>
+#include <litmus/debug_trace.h>
 
 static struct task_struct* demo_schedule(struct task_struct * prev)
 {
@@ -17,6 +18,8 @@ static struct task_struct* demo_schedule(struct task_struct * prev)
 
 static long demo_admit_task(struct task_struct *tsk)
 {
+	TRACE_TASK(tsk, "rejected by demo plugin.\n");
+
 	/* Reject every task. */
 	return -EINVAL;
 }
