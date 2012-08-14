@@ -172,10 +172,11 @@ static void demo_task_resume(struct task_struct  *tsk)
 
 static long demo_admit_task(struct task_struct *tsk)
 {
-	TRACE_TASK(tsk, "rejected by demo plugin.\n");
-
-	/* Reject every task. */
-	return -EINVAL;
+	if (task_cpu(tsk) == get_partition(tsk)) {
+		TRACE_TASK(tsk, "accepted by demo plugin.\n");
+		return 0;
+	} else
+		return -EINVAL;
 }
 
 static void demo_task_new(struct task_struct *tsk, int on_runqueue,
