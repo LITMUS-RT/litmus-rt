@@ -133,6 +133,15 @@ static void unboost_priority(struct task_struct* t)
 
 #endif
 
+static int psnedf_preempt_check(psnedf_domain_t *pedf)
+{
+	if (edf_preemption_needed(&pedf->domain, pedf->scheduled)) {
+		preempt(pedf);
+		return 1;
+	} else
+		return 0;
+}
+
 /* This check is trivial in partioned systems as we only have to consider
  * the CPU of the partition.
  */
@@ -143,11 +152,7 @@ static int psnedf_check_resched(rt_domain_t *edf)
 	/* because this is a callback from rt_domain_t we already hold
 	 * the necessary lock for the ready queue
 	 */
-	if (edf_preemption_needed(edf, pedf->scheduled)) {
-		preempt(pedf);
-		return 1;
-	} else
-		return 0;
+	return psnedf_preempt_check(pedf);
 }
 
 static void job_completion(struct task_struct* t, int forced)
@@ -299,7 +304,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 	} else {
 		requeue(t, edf);
 		/* maybe we have to reschedule */
-		preempt(pedf);
+		psnedf_preempt_check(pedf);
 	}
 	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 }
@@ -335,8 +340,10 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	 * de-scheduling the task, i.e., wake_up() raced with schedule()
 	 * and won.
 	 */
-	if (pedf->scheduled != task)
+	if (pedf->scheduled != task) {
 		requeue(task, edf);
+		psnedf_preempt_check(pedf);
+	}
 
 	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 	TRACE_TASK(task, "wake up done\n");

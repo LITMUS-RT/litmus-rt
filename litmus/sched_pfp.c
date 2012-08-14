@@ -95,6 +95,12 @@ static void pfp_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
 }
 
+static void pfp_preempt_check(pfp_domain_t *pfp)
+{
+	if (fp_higher_prio(fp_prio_peek(&pfp->ready_queue), pfp->scheduled))
+		preempt(pfp);
+}
+
 static void pfp_domain_init(pfp_domain_t* pfp,
 			       int cpu)
 {
@@ -291,7 +297,7 @@ static void pfp_task_new(struct task_struct * t, int on_rq, int running)
 	} else {
 		requeue(t, pfp);
 		/* maybe we have to reschedule */
-		preempt(pfp);
+		pfp_preempt_check(pfp);
 	}
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
 }
@@ -337,8 +343,10 @@ static void pfp_task_wake_up(struct task_struct *task)
 	 * and won. Also, don't requeue if it is still queued, which can
 	 * happen under the DPCP due wake-ups racing with migrations.
 	 */
-	if (pfp->scheduled != task)
+	if (pfp->scheduled != task) {
 		requeue(task, pfp);
+		pfp_preempt_check(pfp);
+	}
 
 out_unlock:
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
