@@ -2,6 +2,8 @@
 
 #ifdef CONFIG_LITMUS_LOCKING
 
+#include <linux/sched.h>
+#include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/trace.h>
 #include <litmus/wait.h>

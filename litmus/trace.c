@@ -74,6 +74,7 @@ static void __add_timestamp_user(struct timestamp *pre_recorded)
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		*ts = *pre_recorded;
 		ts->seq_no = seq_no;
+		ts->cpu	   = raw_smp_processor_id();
 		__save_irq_flags(ts);
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
@@ -132,6 +133,26 @@ feather_callback void save_task_latency(unsigned long event,
 		ts->pid	      = 0;
 		ts->task_type = TSK_RT;
 		__save_irq_flags(ts);
+		ft_buffer_finish_write(trace_ts_buf, ts);
+	}
+}
+
+/* fake timestamp to user-reported time */
+void save_timestamp_time(unsigned long event,
+			 unsigned long ptr)
+{
+	uint64_t* time = (uint64_t*) ptr;
+	unsigned int seq_no;
+	struct timestamp *ts;
+	seq_no = fetch_and_inc((int *) &ts_seq_no);
+	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
+		ts->event     = event;
+		ts->seq_no    = seq_no;
+		ts->pid	      = current->pid;
+		ts->cpu       = raw_smp_processor_id();
+		ts->task_type = is_realtime(current) ? TSK_RT : TSK_BE;
+		__save_irq_flags(ts);
+		ts->timestamp = *time;
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
 }

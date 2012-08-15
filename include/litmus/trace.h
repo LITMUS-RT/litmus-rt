@@ -3,6 +3,7 @@
 
 #ifdef CONFIG_SCHED_OVERHEAD_TRACE
 
+
 #include <litmus/feather_trace.h>
 #include <litmus/feather_buffer.h>
 
@@ -32,10 +33,13 @@ feather_callback void save_timestamp_def(unsigned long event, unsigned long type
 feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr);
 feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu);
 feather_callback void save_task_latency(unsigned long event, unsigned long when_ptr);
+feather_callback void save_timestamp_time(unsigned long event, unsigned long time_ptr);
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
 #define DTIMESTAMP(id, def)  ft_event1(id, save_timestamp_def, (unsigned long) def)
+
+#define TIMESTAMP_CUR(id) DTIMESTAMP(id, is_realtime(current) ? TSK_RT : TSK_BE)
 
 #define TTIMESTAMP(id, task) \
 	ft_event1(id, save_timestamp_task, (unsigned long) task)
@@ -46,17 +50,24 @@ feather_callback void save_task_latency(unsigned long event, unsigned long when_
 #define LTIMESTAMP(id, task) \
 	ft_event1(id, save_task_latency, (unsigned long) task)
 
+#define TIMESTAMP_TIME(id, time_ptr) \
+	ft_event1(id, save_timestamp_time, (unsigned long) time_ptr)
+
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
 #define TIMESTAMP(id)        /* no tracing */
 
 #define DTIMESTAMP(id, def)  /* no tracing */
 
+#define TIMESTAMP_CUR(id)    /* no tracing */
+
 #define TTIMESTAMP(id, task) /* no tracing */
 
 #define CTIMESTAMP(id, cpu)  /* no tracing */
 
 #define LTIMESTAMP(id, when_ptr) /* no tracing */
+
+#define TIMESTAMP_TIME(id, time_ptr) /* no tracing */
 
 #endif
 
@@ -69,7 +80,20 @@ feather_callback void save_task_latency(unsigned long event, unsigned long when_
  * always the next number after the start time event id.
  */
 
+#define __TS_SYSCALL_IN_START(p)	TIMESTAMP_TIME(10, p)
+#define TS_SYSCALL_IN_END		TIMESTAMP_CUR(11)
 
+#define TS_SYSCALL_OUT_START		TIMESTAMP_CUR(20)
+#define TS_SYSCALL_OUT_END		TIMESTAMP_CUR(21)
+
+#define TS_LOCK_START			TIMESTAMP_CUR(30)
+#define TS_LOCK_END			TIMESTAMP_CUR(31)
+
+#define TS_LOCK_SUSPEND			TIMESTAMP_CUR(38)
+#define TS_LOCK_RESUME			TIMESTAMP_CUR(39)
+
+#define TS_UNLOCK_START			TIMESTAMP_CUR(40)
+#define TS_UNLOCK_END			TIMESTAMP_CUR(41)
 
 #define TS_SCHED_START			DTIMESTAMP(100, TSK_UNKNOWN) /* we only
 								      * care
@@ -100,14 +124,6 @@ feather_callback void save_task_latency(unsigned long event, unsigned long when_
 
 #define TS_EXIT_NP_START		TIMESTAMP(150)
 #define TS_EXIT_NP_END			TIMESTAMP(151)
-
-#define TS_LOCK_START			TIMESTAMP(170)
-#define TS_LOCK_SUSPEND			TIMESTAMP(171)
-#define TS_LOCK_RESUME			TIMESTAMP(172)
-#define TS_LOCK_END			TIMESTAMP(173)
-
-#define TS_UNLOCK_START			TIMESTAMP(180)
-#define TS_UNLOCK_END			TIMESTAMP(181)
 
 #define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
 #define TS_SEND_RESCHED_END		DTIMESTAMP(191, TSK_UNKNOWN)
