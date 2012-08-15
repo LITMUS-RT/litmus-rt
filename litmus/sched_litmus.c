@@ -194,6 +194,9 @@ static void dequeue_task_litmus(struct rq *rq, struct task_struct *p,
 
 static void yield_task_litmus(struct rq *rq)
 {
+	TS_SYSCALL_IN_START;
+	TS_SYSCALL_IN_END;
+
 	BUG_ON(rq->curr != current);
 	/* sched_yield() is called to trigger delayed preemptions.
 	 * Thus, mark the current task as needing to be rescheduled.
@@ -202,6 +205,8 @@ static void yield_task_litmus(struct rq *rq)
 	 */
 	clear_exit_np(current);
 	litmus_reschedule_local();
+
+	TS_SYSCALL_OUT_START;
 }
 
 /* Plugins are responsible for this.

@@ -259,4 +259,20 @@ static inline quanta_t time2quanta(lt_t time, enum round round)
 /* By how much is cpu staggered behind CPU 0? */
 u64 cpu_stagger_offset(int cpu);
 
+static inline struct control_page* get_control_page(struct task_struct *t)
+{
+	return tsk_rt(t)->ctrl_page;
+}
+
+static inline int has_control_page(struct task_struct* t)
+{
+	return tsk_rt(t)->ctrl_page != NULL;
+}
+
+
+#define TS_SYSCALL_IN_START						\
+	if (has_control_page(current)) {				\
+		__TS_SYSCALL_IN_START(&get_control_page(current)->ts_syscall_start); \
+	}
+
 #endif

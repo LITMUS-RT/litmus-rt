@@ -89,7 +89,13 @@ union np_flag {
  * determining preemption/migration overheads).
  */
 struct control_page {
+	/* This flag is used by userspace to communicate non-preempive
+	 * sections. */
 	volatile union np_flag sched;
+
+	/* Locking overhead tracing: userspace records here the time stamp
+	 * prior to starting the system call. */
+	uint64_t ts_syscall_start; /* Feather-Trace cycles */
 
 	/* to be extended */
 };
