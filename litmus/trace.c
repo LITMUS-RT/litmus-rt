@@ -46,7 +46,8 @@ static inline void __save_irq_flags(struct timestamp *ts)
 }
 
 static inline void __save_timestamp_cpu(unsigned long event,
-					uint8_t type, uint8_t cpu)
+					uint8_t type, uint8_t cpu,
+					uint16_t pid_fragment)
 {
 	unsigned int seq_no;
 	struct timestamp *ts;
@@ -54,6 +55,7 @@ static inline void __save_timestamp_cpu(unsigned long event,
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		ts->event     = event;
 		ts->seq_no    = seq_no;
+		ts->pid	      = pid_fragment;
 		ts->cpu       = cpu;
 		ts->task_type = type;
 		__save_irq_flags(ts);
@@ -78,9 +80,10 @@ static void __add_timestamp_user(struct timestamp *pre_recorded)
 }
 
 static inline void __save_timestamp(unsigned long event,
-				   uint8_t type)
+				    uint8_t type)
 {
-	__save_timestamp_cpu(event, type, raw_smp_processor_id());
+	__save_timestamp_cpu(event, type, raw_smp_processor_id(),
+			     current->pid);
 }
 
 feather_callback void save_timestamp(unsigned long event)
@@ -97,14 +100,18 @@ feather_callback void save_timestamp_def(unsigned long event,
 feather_callback void save_timestamp_task(unsigned long event,
 					  unsigned long t_ptr)
 {
-	int rt = is_realtime((struct task_struct *) t_ptr);
-	__save_timestamp(event, rt ? TSK_RT : TSK_BE);
+	struct task_struct *t = (struct task_struct *) t_ptr;
+	int rt = is_realtime(t);
+	__save_timestamp_cpu(event, rt ? TSK_RT : TSK_BE,
+			     raw_smp_processor_id(),
+			     t->pid);
 }
 
 feather_callback void save_timestamp_cpu(unsigned long event,
 					 unsigned long cpu)
 {
-	__save_timestamp_cpu(event, TSK_UNKNOWN, cpu);
+	__save_timestamp_cpu(event, TSK_UNKNOWN, cpu,
+			     current->pid);
 }
 
 feather_callback void save_task_latency(unsigned long event,
@@ -122,6 +129,7 @@ feather_callback void save_task_latency(unsigned long event,
 		ts->timestamp = now - *when;
 		ts->seq_no    = seq_no;
 		ts->cpu       = cpu;
+		ts->pid	      = 0;
 		ts->task_type = TSK_RT;
 		__save_irq_flags(ts);
 		ft_buffer_finish_write(trace_ts_buf, ts);

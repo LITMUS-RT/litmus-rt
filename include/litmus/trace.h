@@ -16,7 +16,8 @@ enum task_type_marker {
 };
 
 struct timestamp {
-	uint64_t		timestamp;
+	uint64_t		timestamp:48;
+	uint64_t		pid:16;
 	uint32_t		seq_no;
 	uint8_t			cpu;
 	uint8_t			event;
