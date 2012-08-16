@@ -166,6 +166,18 @@ static int put_od_entry(struct od_table_entry* od)
 	return 0;
 }
 
+static long close_od_entry(struct od_table_entry *od)
+{
+	long ret;
+
+	/* Give the class a chance to reject the close. */
+	ret = fdso_close(od);
+	if (ret == 0)
+		ret = put_od_entry(od);
+
+	return ret;
+}
+
 void exit_od_table(struct task_struct* t)
 {
 	int i;
@@ -173,7 +185,7 @@ void exit_od_table(struct task_struct* t)
 	if (t->od_table) {
 		for (i = 0; i < MAX_OBJECT_DESCRIPTORS; i++)
 			if (t->od_table[i].used)
-				put_od_entry(t->od_table + i);
+				close_od_entry(t->od_table + i);
 		kfree(t->od_table);
 		t->od_table = NULL;
 	}
@@ -287,11 +299,7 @@ asmlinkage long sys_od_close(int od)
 		return ret;
 
 
-	/* give the class a chance to reject the close
-	 */
-	ret = fdso_close(t->od_table + od);
-	if (ret == 0)
-		ret = put_od_entry(t->od_table + od);
+	ret = close_od_entry(t->od_table + od);
 
 	return ret;
 }
