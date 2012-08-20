@@ -23,6 +23,14 @@ static inline void setup_release(struct task_struct *t, lt_t release)
 void prepare_for_next_period(struct task_struct *t)
 {
 	BUG_ON(!t);
+
+	/* Record lateness before we set up the next job's
+	 * release and deadline. Lateness may be negative.
+	 */
+	t->rt_param.job_params.lateness =
+		(long long)litmus_clock() - 
+		(long long)t->rt_param.job_params.deadline;
+
 	setup_release(t, get_release(t) + get_rt_period(t));
 }
 

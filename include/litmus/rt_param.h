@@ -110,6 +110,12 @@ struct rt_job {
 	/* How much service has this job received so far? */
 	lt_t	exec_time;
 
+	/* By how much did the prior job miss its deadline by?
+	 * Value differs from tardiness in that lateness may
+	 * be negative (when job finishes before its deadline).
+	 */
+	long long	lateness;
+
 	/* Which job is this. This is used to let user space
 	 * specify which job to wait for, which is important if jobs
 	 * overrun. If we just call sys_sleep_next_period() then we

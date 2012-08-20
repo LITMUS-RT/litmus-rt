@@ -63,7 +63,7 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_exec_time(t)    (tsk_rt(t)->job_params.exec_time)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
 #define get_release(t)		(tsk_rt(t)->job_params.release)
-
+#define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 
 #define is_hrt(t)     		\
 	(tsk_rt(t)->task_params.cls == RT_CLASS_HARD)
