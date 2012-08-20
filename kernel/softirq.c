@@ -211,6 +211,9 @@ asmlinkage void __do_softirq(void)
 	int max_restart = MAX_SOFTIRQ_RESTART;
 	int cpu;
 
+	/* Mark Feather-Trace samples as "disturbed". */
+	ft_irq_fired();
+
 	pending = local_softirq_pending();
 	account_system_vtime(current);
 
