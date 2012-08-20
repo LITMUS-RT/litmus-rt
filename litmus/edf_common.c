@@ -63,25 +63,35 @@ int edf_higher_prio(struct task_struct* first,
 
 #endif
 
-
-	return !is_realtime(second_task)  ||
-
-		/* is the deadline of the first task earlier?
+	/* Determine the task with earliest deadline, with
+	 * tie-break logic.
+	 */
+	if (unlikely(!is_realtime(second_task))) {
+		return 1;
+	}
+	else if (earlier_deadline(first_task, second_task)) {
+		/* Is the deadline of the first task earlier?
 		 * Then it has higher priority.
 		 */
-		earlier_deadline(first_task, second_task) ||
+		return 1;
+	}
+	else if (get_deadline(first_task) == get_deadline(second_task)) {
+		/* Need to tie break */
 
-		/* Do we have a deadline tie?
-		 * Then break by PID.
-		 */
-		(get_deadline(first_task) == get_deadline(second_task) &&
-	        (first_task->pid < second_task->pid ||
-
-		/* If the PIDs are the same then the task with the inherited
-		 * priority wins.
-		 */
-		(first_task->pid == second_task->pid &&
-		 !second->rt_param.inh_task)));
+		/* Tie break by pid */
+		if (first_task->pid < second_task->pid) {
+			return 1;
+		}
+		else if (first_task->pid == second_task->pid) {
+			/* If the PIDs are the same then the task with the
+			 * inherited priority wins.
+			 */
+			if (!second->rt_param.inh_task) {
+				return 1;
+			}
+		}
+	}
+	return 0; /* fall-through. prio(second_task) > prio(first_task) */
 }
 
 int edf_ready_order(struct bheap_node* a, struct bheap_node* b)
