@@ -536,8 +536,6 @@ static int __init _init_litmus(void)
 	 */
 	printk("Starting LITMUS^RT kernel\n");
 
-	BUILD_BUG_ON(sizeof(union np_flag) != sizeof(uint32_t));
-
 	register_sched_plugin(&linux_sched_plugin);
 
 	bheap_node_cache    = KMEM_CACHE(bheap_node, SLAB_PANIC);

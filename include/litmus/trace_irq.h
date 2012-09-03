@@ -3,17 +3,7 @@
 
 #ifdef CONFIG_SCHED_OVERHEAD_TRACE
 
-#include <asm/atomic.h>
-#include <linux/percpu.h>
-
-extern DEFINE_PER_CPU(atomic_t, irq_fired_count);
-
-static inline void ft_irq_fired(void)
-{
-	/* Only called with preemptions disabled.  */
-	atomic_inc(&__get_cpu_var(irq_fired_count));
-}
-
+void ft_irq_fired(void);
 
 #else
 

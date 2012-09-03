@@ -133,6 +133,17 @@ static int __init init_litmus_ctrl_dev(void)
 
 	BUILD_BUG_ON(sizeof(struct control_page) > PAGE_SIZE);
 
+	BUILD_BUG_ON(sizeof(union np_flag) != sizeof(uint64_t));
+
+	BUILD_BUG_ON(offsetof(struct control_page, sched.raw)
+		     != LITMUS_CP_OFFSET_SCHED);
+	BUILD_BUG_ON(offsetof(struct control_page, irq_count)
+		     != LITMUS_CP_OFFSET_IRQ_COUNT);
+	BUILD_BUG_ON(offsetof(struct control_page, ts_syscall_start)
+		     != LITMUS_CP_OFFSET_TS_SC_START);
+	BUILD_BUG_ON(offsetof(struct control_page, irq_syscall_start)
+		     != LITMUS_CP_OFFSET_IRQ_SC_START);
+
 	printk("Initializing LITMUS^RT control device.\n");
 	err = misc_register(&litmus_ctrl_dev);
 	if (err)

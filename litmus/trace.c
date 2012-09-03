@@ -18,6 +18,15 @@ static unsigned int ts_seq_no = 0;
 
 DEFINE_PER_CPU(atomic_t, irq_fired_count);
 
+void ft_irq_fired(void)
+{
+	/* Only called with preemptions disabled.  */
+	atomic_inc(&__get_cpu_var(irq_fired_count));
+
+	if (has_control_page(current))
+		get_control_page(current)->irq_count++;
+}
+
 static inline void clear_irq_fired(void)
 {
 	atomic_set(&__raw_get_cpu_var(irq_fired_count), 0);

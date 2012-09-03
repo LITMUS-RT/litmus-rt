@@ -65,12 +65,12 @@ struct rt_task {
 };
 
 union np_flag {
-	uint32_t raw;
+	uint64_t raw;
 	struct {
 		/* Is the task currently in a non-preemptive section? */
-		uint32_t flag:31;
+		uint64_t flag:31;
 		/* Should the task call into the scheduler? */
-		uint32_t preempt:1;
+		uint64_t preempt:1;
 	} np;
 };
 
@@ -93,12 +93,24 @@ struct control_page {
 	 * sections. */
 	volatile union np_flag sched;
 
+	volatile uint64_t irq_count; /* Incremented by the kernel each time an IRQ is
+				      * handled. */
+
 	/* Locking overhead tracing: userspace records here the time stamp
-	 * prior to starting the system call. */
-	uint64_t ts_syscall_start; /* Feather-Trace cycles */
+	 * and IRQ counter prior to starting the system call. */
+	uint64_t ts_syscall_start;  /* Feather-Trace cycles */
+	uint64_t irq_syscall_start; /* Snapshot of irq_count when the syscall
+				     * started. */
 
 	/* to be extended */
 };
+
+/* Expected offsets within the control page. */
+
+#define LITMUS_CP_OFFSET_SCHED		0
+#define LITMUS_CP_OFFSET_IRQ_COUNT	8
+#define LITMUS_CP_OFFSET_TS_SC_START	16
+#define LITMUS_CP_OFFSET_IRQ_SC_START	24
 
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
