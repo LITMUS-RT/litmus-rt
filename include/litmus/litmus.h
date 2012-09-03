@@ -270,9 +270,28 @@ static inline int has_control_page(struct task_struct* t)
 }
 
 
+#ifdef CONFIG_SCHED_OVERHEAD_TRACE
+
 #define TS_SYSCALL_IN_START						\
 	if (has_control_page(current)) {				\
 		__TS_SYSCALL_IN_START(&get_control_page(current)->ts_syscall_start); \
 	}
+
+#define TS_SYSCALL_IN_END						\
+	if (has_control_page(current)) {				\
+		uint64_t irqs;						\
+		local_irq_disable();					\
+		irqs = get_control_page(current)->irq_count -		\
+			get_control_page(current)->irq_syscall_start;	\
+		__TS_SYSCALL_IN_END(&irqs);				\
+		local_irq_enable();					\
+	}
+
+#else
+
+#define TS_SYSCALL_IN_START
+#define TS_SYSCALL_IN_END
+
+#endif
 
 #endif

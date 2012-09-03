@@ -166,6 +166,27 @@ void save_timestamp_time(unsigned long event,
 	}
 }
 
+/* Record user-reported IRQ count */
+void save_timestamp_irq(unsigned long event,
+			unsigned long irq_counter_ptr)
+{
+	uint64_t* irqs = (uint64_t*) irq_counter_ptr;
+	unsigned int seq_no;
+	struct timestamp *ts;
+	seq_no = fetch_and_inc((int *) &ts_seq_no);
+	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
+		ts->event     = event;
+		ts->seq_no    = seq_no;
+		ts->pid	      = current->pid;
+		ts->cpu       = raw_smp_processor_id();
+		ts->task_type = is_realtime(current) ? TSK_RT : TSK_BE;
+		ts->irq_count = *irqs;
+		ts->irq_flag  = *irqs > 0;
+		ts->timestamp = ft_timestamp();
+		ft_buffer_finish_write(trace_ts_buf, ts);
+	}
+}
+
 /******************************************************************************/
 /*                        DEVICE FILE DRIVER                                  */
 /******************************************************************************/

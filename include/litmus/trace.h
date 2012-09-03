@@ -34,6 +34,7 @@ feather_callback void save_timestamp_task(unsigned long event, unsigned long t_p
 feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu);
 feather_callback void save_task_latency(unsigned long event, unsigned long when_ptr);
 feather_callback void save_timestamp_time(unsigned long event, unsigned long time_ptr);
+feather_callback void save_timestamp_irq(unsigned long event, unsigned long irq_count_ptr);
 
 #define TIMESTAMP(id) ft_event0(id, save_timestamp)
 
@@ -53,6 +54,9 @@ feather_callback void save_timestamp_time(unsigned long event, unsigned long tim
 #define TIMESTAMP_TIME(id, time_ptr) \
 	ft_event1(id, save_timestamp_time, (unsigned long) time_ptr)
 
+#define TIMESTAMP_IRQ(id, irq_count_ptr) \
+	ft_event1(id, save_timestamp_irq, (unsigned long) irq_count_ptr)
+
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
 #define TIMESTAMP(id)        /* no tracing */
@@ -69,6 +73,8 @@ feather_callback void save_timestamp_time(unsigned long event, unsigned long tim
 
 #define TIMESTAMP_TIME(id, time_ptr) /* no tracing */
 
+#define TIMESTAMP_IRQ(id, irq_count_ptr) /* no tracing */
+
 #endif
 
 
@@ -81,7 +87,7 @@ feather_callback void save_timestamp_time(unsigned long event, unsigned long tim
  */
 
 #define __TS_SYSCALL_IN_START(p)	TIMESTAMP_TIME(10, p)
-#define TS_SYSCALL_IN_END		TIMESTAMP_CUR(11)
+#define __TS_SYSCALL_IN_END(p)		TIMESTAMP_IRQ(11, p)
 
 #define TS_SYSCALL_OUT_START		TIMESTAMP_CUR(20)
 #define TS_SYSCALL_OUT_END		TIMESTAMP_CUR(21)
