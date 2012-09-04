@@ -251,8 +251,10 @@ extern void hrtimer_pull(void);
 void smp_pull_timers_interrupt(struct pt_regs *regs)
 {
 	ack_APIC_irq();
+	irq_enter();
 	TRACE("pull timer interrupt\n");
 	hrtimer_pull();
+	irq_exit();
 }
 
 struct smp_ops smp_ops = {

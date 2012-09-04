@@ -2597,8 +2597,12 @@ void scheduler_ipi(void)
 	struct rq *rq = this_rq();
 	struct task_struct *list = xchg(&rq->wake_list, NULL);
 
-	if (!list)
+	if (!list) {
+		/* If we don't call irq_enter(), we need to trigger the IRQ
+		 * tracing manually. */
+		ft_irq_fired();
 		return;
+	}
 
 	/*
 	 * Not all reschedule IPI handlers call irq_enter/irq_exit, since
