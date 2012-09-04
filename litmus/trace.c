@@ -43,68 +43,97 @@ static inline unsigned int get_and_clear_irq_fired(void)
 	return atomic_xchg(&__raw_get_cpu_var(irq_fired_count), 0);
 }
 
-static inline void __save_irq_flags(struct timestamp *ts)
+static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
 {
-	unsigned int irq_count;
-
-	irq_count     = get_and_clear_irq_fired();
 	/* Store how many interrupts occurred. */
 	ts->irq_count = irq_count;
 	/* Extra flag because ts->irq_count overflows quickly. */
 	ts->irq_flag  = irq_count > 0;
+
 }
 
-static inline void __save_timestamp_cpu(unsigned long event,
-					uint8_t type, uint8_t cpu,
-					uint16_t pid_fragment)
+static inline void write_timestamp(uint8_t event,
+				   uint8_t type,
+				   uint8_t cpu,
+				   uint16_t pid_fragment,
+				   unsigned int irq_count,
+				   int record_irq,
+				   uint64_t timestamp,
+				   int record_timestamp)
 {
+	unsigned long flags;
 	unsigned int seq_no;
 	struct timestamp *ts;
+
+	/* Avoid preemptions while recording the timestamp. This reduces the
+	 * number of "out of order" timestamps in the stream and makes
+	 * post-processing easier. */
+
+	local_irq_save(flags);
+
 	seq_no = fetch_and_inc((int *) &ts_seq_no);
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		ts->event     = event;
 		ts->seq_no    = seq_no;
-		ts->pid	      = pid_fragment;
-		ts->cpu       = cpu;
+
 		ts->task_type = type;
-		__save_irq_flags(ts);
-		barrier();
-		/* prevent re-ordering of ft_timestamp() */
-		ts->timestamp = ft_timestamp();
+		ts->pid	      = pid_fragment;
+
+		ts->cpu       = cpu;
+
+		if (record_irq)
+			irq_count = get_and_clear_irq_fired();
+
+		save_irq_flags(ts, irq_count);
+
+		if (record_timestamp)
+			timestamp = ft_timestamp();
+
+		ts->timestamp = timestamp;
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
+
+	local_irq_restore(flags);
 }
 
 static void __add_timestamp_user(struct timestamp *pre_recorded)
 {
+	unsigned long flags;
 	unsigned int seq_no;
 	struct timestamp *ts;
+
+
+	local_irq_save(flags);
+
 	seq_no = fetch_and_inc((int *) &ts_seq_no);
 	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
 		*ts = *pre_recorded;
 		ts->seq_no = seq_no;
 		ts->cpu	   = raw_smp_processor_id();
-		__save_irq_flags(ts);
+	        save_irq_flags(ts, get_and_clear_irq_fired());
 		ft_buffer_finish_write(trace_ts_buf, ts);
 	}
-}
 
-static inline void __save_timestamp(unsigned long event,
-				    uint8_t type)
-{
-	__save_timestamp_cpu(event, type, raw_smp_processor_id(),
-			     current->pid);
+	local_irq_restore(flags);
 }
 
 feather_callback void save_timestamp(unsigned long event)
 {
-	__save_timestamp(event, TSK_UNKNOWN);
+	write_timestamp(event, TSK_UNKNOWN,
+			raw_smp_processor_id(),
+			current->pid,
+			0, 1,
+			0, 1);
 }
 
 feather_callback void save_timestamp_def(unsigned long event,
 					 unsigned long type)
 {
-	__save_timestamp(event, (uint8_t) type);
+	write_timestamp(event, type,
+			raw_smp_processor_id(),
+			current->pid,
+			0, 1,
+			0, 1);
 }
 
 feather_callback void save_timestamp_task(unsigned long event,
@@ -112,16 +141,19 @@ feather_callback void save_timestamp_task(unsigned long event,
 {
 	struct task_struct *t = (struct task_struct *) t_ptr;
 	int rt = is_realtime(t);
-	__save_timestamp_cpu(event, rt ? TSK_RT : TSK_BE,
-			     raw_smp_processor_id(),
-			     t->pid);
+
+	write_timestamp(event, rt ? TSK_RT : TSK_BE,
+			raw_smp_processor_id(),
+			t->pid,
+			0, 1,
+			0, 1);
 }
 
 feather_callback void save_timestamp_cpu(unsigned long event,
 					 unsigned long cpu)
 {
-	__save_timestamp_cpu(event, TSK_UNKNOWN, cpu,
-			     current->pid);
+	write_timestamp(event, TSK_UNKNOWN, cpu, current->pid,
+			0, 1, 0, 1);
 }
 
 feather_callback void save_task_latency(unsigned long event,
@@ -129,21 +161,10 @@ feather_callback void save_task_latency(unsigned long event,
 {
 	lt_t now = litmus_clock();
 	lt_t *when = (lt_t*) when_ptr;
-	unsigned int seq_no;
-	int cpu = raw_smp_processor_id();
-	struct timestamp *ts;
 
-	seq_no = fetch_and_inc((int *) &ts_seq_no);
-	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
-		ts->event     = event;
-		ts->timestamp = now - *when;
-		ts->seq_no    = seq_no;
-		ts->cpu       = cpu;
-		ts->pid	      = 0;
-		ts->task_type = TSK_RT;
-		__save_irq_flags(ts);
-		ft_buffer_finish_write(trace_ts_buf, ts);
-	}
+	write_timestamp(event, TSK_RT, raw_smp_processor_id(), 0,
+			0, 1,
+			now - *when, 0);
 }
 
 /* fake timestamp to user-reported time */
@@ -151,19 +172,11 @@ void save_timestamp_time(unsigned long event,
 			 unsigned long ptr)
 {
 	uint64_t* time = (uint64_t*) ptr;
-	unsigned int seq_no;
-	struct timestamp *ts;
-	seq_no = fetch_and_inc((int *) &ts_seq_no);
-	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
-		ts->event     = event;
-		ts->seq_no    = seq_no;
-		ts->pid	      = current->pid;
-		ts->cpu       = raw_smp_processor_id();
-		ts->task_type = is_realtime(current) ? TSK_RT : TSK_BE;
-		__save_irq_flags(ts);
-		ts->timestamp = *time;
-		ft_buffer_finish_write(trace_ts_buf, ts);
-	}
+
+	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
+			raw_smp_processor_id(), current->pid,
+			0, 1,
+			*time, 0);
 }
 
 /* Record user-reported IRQ count */
@@ -171,20 +184,11 @@ void save_timestamp_irq(unsigned long event,
 			unsigned long irq_counter_ptr)
 {
 	uint64_t* irqs = (uint64_t*) irq_counter_ptr;
-	unsigned int seq_no;
-	struct timestamp *ts;
-	seq_no = fetch_and_inc((int *) &ts_seq_no);
-	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
-		ts->event     = event;
-		ts->seq_no    = seq_no;
-		ts->pid	      = current->pid;
-		ts->cpu       = raw_smp_processor_id();
-		ts->task_type = is_realtime(current) ? TSK_RT : TSK_BE;
-		ts->irq_count = *irqs;
-		ts->irq_flag  = *irqs > 0;
-		ts->timestamp = ft_timestamp();
-		ft_buffer_finish_write(trace_ts_buf, ts);
-	}
+
+	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
+			raw_smp_processor_id(), current->pid,
+			*irqs, 0,
+			0, 1);
 }
 
 /******************************************************************************/
