@@ -465,17 +465,10 @@ static void boost_priority(struct task_struct* t, lt_t priority_point)
 	/* tie-break by protocol-specific priority point */
 	tsk_rt(t)->boost_start_time = priority_point;
 
-	if (pfp->scheduled != t) {
-		/* holder may be queued: first stop queue changes */
-		raw_spin_lock(&pfp->domain.release_lock);
-		if (is_queued(t) &&
-		    /* If it is queued, then we need to re-order. */
-		    bheap_decrease(fp_ready_order, tsk_rt(t)->heap_node) &&
-		    /* If we bubbled to the top, then we need to check for preemptions. */
-		    fp_preemption_needed(&pfp->ready_queue, pfp->scheduled))
-				preempt(pfp);
-		raw_spin_unlock(&pfp->domain.release_lock);
-	} /* else: nothing to do since the job is not queued while scheduled */
+	/* Priority boosting currently only takes effect for already-scheduled
+	 * tasks. This is sufficient since priority boosting only kicks in as
+	 * part of lock acquisitions. */
+	BUG_ON(pfp->scheduled != t);
 
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
 }
