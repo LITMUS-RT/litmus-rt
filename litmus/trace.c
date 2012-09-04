@@ -58,6 +58,7 @@ static inline void write_timestamp(uint8_t event,
 				   uint16_t pid_fragment,
 				   unsigned int irq_count,
 				   int record_irq,
+				   int hide_irq,
 				   uint64_t timestamp,
 				   int record_timestamp)
 {
@@ -84,7 +85,7 @@ static inline void write_timestamp(uint8_t event,
 		if (record_irq)
 			irq_count = get_and_clear_irq_fired();
 
-		save_irq_flags(ts, irq_count);
+		save_irq_flags(ts, irq_count - hide_irq);
 
 		if (record_timestamp)
 			timestamp = ft_timestamp();
@@ -122,7 +123,7 @@ feather_callback void save_timestamp(unsigned long event)
 	write_timestamp(event, TSK_UNKNOWN,
 			raw_smp_processor_id(),
 			current->pid,
-			0, 1,
+			0, 1, 0,
 			0, 1);
 }
 
@@ -132,7 +133,7 @@ feather_callback void save_timestamp_def(unsigned long event,
 	write_timestamp(event, type,
 			raw_smp_processor_id(),
 			current->pid,
-			0, 1,
+			0, 1, 0,
 			0, 1);
 }
 
@@ -145,7 +146,7 @@ feather_callback void save_timestamp_task(unsigned long event,
 	write_timestamp(event, rt ? TSK_RT : TSK_BE,
 			raw_smp_processor_id(),
 			t->pid,
-			0, 1,
+			0, 1, 0,
 			0, 1);
 }
 
@@ -153,7 +154,8 @@ feather_callback void save_timestamp_cpu(unsigned long event,
 					 unsigned long cpu)
 {
 	write_timestamp(event, TSK_UNKNOWN, cpu, current->pid,
-			0, 1, 0, 1);
+			0, 1, 0,
+			0, 1);
 }
 
 feather_callback void save_task_latency(unsigned long event,
@@ -163,31 +165,41 @@ feather_callback void save_task_latency(unsigned long event,
 	lt_t *when = (lt_t*) when_ptr;
 
 	write_timestamp(event, TSK_RT, raw_smp_processor_id(), 0,
-			0, 1,
+			0, 1, 0,
 			now - *when, 0);
 }
 
 /* fake timestamp to user-reported time */
-void save_timestamp_time(unsigned long event,
+feather_callback void save_timestamp_time(unsigned long event,
 			 unsigned long ptr)
 {
 	uint64_t* time = (uint64_t*) ptr;
 
 	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			raw_smp_processor_id(), current->pid,
-			0, 1,
+			0, 1, 0,
 			*time, 0);
 }
 
 /* Record user-reported IRQ count */
-void save_timestamp_irq(unsigned long event,
+feather_callback void save_timestamp_irq(unsigned long event,
 			unsigned long irq_counter_ptr)
 {
 	uint64_t* irqs = (uint64_t*) irq_counter_ptr;
 
 	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			raw_smp_processor_id(), current->pid,
-			*irqs, 0,
+			*irqs, 0, 0,
+			0, 1);
+}
+
+/* Suppress one IRQ from the irq count. Used by TS_SEND_RESCHED_END, which is
+ * called from within an interrupt that is expected. */
+feather_callback void save_timestamp_hide_irq(unsigned long event)
+{
+	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
+			raw_smp_processor_id(), current->pid,
+			0, 1, 1,
 			0, 1);
 }
 
