@@ -225,6 +225,11 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 		if (pfp->scheduled && !blocks  && !migrate)
 			requeue(pfp->scheduled, pfp);
 		next = fp_prio_take(&pfp->ready_queue);
+		/* If preempt is set, we should not see the same task again. */
+		BUG_ON(preempt && next == prev);
+		/* Similarly, if preempt is set, then next may not be NULL,
+		 * unless it's a migration. */
+		BUG_ON(preempt && !migrate && next == NULL);
 	} else
 		/* Only override Linux scheduler if we have a real-time task
 		 * scheduled that needs to continue.
