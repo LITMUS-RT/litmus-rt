@@ -15,7 +15,7 @@
 #include <litmus/fp_common.h>
 
 /* fp_higher_prio -  returns true if first has a higher static priority
- *                   than second. Deadline ties are broken by PID.
+ *                   than second. Ties are broken by PID.
  *
  * both first and second may be NULL
  */
@@ -37,6 +37,9 @@ int fp_higher_prio(struct task_struct* first,
 	if (!first || !second)
 		return first && !second;
 
+	if (!is_realtime(second_task))
+		return 1;
+
 #ifdef CONFIG_LITMUS_LOCKING
 
 	/* Check for inherited priorities. Change task
@@ -51,33 +54,30 @@ int fp_higher_prio(struct task_struct* first,
 	 */
 	if (unlikely(is_priority_boosted(first_task))) {
 		/* first_task is boosted, how about second_task? */
-		if (!is_priority_boosted(second_task) ||
-		    lt_before(get_boost_start(first_task),
-			      get_boost_start(second_task)))
-			return 1;
+		if (is_priority_boosted(second_task))
+			/* break by priority point */
+			return lt_before(get_boost_start(first_task),
+					 get_boost_start(second_task));
 		else
-			return 0;
+			/* priority boosting wins. */
+			return 1;
 	} else if (unlikely(is_priority_boosted(second_task)))
 		/* second_task is boosted, first is not*/
 		return 0;
 
 #endif
 
+	/* Comparisons to itself are not expected; priority inheritance
+	 * should also not cause this to happen. */
+	BUG_ON(first_task == second_task);
 
-	return !is_realtime(second_task)  ||
-
-		get_priority(first_task) < get_priority(second_task) ||
-
-		/* Break by PID.
-		 */
-		(get_priority(first_task) == get_priority(second_task) &&
-	        (first_task->pid < second_task->pid ||
-
-		/* If the PIDs are the same then the task with the inherited
-		 * priority wins.
-		 */
-		(first_task->pid == second_task->pid &&
-		 !second->rt_param.inh_task)));
+	if (get_priority(first_task) < get_priority(second_task))
+		return 1;
+	else if (get_priority(first_task) == get_priority(second_task))
+		/* Break by PID. */
+		return first_task->pid < second_task->pid;
+	else
+		return 0;
 }
 
 int fp_ready_order(struct bheap_node* a, struct bheap_node* b)
