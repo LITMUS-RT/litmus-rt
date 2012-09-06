@@ -55,7 +55,7 @@ static void preempt(pfp_domain_t *pfp)
 
 static unsigned int priority_index(struct task_struct* t)
 {
-#ifdef CONFIG_LOCKING
+#ifdef CONFIG_LITMUS_LOCKING
 	if (unlikely(t->rt_param.inh_task))
 		/* use effective priority */
 		t = t->rt_param.inh_task;
