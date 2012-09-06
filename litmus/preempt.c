@@ -2,6 +2,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/preempt.h>
+#include <litmus/trace.h>
 
 /* The rescheduling state of each processor.
  */
@@ -47,6 +48,7 @@ void sched_state_ipi(void)
 		set_tsk_need_resched(current);
 		TRACE_STATE("IPI -> set_tsk_need_resched(%s/%d)\n",
 			    current->comm, current->pid);
+		TS_SEND_RESCHED_END;
 	} else {
 		/* ignore */
 		TRACE_STATE("ignoring IPI in state %x (%s)\n",
@@ -85,8 +87,10 @@ void litmus_reschedule(int cpu)
 	if (scheduled_transition_ok) {
 		if (smp_processor_id() == cpu)
 			set_tsk_need_resched(current);
-		else
+		else {
+			TS_SEND_RESCHED_START(cpu);
 			smp_send_reschedule(cpu);
+		}
 	}
 
 	TRACE_STATE("%s picked-ok:%d sched-ok:%d\n",
