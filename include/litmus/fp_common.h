@@ -57,7 +57,7 @@ static inline unsigned int fpq_find(struct fp_prio_queue* q)
 
 static inline void fp_prio_add(struct fp_prio_queue* q, struct task_struct* t, unsigned int index)
 {
-
+	BUG_ON(index >= LITMUS_MAX_PRIORITY);
 	BUG_ON(bheap_node_in_heap(tsk_rt(t)->heap_node));
 
 	fpq_set(q, index);
