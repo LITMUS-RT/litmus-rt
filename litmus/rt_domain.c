@@ -331,12 +331,7 @@ void __add_release_on(rt_domain_t* rt, struct task_struct *task,
 	list_add(&tsk_rt(task)->list, &rt->tobe_released);
 	task->rt_param.domain = rt;
 
-	/* start release timer */
-	TS_SCHED2_START(task);
-
 	arm_release_timer_on(rt, target_cpu);
-
-	TS_SCHED2_END(task);
 }
 #endif
 
@@ -349,11 +344,6 @@ void __add_release(rt_domain_t* rt, struct task_struct *task)
 	list_add(&tsk_rt(task)->list, &rt->tobe_released);
 	task->rt_param.domain = rt;
 
-	/* start release timer */
-	TS_SCHED2_START(task);
-
 	arm_release_timer(rt);
-
-	TS_SCHED2_END(task);
 }
 

@@ -4417,14 +4417,20 @@ litmus_need_resched_nonpreemptible:
 		raw_spin_unlock_irq(&rq->lock);
 	}
 
+	TS_SCHED2_START(prev);
 	sched_trace_task_switch_to(current);
 
 	post_schedule(rq);
 
-	if (sched_state_validate_switch())
+	if (sched_state_validate_switch()) {
+		TS_SCHED2_END(prev);
 		goto litmus_need_resched_nonpreemptible;
+	}
 
 	preempt_enable_no_resched();
+
+	TS_SCHED2_END(prev);
+
 	if (need_resched())
 		goto need_resched;
 
