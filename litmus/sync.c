@@ -16,63 +16,106 @@
 
 #include <litmus/sched_trace.h>
 
-static DECLARE_COMPLETION(ts_release);
+struct ts_release_wait {
+	struct list_head list;
+	struct completion completion;
+	lt_t ts_release_time;
+};
+
+#define DECLARE_TS_RELEASE_WAIT(symb)					\
+	struct ts_release_wait symb =					\
+	{								\
+		LIST_HEAD_INIT(symb.list),				\
+		COMPLETION_INITIALIZER_ONSTACK(symb.completion),	\
+		0							\
+	}
+
+static LIST_HEAD(task_release_list);
+static DEFINE_MUTEX(task_release_lock);
 
 static long do_wait_for_ts_release(void)
 {
-	long ret = 0;
+	DECLARE_TS_RELEASE_WAIT(wait);
 
-	/* If the interruption races with a release, the completion object
-	 * may have a non-zero counter. To avoid this problem, this should
-	 * be replaced by wait_for_completion().
-	 *
-	 * For debugging purposes, this is interruptible for now.
-	 */
-	ret = wait_for_completion_interruptible(&ts_release);
+	long ret = -ERESTARTSYS;
 
+	if (mutex_lock_interruptible(&task_release_lock))
+		goto out;
+
+	list_add(&wait.list, &task_release_list);
+
+	mutex_unlock(&task_release_lock);
+
+	/* We are enqueued, now we wait for someone to wake us up. */
+	ret = wait_for_completion_interruptible(&wait.completion);
+
+	if (!ret) {
+		/* Completion succeeded, setup release. */
+		litmus->release_at(current, wait.ts_release_time
+				   + current->rt_param.task_params.phase
+				   - current->rt_param.task_params.period);
+		/* trigger advance to next job release at the programmed time */
+		ret = complete_job();
+	} else {
+		/* We were interrupted, must cleanup list. */
+		mutex_lock(&task_release_lock);
+		if (!wait.completion.done)
+			list_del(&wait.list);
+		mutex_unlock(&task_release_lock);
+	}
+
+out:
 	return ret;
 }
 
 int count_tasks_waiting_for_release(void)
 {
-	unsigned long flags;
 	int task_count = 0;
 	struct list_head *pos;
 
-	spin_lock_irqsave(&ts_release.wait.lock, flags);
-	list_for_each(pos, &ts_release.wait.task_list) {
+	mutex_lock(&task_release_lock);
+
+	list_for_each(pos, &task_release_list) {
 		task_count++;
 	}
-	spin_unlock_irqrestore(&ts_release.wait.lock, flags);
+
+	mutex_unlock(&task_release_lock);
+
 
 	return task_count;
 }
 
 static long do_release_ts(lt_t start)
 {
-	int  task_count = 0;
-	unsigned long flags;
+	long  task_count = 0;
+
 	struct list_head	*pos;
-	struct task_struct 	*t;
+	struct ts_release_wait	*wait;
 
-
-	spin_lock_irqsave(&ts_release.wait.lock, flags);
-	TRACE("<<<<<< synchronous task system release >>>>>>\n");
-
-	sched_trace_sys_release(&start);
-	list_for_each(pos, &ts_release.wait.task_list) {
-		t = (struct task_struct*) list_entry(pos,
-						     struct __wait_queue,
-						     task_list)->private;
-		task_count++;
-		litmus->release_at(t, start + t->rt_param.task_params.phase);
-		sched_trace_task_release(t);
+	if (mutex_lock_interruptible(&task_release_lock)) {
+		task_count = -ERESTARTSYS;
+		goto out;
 	}
 
-	spin_unlock_irqrestore(&ts_release.wait.lock, flags);
+	TRACE("<<<<<< synchronous task system release >>>>>>\n");
+	sched_trace_sys_release(&start);
 
-	complete_n(&ts_release, task_count);
+	task_count = 0;
+	list_for_each(pos, &task_release_list) {
+		wait = (struct ts_release_wait*)
+			list_entry(pos, struct ts_release_wait, list);
 
+		task_count++;
+		wait->ts_release_time = start;
+		complete(&wait->completion);
+	}
+
+	/* clear stale list */
+	INIT_LIST_HEAD(&task_release_list);
+
+	mutex_unlock(&task_release_lock);
+
+out:
 	return task_count;
 }
 
@@ -88,17 +131,22 @@ asmlinkage long sys_wait_for_ts_release(void)
 	return ret;
 }
 
+#define ONE_MS 1000000
 
 asmlinkage long sys_release_ts(lt_t __user *__delay)
 {
 	long ret;
 	lt_t delay;
+	lt_t start_time;
 
 	/* FIXME: check capabilities... */
 
 	ret = copy_from_user(&delay, __delay, sizeof(delay));
-	if (ret == 0)
-		ret = do_release_ts(litmus_clock() + delay);
+	if (ret == 0) {
+		/* round up to next larger integral millisecond */
+		start_time = ((litmus_clock() / ONE_MS) + 1) * ONE_MS;
+		ret = do_release_ts(start_time + delay);
+	}
 
 	return ret;
 }
