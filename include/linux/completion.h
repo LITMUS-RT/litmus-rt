@@ -90,7 +90,6 @@ extern bool completion_done(struct completion *x);
 
 extern void complete(struct completion *);
 extern void complete_all(struct completion *);
-extern void complete_n(struct completion *, int n);
 
 /**
  * INIT_COMPLETION - reinitialize a completion structure
