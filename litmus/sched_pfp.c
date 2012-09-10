@@ -112,8 +112,7 @@ static void pfp_domain_init(pfp_domain_t* pfp,
 
 static void requeue(struct task_struct* t, pfp_domain_t *pfp)
 {
-	if (t->state != TASK_RUNNING)
-		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
+	BUG_ON(!is_running(t));
 
 	set_rt_flags(t, RT_F_RUNNING);
 	if (is_released(t, litmus_clock()))
@@ -225,6 +224,21 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 		if (pfp->scheduled && !blocks  && !migrate)
 			requeue(pfp->scheduled, pfp);
 		next = fp_prio_take(&pfp->ready_queue);
+		if (next == prev) {
+			struct task_struct *t = fp_prio_peek(&pfp->ready_queue);
+			TRACE_TASK(next, "next==prev sleep=%d oot=%d np=%d preempt=%d migrate=%d "
+				   "boost=%d empty=%d prio-idx=%u prio=%u\n",
+				   sleep, out_of_time, np, preempt, migrate,
+				   is_priority_boosted(next),
+				   t == NULL,
+				   priority_index(next),
+				   get_priority(next));
+			if (t)
+				TRACE_TASK(t, "waiter boost=%d prio-idx=%u prio=%u\n",
+					   is_priority_boosted(t),
+					   priority_index(t),
+					   get_priority(t));
+		}
 		/* If preempt is set, we should not see the same task again. */
 		BUG_ON(preempt && next == prev);
 		/* Similarly, if preempt is set, then next may not be NULL,
