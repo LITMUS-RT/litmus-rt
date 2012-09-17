@@ -3163,15 +3163,25 @@ static inline void post_schedule(struct rq *rq)
 asmlinkage void schedule_tail(struct task_struct *prev)
 	__releases(rq->lock)
 {
-	struct rq *rq = this_rq();
-
+	struct rq *rq;
+	
+	preempt_disable();
+	
+	rq = this_rq();
 	finish_task_switch(rq, prev);
+
+	sched_trace_task_switch_to(current);
 
 	/*
 	 * FIXME: do we need to worry about rq being invalidated by the
 	 * task_switch?
 	 */
 	post_schedule(rq);
+
+	if (sched_state_validate_switch())
+		litmus_reschedule_local();
+
+	preempt_enable();
 
 #ifdef __ARCH_WANT_UNLOCKED_CTXSW
 	/* In this case, finish_task_switch does not reenable preemption */
