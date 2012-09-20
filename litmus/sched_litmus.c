@@ -102,9 +102,9 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			}
 		}
 #ifdef  __ARCH_WANT_UNLOCKED_CTXSW
-		if (next->oncpu)
+		if (next->on_cpu)
 			TRACE_TASK(next, "waiting for !oncpu");
-		while (next->oncpu) {
+		while (next->on_cpu) {
 			cpu_relax();
 			mb();
 		}
