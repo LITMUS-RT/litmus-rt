@@ -57,10 +57,11 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_rt_phase(t)		(tsk_rt(t)->task_params.phase)
 #define get_partition(t) 	(tsk_rt(t)->task_params.cpu)
 #define get_priority(t) 	(tsk_rt(t)->task_params.priority)
-#define get_class(t)        (tsk_rt(t)->task_params.cls)
+#define get_class(t)        	(tsk_rt(t)->task_params.cls)
 
 /* job_param macros */
-#define get_exec_time(t)    (tsk_rt(t)->job_params.exec_time)
+#define get_job_no(t)           (tsk_rt(t)->job_params.job_no)
+#define get_exec_time(t)    	(tsk_rt(t)->job_params.exec_time)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)

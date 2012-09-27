@@ -308,7 +308,6 @@ feather_callback void do_sched_trace_task_tardy(unsigned long id,
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 12,			\
 			do_sched_trace_task_tardy, t);			\
-		trace_litmus_task_tardy(t);				\
 	} while (0)
 
 #define QT_START lt_t _qt_start = litmus_clock()
