@@ -869,13 +869,15 @@ static struct 	platform_device 	i2c2_gpio_device = {
 	.dev.platform_data = &i2c2_gpio_platdata,
 };
 
+#endif  // #ifdef CONFIG_VIDEO_TVOUT
+
 static struct i2c_board_info i2c_devs2[] __initdata = {
+#ifdef CONFIG_VIDEO_TVOUT
 	{
 		I2C_BOARD_INFO("s5p_ddc", (0x74 >> 1)),
 	},
+#endif
 };
-
-#endif  // #ifdef CONFIG_VIDEO_TVOUT
 
 static struct i2c_board_info i2c_devs4[] __initdata = {
 
