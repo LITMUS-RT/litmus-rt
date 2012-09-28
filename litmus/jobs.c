@@ -8,7 +8,11 @@
 
 static inline void setup_release(struct task_struct *t, lt_t release)
 {
-	tsk_rt(t)->tot_exec_time += tsk_rt(t)->job_params.exec_time;
+	lt_t exec_time = tsk_rt(t)->job_params.exec_time;
+
+	tsk_rt(t)->tot_exec_time += exec_time;
+	if (tsk_rt(t)->max_exec_time < exec_time)
+		tsk_rt(t)->max_exec_time = exec_time;
 
 	/* prepare next release */
 	tsk_rt(t)->job_params.release   = tsk_rt(t)->job_params.deadline;
