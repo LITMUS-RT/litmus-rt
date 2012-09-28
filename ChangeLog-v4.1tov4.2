@@ -1,0 +1,43 @@
+Improovments on s5p hdmi stuff
+memcopy from glibc
+string from glibc
+scheduler performance: if the user sets it up it will power up all the 4 cores on switcching, if the user switchs off this he'll try to shutdown.
+Added the CONFIG_MALI_GPU_OVERCLOCK_533MHZ to the config
+Reduced the time that MALI takes to changed frequencies from 1sec to 100msec.
+Merge error in cpupower driver
+RCU: Joe's RCU
+mm.h: increase readahead value from 128kb to 2048kb
+sched: don't call task_group() many times in set_task_rq() - Improves performance, better if autogroup is enabled.
+ARM: SMP: use a timing out completion for cpu hotplug - from Russel King
+Little trick on slub.c to get some performance
+Add dynamic writeback feature from 3.1
+Added optimized ARM RWSEM algorithm.
+lib/sha1: use the git implementation of SHA-1 (10 to 15% faster boot times)
+Remove ARM sha1 routines (as the update above make's it obsolet)
+Prevent aliased requests from starving other I/O
+I/O-less dirty throttling, reduce filesystem writeback from page reclaim - backport from 3.2
+writeback: Add a 'reason' to wb_writeback_work
+fs/sync.c: add module_param to enable/disable fsync() calls. Its enabled by default. Let me explain this a little more.
+	- When you write something to disk either you just write and bye or you write and wait until the confirmation is made.
+	- By default I left this enable as its the default. If you disable it you'll get more performance but (HUGE WARNING).
+	- If you writed something to disk and you power off your board, you have a huge chance of data corruption. So, only turn this off if you can assure
+	- that you will turn off your board properly.
+Added support for XZ compressed kernels
+Enabled XZ Support ;) 3Mbyte kernel now ;) 
+
+--- BELOW ARM PATCH's from Vicent Guittot!!! --
+ARM: 7011/1: Add ARM cpu topology definition
+sched: Ensure cpu_power periodic update
+ARM: topology: save cpu id of each core
+ARM: topology: Update topology according to current sched_mc mode
+ARM: 7182/1: ARM cpu topology: fix warning
+ARM: topology: Add a cpu_power function
+ARM: topology: Add a topology update notification
+ARM: cpu topology: Add asym topology flag for using cpu0 1st
+ARM: cpu topology: add debugfs
+cpupower: update the cpu_power according to cpu load
+sched: use cpu capacity to decide if a ILB is needed
+-- END --
+
+
+And least but not less important. Merged 3.0.42 ;) 

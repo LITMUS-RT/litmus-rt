@@ -1,0 +1,64 @@
+v1:
+* Added SIO Scheduler (Faster IO on Flash devices)
+* Disabled FRAME_POINTER, it can slow the kernel down
+* Built Using -ffast-match
+* Decreased IO Latency to Solid State drives 
+* Better KSM Tunning (Apps with real multi-thread such as native ffmpeg
+* should perform better) 
+* Latest lowmemorykiller
+
+v2:
+* Same as V1 plus:
+* Compile VFP as Neon
+* Makefile: Make use of neon and A9 instructions when ever its possible
+* Disabled MMC_CAP_ERASE: Since its a dev board, just wipe it yourself. This
+* may cause issues with Samsung and Flash devices. (Disabled only on eMMC).
+* Its enabled on the SDCARD.
+* CPU unaligned access path -> Should Increase SIMD speed. (from 1.2x to
+* 3.8x) Very useful while soft decoding videos, if the codecs use it.
+* Patched and Optimized CRC32 algorithm.
+
+v3:
+* BFQ IO Scheduler
+* Tweaked BFQ IO Scheduler to get better performance on flash devices
+* SLQB allocator
+* Complete MALI port from SGS 3 sources, its newer.. as well plenty of code
+* Clean up on MALI drivers
+* Cleaned all DEBUG stuff that Samsung coded on Mali Driver and wasn't in use
+
+
+4:
+3.0.41 kernel
+Implemented WasActive page flag
+More Makefile optimizations
+
+By default I have enabled the CIFS support so we can mount windows share's on Android.
+By doing this you get more performance to watch videos that are on Samba Shares.
+You can use the app Cifs Manager from market to have a nice UI. 
+
+4patch1:
+CFQ IO scheduler was causing kernel panic due to bad patching. -> FIXED
+BFQ IO Scheduler wasn't setted as default -> FIXED
+Wireless wasnt working -> Fine, we need to recompile the driver, new kernel new driver
+the new zImage, new kernel source fixed, binary driver for wifi (including
+respecting the previous path for the "TXT" required by the driver)
+Also provided the Wifi sources. I've patched it to be less chatty.
+
+
+4.1: *UNTESTED*
+arch/arm/kernel: disable preemption in machine_shutdown - found by google
+mm/backing-dev: use synchronize_rcu_expedited instead of synchronize_rcu
+fs/ext4: fix data corruption in inodes with journalled data
+fs/ext4: Fix overflow caused by missing cast in ext4_fallocate()
+fs/ext4: fix races in ext4_sync_parent()
+mm/page-writeback: remove useless rcu lock-unlock from mapping_tagged()
+tmpfs: clone shmem_file_splice_read()
+tmpfs: refine shmem_file_splice_read
+tmpfs: pass gfp to shmem_getpage_gfp
+tmpfs: remove_shmem_readpage
+tmpfs: simplify prealloc_page
+tmpfs: simplify filepage/swappage
+writeback: account NR_WRITTEN at IO completion time
+mm/slqc: Fixed the use of a deprecated function
+
+new Wifi driver even less chatty.
