@@ -346,3 +346,15 @@ ENTRY(sys_call_table)
 	.long sys_syncfs
 	.long sys_sendmmsg		/* 345 */
 	.long sys_setns
+	.long sys_set_rt_task_param	/* LITMUS^RT 347 */
+	.long sys_get_rt_task_param
+	.long sys_complete_job
+	.long sys_od_open
+	.long sys_od_close
+	.long sys_litmus_lock		/* +5 */
+	.long sys_litmus_unlock
+	.long sys_query_job_no
+	.long sys_wait_for_job_release
+	.long sys_wait_for_ts_release
+	.long sys_release_ts		/* +10 */
+	.long sys_null_call

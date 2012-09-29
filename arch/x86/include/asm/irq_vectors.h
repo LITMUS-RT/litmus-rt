@@ -135,6 +135,13 @@
 #define INVALIDATE_TLB_VECTOR_START	\
 	(INVALIDATE_TLB_VECTOR_END-NUM_INVALIDATE_TLB_VECTORS+1)
 
+/*
+ * LITMUS^RT pull timers IRQ vector
+ * Make sure it's below the above max 32 vectors.
+ */
+#define PULL_TIMERS_VECTOR		0xce
+
+
 #define NR_VECTORS			 256
 
 #define FPU_IRQ				  13

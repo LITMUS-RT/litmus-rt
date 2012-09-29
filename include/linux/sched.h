@@ -39,6 +39,7 @@
 #define SCHED_BATCH		3
 /* SCHED_ISO: reserved but not implemented yet */
 #define SCHED_IDLE		5
+#define SCHED_LITMUS		6
 /* Can be ORed in to make sure the process is reverted back to SCHED_NORMAL on fork */
 #define SCHED_RESET_ON_FORK     0x40000000
 
@@ -92,6 +93,9 @@ struct sched_param {
 #include <linux/cred.h>
 
 #include <asm/processor.h>
+
+#include <litmus/rt_param.h>
+#include <litmus/preempt.h>
 
 struct exec_domain;
 struct futex_pi_state;
@@ -1210,6 +1214,7 @@ struct sched_rt_entity {
 };
 
 struct rcu_node;
+struct od_table_entry;
 
 enum perf_event_task_context {
 	perf_invalid_context = -1,
@@ -1314,9 +1319,9 @@ struct task_struct {
 	unsigned long stack_canary;
 #endif
 
-	/* 
+	/*
 	 * pointers to (original) parent process, youngest child, younger sibling,
-	 * older sibling, respectively.  (p->father can be replaced with 
+	 * older sibling, respectively.  (p->father can be replaced with
 	 * p->real_parent->pid)
 	 */
 	struct task_struct *real_parent; /* real parent process */
@@ -1533,6 +1538,12 @@ struct task_struct {
 	 */
 	int nr_dirtied;
 	int nr_dirtied_pause;
+
+	/* LITMUS RT parameters and state */
+	struct rt_param rt_param;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry *od_table;
 
 #ifdef CONFIG_LATENCYTOP
 	int latency_record_count;
@@ -2149,7 +2160,7 @@ static inline int dequeue_signal_lock(struct task_struct *tsk, sigset_t *mask, s
 	spin_unlock_irqrestore(&tsk->sighand->siglock, flags);
 
 	return ret;
-}	
+}
 
 extern void block_all_signals(int (*notifier)(void *priv), void *priv,
 			      sigset_t *mask);
@@ -2459,6 +2470,7 @@ static inline int test_tsk_thread_flag(struct task_struct *tsk, int flag)
 static inline void set_tsk_need_resched(struct task_struct *tsk)
 {
 	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED);
+	sched_state_will_schedule(tsk);
 }
 
 static inline void clear_tsk_need_resched(struct task_struct *tsk)

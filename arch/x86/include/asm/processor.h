@@ -164,6 +164,10 @@ extern void print_cpu_info(struct cpuinfo_x86 *);
 extern void init_scattered_cpuid_features(struct cpuinfo_x86 *c);
 extern unsigned int init_intel_cacheinfo(struct cpuinfo_x86 *c);
 extern unsigned short num_cache_leaves;
+#ifdef CONFIG_SYSFS
+extern int get_shared_cpu_map(cpumask_var_t mask,
+			       unsigned int cpu, int index);
+#endif
 
 extern void detect_extended_topology(struct cpuinfo_x86 *c);
 extern void detect_ht(struct cpuinfo_x86 *c);

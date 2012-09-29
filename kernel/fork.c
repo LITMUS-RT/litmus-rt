@@ -79,6 +79,9 @@
 
 #include <trace/events/sched.h>
 
+#include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
+
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -208,6 +211,7 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(atomic_read(&tsk->usage));
 	WARN_ON(tsk == current);
 
+	exit_litmus(tsk);
 	exit_creds(tsk);
 	delayacct_tsk_free(tsk);
 	put_signal_struct(tsk->signal);
@@ -292,6 +296,9 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 		goto out;
 
 	tsk->stack = ti;
+
+	/* Don't let the new task be a real-time task. */
+	litmus_fork(tsk);
 
 	err = prop_local_init_single(&tsk->dirties);
 	if (err)

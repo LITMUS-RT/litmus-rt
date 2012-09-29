@@ -1078,7 +1078,7 @@ static void check_preempt_equal_prio(struct rq *rq, struct task_struct *p)
  */
 static void check_preempt_curr_rt(struct rq *rq, struct task_struct *p, int flags)
 {
-	if (p->prio < rq->curr->prio) {
+	if (p->prio < rq->curr->prio || p->policy == SCHED_LITMUS) {
 		resched_task(rq->curr);
 		return;
 	}

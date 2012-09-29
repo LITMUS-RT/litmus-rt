@@ -1,0 +1,282 @@
+menu "LITMUS^RT"
+
+menu "Scheduling"
+
+config PLUGIN_CEDF
+        bool "Clustered-EDF"
+	depends on X86 && SYSFS
+        default y
+        help
+          Include the Clustered EDF (C-EDF) plugin in the kernel.
+          This is appropriate for large platforms with shared caches.
+          On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
+          makes little sense since there aren't any shared caches.
+
+config PLUGIN_PFAIR
+	bool "PFAIR"
+	depends on HIGH_RES_TIMERS && !NO_HZ
+	default y
+	help
+	  Include the PFAIR plugin (i.e., the PD^2 scheduler) in the kernel.
+	  The PFAIR plugin requires high resolution timers (for staggered quanta)
+	  and does not support NO_HZ (quanta could be missed when the system is idle).
+
+	  If unsure, say Yes.
+
+config RELEASE_MASTER
+        bool "Release-master Support"
+	depends on ARCH_HAS_SEND_PULL_TIMERS
+	default n
+	help
+           Allow one processor to act as a dedicated interrupt processor
+           that services all timer interrupts, but that does not schedule
+           real-time tasks. See RTSS'09 paper for details
+	   (http://www.cs.unc.edu/~anderson/papers.html).
+           Currently only supported by GSN-EDF.
+
+endmenu
+
+menu "Real-Time Synchronization"
+
+config NP_SECTION
+        bool "Non-preemptive section support"
+	default n
+	help
+	  Allow tasks to become non-preemptable.
+          Note that plugins still need to explicitly support non-preemptivity.
+          Currently, only GSN-EDF and PSN-EDF have such support.
+
+	  This is required to support locking protocols such as the FMLP.
+	  If disabled, all tasks will be considered preemptable at all times.
+
+config LITMUS_LOCKING
+        bool "Support for real-time locking protocols"
+	depends on NP_SECTION
+	default n
+	help
+	  Enable LITMUS^RT's deterministic multiprocessor real-time
+	  locking protocols.
+
+	  Say Yes if you want to include locking protocols such as the FMLP and
+	  Baker's SRP.
+
+endmenu
+
+menu "Performance Enhancements"
+
+config SCHED_CPU_AFFINITY
+	bool "Local Migration Affinity"
+	depends on X86
+	default y
+	help
+	  Rescheduled tasks prefer CPUs near to their previously used CPU.  This
+	  may improve performance through possible preservation of cache affinity.
+
+	  Warning: May make bugs harder to find since tasks may migrate less often.
+
+	  NOTES:
+	  	* Feature is not utilized by PFair/PD^2.
+
+	  Say Yes if unsure.
+
+choice
+	prompt "EDF Tie-Break Behavior"
+	default EDF_TIE_BREAK_LATENESS_NORM
+	help
+	  Allows the configuration of tie-breaking behavior when the deadlines
+	  of two EDF-scheduled tasks are equal.
+	
+	config EDF_TIE_BREAK_LATENESS
+	bool "Lateness-based Tie Break"
+	help
+	  Break ties between two jobs, A and B, based upon the lateness of their
+	  prior jobs. The job with the greatest lateness has priority. Note that
+	  lateness has a negative value if the prior job finished before its
+	  deadline.
+	
+	config EDF_TIE_BREAK_LATENESS_NORM
+	bool "Normalized Lateness-based Tie Break"
+	help
+	  Break ties between two jobs, A and B, based upon the lateness, normalized
+	  by relative deadline, of their prior jobs. The job with the greatest
+	  normalized lateness has priority. Note that lateness has a negative value
+	  if the prior job finished before its deadline.
+	  
+	  Normalized lateness tie-breaks are likely desireable over non-normalized
+	  tie-breaks if the execution times and/or relative deadlines of tasks in a
+	  task set vary greatly.
+	
+	config EDF_TIE_BREAK_HASH
+	bool "Hash-based Tie Breaks"
+	help
+	  Break ties between two jobs, A and B, with equal deadlines by using a
+	  uniform hash; i.e.: hash(A.pid, A.job_num) < hash(B.pid, B.job_num). Job
+	  A has ~50% of winning a given tie-break.
+	
+	config EDF_PID_TIE_BREAK
+	bool "PID-based Tie Breaks"
+	help
+	  Break ties based upon OS-assigned thread IDs. Use this option if
+	  required by algorithm's real-time analysis or per-task response-time
+	  jitter must be minimized.
+	
+	  NOTES:
+	    * This tie-breaking method was default in Litmus 2012.2 and before.
+		
+endchoice
+
+endmenu
+
+menu "Tracing"
+
+config FEATHER_TRACE
+	bool "Feather-Trace Infrastructure"
+	default y
+	help
+	  Feather-Trace basic tracing infrastructure. Includes device file
+	  driver and instrumentation point support.
+
+	  There are actually two implementations of Feather-Trace.
+	  1) A slower, but portable, default implementation.
+	  2) Architecture-specific implementations that rewrite kernel .text at runtime.
+
+	  If enabled, Feather-Trace will be based on 2) if available (currently only for x86).
+	  However, if DEBUG_RODATA=y, then Feather-Trace will choose option 1) in any case
+	  to avoid problems with write-protected .text pages.
+
+	  Bottom line: to avoid increased overheads, choose DEBUG_RODATA=n.
+
+	  Note that this option only enables the basic Feather-Trace infrastructure;
+	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
+	  actually enable any events.
+
+config SCHED_TASK_TRACE
+	bool "Trace real-time tasks"
+	depends on FEATHER_TRACE
+	default y
+	help
+	  Include support for the sched_trace_XXX() tracing functions. This
+          allows the collection of real-time task events such as job
+	  completions, job releases, early completions, etc. This results in  a
+	  small overhead in the scheduling code. Disable if the overhead is not
+	  acceptable (e.g., benchmarking).
+
+	  Say Yes for debugging.
+	  Say No for overhead tracing.
+
+config SCHED_TASK_TRACE_SHIFT
+       int "Buffer size for sched_trace_xxx() events"
+       depends on SCHED_TASK_TRACE
+       range 8 13
+       default 9
+       help
+
+         Select the buffer size of sched_trace_xxx() events as a power of two.
+	 These buffers are statically allocated as per-CPU data. Each event
+	 requires 24 bytes storage plus one additional flag byte. Too large
+	 buffers can cause issues with the per-cpu allocator (and waste
+	 memory). Too small buffers can cause scheduling events to be lost. The
+	 "right" size is workload dependent and depends on the number of tasks,
+	 each task's period, each task's number of suspensions, and how often
+	 the buffer is flushed.
+
+	 Examples: 12 =>   4k events
+		   10 =>   1k events
+		    8 =>  512 events
+
+config SCHED_LITMUS_TRACEPOINT
+	bool "Enable Event/Tracepoint Tracing for real-time task tracing"
+	depends on TRACEPOINTS
+	default n
+	help
+	  Enable kernel-style events (tracepoint) for Litmus. Litmus events
+	  trace the same functions as the above sched_trace_XXX(), but can
+	  be enabled independently.
+	  Litmus tracepoints can be recorded and analyzed together (single
+	  time reference) with all other kernel tracing events (e.g.,
+	  sched:sched_switch, etc.).
+
+	  This also enables a quick way to visualize schedule traces using
+	  trace-cmd utility and kernelshark visualizer.
+
+	  Say Yes for debugging and visualization purposes.
+	  Say No for overhead tracing.
+
+config SCHED_OVERHEAD_TRACE
+	bool "Record timestamps for overhead measurements"
+	depends on FEATHER_TRACE
+	default n
+	help
+	  Export event stream for overhead tracing.
+	  Say Yes for overhead tracing.
+
+config SCHED_DEBUG_TRACE
+	bool "TRACE() debugging"
+	default y
+	help
+	  Include support for sched_trace_log_messageg(), which is used to
+	  implement TRACE(). If disabled, no TRACE() messages will be included
+	  in the kernel, and no overheads due to debugging statements will be
+	  incurred by the scheduler. Disable if the overhead is not acceptable
+	  (e.g. benchmarking).
+
+	  Say Yes for debugging.
+	  Say No for overhead tracing.
+
+config SCHED_DEBUG_TRACE_SHIFT
+       int "Buffer size for TRACE() buffer"
+       depends on SCHED_DEBUG_TRACE
+       range 14 22
+       default 18
+       help
+
+	Select the amount of memory needed per for the TRACE() buffer, as a
+	power of two. The TRACE() buffer is global and statically allocated. If
+	the buffer is too small, there will be holes in the TRACE() log if the
+	buffer-flushing task is starved.
+
+	The default should be sufficient for most systems. Increase the buffer
+	size if the log contains holes. Reduce the buffer size when running on
+	a memory-constrained system.
+
+	Examples: 14 =>  16KB
+		  18 => 256KB
+		  20 =>   1MB
+
+        This buffer is exported to usespace using a misc device as
+        'litmus/log'. On a system with default udev rules, a corresponding
+        character device node should be created at /dev/litmus/log. The buffer
+        can be flushed using cat, e.g., 'cat /dev/litmus/log > my_log_file.txt'.
+
+config SCHED_DEBUG_TRACE_CALLER
+       bool "Include [function@file:line] tag in TRACE() log"
+       depends on SCHED_DEBUG_TRACE
+       default n
+       help
+         With this option enabled, TRACE() prepends
+
+	      "[<function name>@<filename>:<line number>]"
+
+	 to each message in the debug log. Enable this to aid in figuring out
+         what was called in which order. The downside is that it adds a lot of
+         clutter.
+
+	 If unsure, say No.
+
+config PREEMPT_STATE_TRACE
+       bool "Trace preemption state machine transitions"
+       depends on SCHED_DEBUG_TRACE
+       default n
+       help
+         With this option enabled, each CPU will log when it transitions
+	 states in the preemption state machine. This state machine is
+	 used to determine how to react to IPIs (avoid races with in-flight IPIs).
+
+	 Warning: this creates a lot of information in the debug trace. Only
+	 recommended when you are debugging preemption-related races.
+
+	 If unsure, say No.
+
+endmenu
+
+endmenu

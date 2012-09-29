@@ -23,6 +23,10 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
+#include <litmus/preempt.h>
+#include <litmus/debug_trace.h>
+#include <litmus/trace.h>
+
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
 #include <asm/mmu_context.h>
@@ -118,6 +122,7 @@ static void native_smp_send_reschedule(int cpu)
 		WARN_ON(1);
 		return;
 	}
+	TS_SEND_RESCHED_START(cpu);
 	apic->send_IPI_mask(cpumask_of(cpu), RESCHEDULE_VECTOR);
 }
 
@@ -145,6 +150,16 @@ void native_send_call_func_ipi(const struct cpumask *mask)
 		apic->send_IPI_mask(mask, CALL_FUNCTION_VECTOR);
 
 	free_cpumask_var(allbutself);
+}
+
+/* trigger timers on remote cpu */
+void smp_send_pull_timers(int cpu)
+{
+	if (unlikely(cpu_is_offline(cpu))) {
+		WARN_ON(1);
+		return;
+	}
+	apic->send_IPI_mask(cpumask_of(cpu), PULL_TIMERS_VECTOR);
 }
 
 /*
@@ -199,8 +214,15 @@ static void native_stop_other_cpus(int wait)
 void smp_reschedule_interrupt(struct pt_regs *regs)
 {
 	ack_APIC_irq();
+	/* LITMUS^RT: this IPI might need to trigger the sched state machine. */
+	sched_state_ipi();
 	inc_irq_stat(irq_resched_count);
+	/*
+	 * LITMUS^RT: starting from 3.0 schedule_ipi() actually does something.
+	 * This may increase IPI latencies compared with previous versions.
+	 */
 	scheduler_ipi();
+	TS_SEND_RESCHED_END;
 	/*
 	 * KVM uses this interrupt to force a cpu out of guest mode
 	 */
@@ -222,6 +244,15 @@ void smp_call_function_single_interrupt(struct pt_regs *regs)
 	generic_smp_call_function_single_interrupt();
 	inc_irq_stat(irq_call_count);
 	irq_exit();
+}
+
+extern void hrtimer_pull(void);
+
+void smp_pull_timers_interrupt(struct pt_regs *regs)
+{
+	ack_APIC_irq();
+	TRACE("pull timer interrupt\n");
+	hrtimer_pull();
 }
 
 struct smp_ops smp_ops = {

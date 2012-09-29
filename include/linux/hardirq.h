@@ -6,6 +6,8 @@
 #include <linux/ftrace_irq.h>
 #include <asm/hardirq.h>
 
+#include <litmus/trace_irq.h>
+
 /*
  * We put the hardirq and softirq counter into the preemption
  * counter. The bitmask has the following meaning:
@@ -192,6 +194,7 @@ extern void rcu_nmi_exit(void);
 		account_system_vtime(current);		\
 		add_preempt_count(HARDIRQ_OFFSET);	\
 		trace_hardirq_enter();			\
+		ft_irq_fired();				\
 	} while (0)
 
 /*
@@ -222,6 +225,7 @@ extern void irq_exit(void);
 		lockdep_off();					\
 		rcu_nmi_enter();				\
 		trace_hardirq_enter();				\
+		ft_irq_fired();					\
 	} while (0)
 
 #define nmi_exit()						\
