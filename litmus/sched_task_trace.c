@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/percpu.h>
+#include <linux/math64.h>
 
 #include <litmus/ftdev.h>
 #include <litmus/litmus.h>
@@ -231,7 +232,8 @@ feather_callback void do_sched_trace_task_exit(unsigned long id,
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	const lt_t max_exec_time = tsk_rt(t)->max_exec_time;
-	const lt_t avg_exec_time = tsk_rt(t)->tot_exec_time / (get_job_no(t) - 1);
+	const lt_t avg_exec_time = div64_u64(tsk_rt(t)->tot_exec_time,
+			(get_job_no(t) - 2));
 
 	struct st_event_record *rec = get_record(ST_TASK_EXIT, t);
 	if (rec) {
