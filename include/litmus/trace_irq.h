@@ -3,6 +3,7 @@
 
 #ifdef CONFIG_SCHED_OVERHEAD_TRACE
 
+#include <asm/atomic.h>
 #include <linux/percpu.h>
 
 extern DEFINE_PER_CPU(atomic_t, irq_fired_count);
