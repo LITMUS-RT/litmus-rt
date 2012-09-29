@@ -17,6 +17,7 @@
  */
 
 #include <linux/ftrace_event.h>
+#include <litmus/litmus.h>
 
 /*
  * DECLARE_EVENT_CLASS can be used to add a generic function
@@ -54,7 +55,7 @@
 #define __string(item, src) __dynamic_array(char, item, -1)
 
 #undef TP_STRUCT__entry
-#define TP_STRUCT__entry(args...) args
+#define TP_STRUCT__entry(args...) args __field( unsigned long long, __rt_ts )
 
 #undef DECLARE_EVENT_CLASS
 #define DECLARE_EVENT_CLASS(name, proto, args, tstruct, assign, print)	\
@@ -507,7 +508,7 @@ static inline notrace int ftrace_get_offsets_##call(			\
 	strcpy(__get_str(dst), src);
 
 #undef TP_fast_assign
-#define TP_fast_assign(args...) args
+#define TP_fast_assign(args...) args; __entry->__rt_ts = litmus_clock();
 
 #undef TP_perf_assign
 #define TP_perf_assign(args...)

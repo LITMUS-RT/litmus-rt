@@ -5,16 +5,16 @@
 
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
+#include <litmus/trace.h>
 
 static inline void setup_release(struct task_struct *t, lt_t release)
 {
 	/* prepare next release */
-	t->rt_param.job_params.release = release;
-	t->rt_param.job_params.deadline = release + get_rt_relative_deadline(t);
-	t->rt_param.job_params.exec_time = 0;
-
+	tsk_rt(t)->job_params.release   = release;
+	tsk_rt(t)->job_params.deadline += release + get_rt_period(t);
+	tsk_rt(t)->job_params.exec_time = 0;
 	/* update job sequence number */
-	t->rt_param.job_params.job_no++;
+	tsk_rt(t)->job_params.job_no++;
 
 	/* don't confuse Linux */
 	t->rt.time_slice = 1;
@@ -47,6 +47,22 @@ void release_at(struct task_struct *t, lt_t start)
  */
 long complete_job(void)
 {
+	lt_t amount;
+	lt_t now = litmus_clock();
+	lt_t exec_time = tsk_rt(current)->job_params.exec_time;
+
+	tsk_rt(current)->tot_exec_time += exec_time;
+	if (lt_before(tsk_rt(current)->max_exec_time, exec_time))
+		tsk_rt(current)->max_exec_time = exec_time;
+
+	if (is_tardy(current, now)) {
+		amount = now - get_deadline(current);
+		if (lt_after(amount, tsk_rt(current)->max_tardy))
+			tsk_rt(current)->max_tardy = amount;
+		tsk_rt(current)->total_tardy += amount;
+		++tsk_rt(current)->missed;
+	}
+
 	/* Mark that we do not excute anymore */
 	set_rt_flags(current, RT_F_SLEEP);
 	/* call schedule, this will return when a new job arrives
