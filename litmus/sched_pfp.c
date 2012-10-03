@@ -369,7 +369,9 @@ static void pfp_task_wake_up(struct task_struct *task)
 		pfp_preempt_check(pfp);
 	}
 
+#ifdef CONFIG_LITMUS_LOCKING
 out_unlock:
+#endif
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
 	TRACE_TASK(task, "wake up done\n");
 }
