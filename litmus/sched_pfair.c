@@ -254,7 +254,7 @@ static void check_preempt(struct task_struct* t)
 {
 	int cpu = NO_CPU;
 	if (tsk_rt(t)->linked_on != tsk_rt(t)->scheduled_on &&
-	    tsk_rt(t)->present) {
+	    is_present(t)) {
 		/* the task can be scheduled and
 		 * is not scheduled where it ought to be scheduled
 		 */
@@ -310,7 +310,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 	int to_relq;
 	p->cur = (p->cur + 1) % p->quanta;
 	if (!p->cur) {
-		if (tsk_rt(t)->present) {
+		if (is_present(t)) {
 			/* The job overran; we start a new budget allocation. */
 			pfair_prepare_next_period(t);
 		} else {
@@ -598,7 +598,7 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 			   "scheduled already on %d.\n", cpu, where);
 		return 0;
 	} else
-		return tsk_rt(t)->present && !is_completed(t);
+		return is_present(t) && !is_completed(t);
 }
 
 static struct task_struct* pfair_schedule(struct task_struct * prev)
