@@ -160,6 +160,9 @@ struct rt_param {
 	/* is the task present? (true if it can be scheduled) */
 	unsigned int		present:1;
 
+	/* has the task completed? */
+	unsigned int		completed:1;
+
 #ifdef CONFIG_LITMUS_LOCKING
 	/* Is the task being priority-boosted by a locking protocol? */
 	unsigned int		priority_boosted:1;
@@ -246,8 +249,6 @@ struct rt_param {
 };
 
 /*	Possible RT flags	*/
-#define RT_F_RUNNING		0x00000000
-#define RT_F_SLEEP		0x00000001
 #define RT_F_EXIT_SEM		0x00000008
 
 #endif

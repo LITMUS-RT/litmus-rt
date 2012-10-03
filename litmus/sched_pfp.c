@@ -114,7 +114,7 @@ static void requeue(struct task_struct* t, pfp_domain_t *pfp)
 {
 	BUG_ON(!is_running(t));
 
-	set_rt_flags(t, RT_F_RUNNING);
+	tsk_rt(t)->completed = 0;
 	if (is_released(t, litmus_clock()))
 		fp_prio_add(&pfp->ready_queue, t, priority_index(t));
 	else
@@ -126,7 +126,7 @@ static void job_completion(struct task_struct* t, int forced)
 	sched_trace_task_completion(t,forced);
 	TRACE_TASK(t, "job_completion().\n");
 
-	set_rt_flags(t, RT_F_SLEEP);
+	tsk_rt(t)->completed = 1;
 	prepare_for_next_period(t);
 	if (is_released(t, litmus_clock()))
 		sched_trace_task_release(t);
@@ -180,7 +180,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 				  budget_enforced(pfp->scheduled) &&
 				  budget_exhausted(pfp->scheduled);
 	np 	    = exists && is_np(pfp->scheduled);
-	sleep	    = exists && get_rt_flags(pfp->scheduled) == RT_F_SLEEP;
+	sleep	    = exists && is_completed(pfp->scheduled);
 	migrate     = exists && get_partition(pfp->scheduled) != pfp->cpu;
 	preempt     = migrate || fp_preemption_needed(&pfp->ready_queue, prev);
 
@@ -253,7 +253,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 
 	if (next) {
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
-		set_rt_flags(next, RT_F_RUNNING);
+		tsk_rt(next)->completed = 0;
 	} else {
 		TRACE("becoming idle at %llu\n", litmus_clock());
 	}

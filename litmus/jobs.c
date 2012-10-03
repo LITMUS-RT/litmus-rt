@@ -38,7 +38,7 @@ void release_at(struct task_struct *t, lt_t start)
 {
 	BUG_ON(!t);
 	setup_release(t, start);
-	set_rt_flags(t, RT_F_RUNNING);
+	tsk_rt(t)->completed = 0;
 }
 
 
@@ -48,7 +48,7 @@ void release_at(struct task_struct *t, lt_t start)
 long complete_job(void)
 {
 	/* Mark that we do not excute anymore */
-	set_rt_flags(current, RT_F_SLEEP);
+	tsk_rt(current)->completed = 1;
 	/* call schedule, this will return when a new job arrives
 	 * it also takes care of preparing for the next release
 	 */

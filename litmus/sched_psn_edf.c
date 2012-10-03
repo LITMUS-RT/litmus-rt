@@ -60,7 +60,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 	if (t->state != TASK_RUNNING)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
 
-	set_rt_flags(t, RT_F_RUNNING);
+	tsk_rt(t)->completed = 0;
 	if (is_released(t, litmus_clock()))
 		__add_ready(edf, t);
 	else
@@ -160,7 +160,7 @@ static void job_completion(struct task_struct* t, int forced)
 	sched_trace_task_completion(t,forced);
 	TRACE_TASK(t, "job_completion().\n");
 
-	set_rt_flags(t, RT_F_SLEEP);
+	tsk_rt(t)->completed = 1;
 	prepare_for_next_period(t);
 }
 
@@ -214,7 +214,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 				  budget_enforced(pedf->scheduled) &&
 				  budget_exhausted(pedf->scheduled);
 	np 	    = exists && is_np(pedf->scheduled);
-	sleep	    = exists && get_rt_flags(pedf->scheduled) == RT_F_SLEEP;
+	sleep	    = exists && is_completed(pedf->scheduled);
 	preempt     = edf_preemption_needed(edf, prev);
 
 	/* If we need to preempt do so.
@@ -266,7 +266,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 
 	if (next) {
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
-		set_rt_flags(next, RT_F_RUNNING);
+		tsk_rt(next)->completed = 0;
 	} else {
 		TRACE("becoming idle at %llu\n", litmus_clock());
 	}

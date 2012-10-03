@@ -299,7 +299,7 @@ static void pfair_prepare_next_period(struct task_struct* t)
 	struct pfair_param* p = tsk_pfair(t);
 
 	prepare_for_next_period(t);
-	get_rt_flags(t) = RT_F_RUNNING;
+	tsk_rt(t)->completed = 0;
 	p->release += p->period;
 }
 
@@ -598,7 +598,7 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 			   "scheduled already on %d.\n", cpu, where);
 		return 0;
 	} else
-		return tsk_rt(t)->present && get_rt_flags(t) == RT_F_RUNNING;
+		return tsk_rt(t)->present && !is_completed(t);
 }
 
 static struct task_struct* pfair_schedule(struct task_struct * prev)
@@ -621,7 +621,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	raw_spin_lock(cpu_lock(state));
 
 	blocks      = is_realtime(prev) && !is_running(prev);
-	completion  = is_realtime(prev) && get_rt_flags(prev) == RT_F_SLEEP;
+	completion  = is_realtime(prev) && is_completed(prev);
 	out_of_time = is_realtime(prev) && time_after(cur_release(prev),
 						      state->local_tick);
 
@@ -720,7 +720,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	/* only add to ready queue if the task isn't still linked somewhere */
 	if (requeue) {
 		TRACE_TASK(t, "requeueing required\n");
-		tsk_rt(t)->flags = RT_F_RUNNING;
+		tsk_rt(t)->completed = 0;
 		__add_ready(&cluster->pfair, t);
 	}
 

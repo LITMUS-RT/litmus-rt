@@ -171,7 +171,7 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 
 	/* Link new task to CPU. */
 	if (linked) {
-		set_rt_flags(linked, RT_F_RUNNING);
+		tsk_rt(linked)->completed = 0;
 		/* handle task is already scheduled somewhere! */
 		on_cpu = linked->rt_param.scheduled_on;
 		if (on_cpu != NO_CPU) {
@@ -350,7 +350,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	TRACE_TASK(t, "job_completion().\n");
 
 	/* set flags */
-	set_rt_flags(t, RT_F_SLEEP);
+	tsk_rt(t)->completed = 1;
 	/* prepare for next period */
 	prepare_for_next_period(t);
 	if (is_released(t, litmus_clock()))
@@ -404,7 +404,7 @@ static void cedf_tick(struct task_struct* t)
  *
  *      - !is_running(scheduled)        // the job blocks
  *	- scheduled->timeslice == 0	// the job completed (forcefully)
- *	- get_rt_flag() == RT_F_SLEEP	// the job completed (by syscall)
+ *	- is_completed()		// the job completed (by syscall)
  * 	- linked != scheduled		// we need to reschedule (for any reason)
  * 	- is_np(scheduled)		// rescheduling must be delayed,
  *					   sys_exit_np must be requested
@@ -443,7 +443,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 				  budget_enforced(entry->scheduled) &&
 				  budget_exhausted(entry->scheduled);
 	np 	    = exists && is_np(entry->scheduled);
-	sleep	    = exists && get_rt_flags(entry->scheduled) == RT_F_SLEEP;
+	sleep	    = exists && is_completed(entry->scheduled);
 	preempt     = entry->scheduled != entry->linked;
 
 #ifdef WANT_ALL_SCHED_EVENTS
@@ -600,7 +600,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 	 * a semaphore, it should never be treated as a new job release.
 	 */
 	if (get_rt_flags(task) == RT_F_EXIT_SEM) {
-		set_rt_flags(task, RT_F_RUNNING);
+		tsk_rt(task)->completed = 0;
 	} else {
 		now = litmus_clock();
 		if (is_tardy(task, now)) {
@@ -612,7 +612,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 			if (task->rt.time_slice) {
 				/* came back in time before deadline
 				*/
-				set_rt_flags(task, RT_F_RUNNING);
+				tsk_rt(task)->completed = 0;
 			}
 		}
 	}
