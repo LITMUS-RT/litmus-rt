@@ -595,25 +595,17 @@ static void cedf_task_wake_up(struct task_struct *task)
 	cluster = task_cpu_cluster(task);
 
 	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
-	/* We need to take suspensions because of semaphores into
-	 * account! If a job resumes after being suspended due to acquiring
-	 * a semaphore, it should never be treated as a new job release.
-	 */
-	if (get_rt_flags(task) == RT_F_EXIT_SEM) {
-		tsk_rt(task)->completed = 0;
-	} else {
-		now = litmus_clock();
-		if (is_tardy(task, now)) {
-			/* new sporadic release */
-			release_at(task, now);
-			sched_trace_task_release(task);
-		}
-		else {
-			if (task->rt.time_slice) {
-				/* came back in time before deadline
-				*/
-				tsk_rt(task)->completed = 0;
-			}
+	now = litmus_clock();
+	if (is_tardy(task, now)) {
+		/* new sporadic release */
+		release_at(task, now);
+		sched_trace_task_release(task);
+	}
+	else {
+		if (task->rt.time_slice) {
+			/* came back in time before deadline
+			*/
+			tsk_rt(task)->completed = 0;
 		}
 	}
 	cedf_job_arrival(task);

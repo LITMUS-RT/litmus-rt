@@ -248,9 +248,6 @@ struct rt_param {
 	struct control_page * ctrl_page;
 };
 
-/*	Possible RT flags	*/
-#define RT_F_EXIT_SEM		0x00000008
-
 #endif
 
 #endif

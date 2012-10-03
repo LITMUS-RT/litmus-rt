@@ -45,8 +45,6 @@ void litmus_exit_task(struct task_struct *tsk);
 #define tsk_rt(t)		(&(t)->rt_param)
 
 /*	Realtime utility macros */
-#define get_rt_flags(t)		(tsk_rt(t)->flags)
-#define set_rt_flags(t,f) 	(tsk_rt(t)->flags=(f))
 #define is_priority_boosted(t)  (tsk_rt(t)->priority_boosted)
 #define get_boost_start(t)  (tsk_rt(t)->boost_start_time)
 
