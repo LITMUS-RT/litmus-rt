@@ -3,6 +3,8 @@
  * policies)
  */
 
+#include <litmus/litmus.h>
+
 #ifdef CONFIG_RT_GROUP_SCHED
 
 #define rt_entity_is_task(rt_se) (!(rt_se)->my_q)
@@ -228,8 +230,11 @@ static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 	if (rt_rq->rt_nr_running) {
 		if (rt_se && !on_rt_rq(rt_se))
 			enqueue_rt_entity(rt_se, false);
-		if (rt_rq->highest_prio.curr < curr->prio)
+		if (rt_rq->highest_prio.curr < curr->prio &&
+		    /* Don't subject LITMUS tasks to remote reschedules */
+		    !is_realtime(curr)) {
 			resched_task(curr);
+		}
 	}
 }
 
@@ -322,8 +327,10 @@ static inline struct rt_rq *group_rt_rq(struct sched_rt_entity *rt_se)
 
 static inline void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 {
-	if (rt_rq->rt_nr_running)
-		resched_task(rq_of_rt_rq(rt_rq)->curr);
+	struct task_struct *curr = rq_of_rt_rq(rt_rq)->curr;
+
+	if (rt_rq->rt_nr_running && !is_realtime(curr))
+		resched_task(curr);
 }
 
 static inline void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
