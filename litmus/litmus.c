@@ -9,6 +9,7 @@
 #include <linux/sched.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/reboot.h>
 
 #include <litmus/litmus.h>
 #include <litmus/bheap.h>
@@ -528,6 +529,25 @@ static struct sysrq_key_op sysrq_kill_rt_tasks_op = {
 
 extern struct sched_plugin linux_sched_plugin;
 
+static int litmus_shutdown_nb(struct notifier_block *unused1,
+				unsigned long unused2, void *unused3)
+{
+	/* Attempt to switch back to regular Linux scheduling.
+	 * Forces the active plugin to clean up.
+	 */
+	if (litmus != &linux_sched_plugin) {
+		int ret = switch_sched_plugin(&linux_sched_plugin);
+		if (ret) {
+			printk("Auto-shutdown of active Litmus plugin failed.\n");
+		}
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block shutdown_notifier = {
+	.notifier_call = litmus_shutdown_nb,
+};
+
 static int __init _init_litmus(void)
 {
 	/*      Common initializers,
@@ -555,11 +575,15 @@ static int __init _init_litmus(void)
 	init_topology();
 #endif
 
+	register_reboot_notifier(&shutdown_notifier);
+
 	return 0;
 }
 
 static void _exit_litmus(void)
 {
+	unregister_reboot_notifier(&shutdown_notifier);
+
 	exit_litmus_proc();
 	kmem_cache_destroy(bheap_node_cache);
 	kmem_cache_destroy(release_heap_cache);
