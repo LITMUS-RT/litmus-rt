@@ -265,7 +265,7 @@ config SCHED_DEBUG_TRACE_CALLER
 
 config PREEMPT_STATE_TRACE
        bool "Trace preemption state machine transitions"
-       depends on SCHED_DEBUG_TRACE
+       depends on SCHED_DEBUG_TRACE && DEBUG_KERNEL
        default n
        help
          With this option enabled, each CPU will log when it transitions
