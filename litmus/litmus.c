@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/reboot.h>
+#include <linux/stop_machine.h>
 
 #include <litmus/litmus.h>
 #include <litmus/bheap.h>
@@ -24,9 +25,6 @@
 
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
-static DEFINE_RAW_SPINLOCK(task_transition_lock);
-/* synchronize plugin switching */
-atomic_t cannot_use_plugin	= ATOMIC_INIT(0);
 
 /* Give log messages sequential IDs. */
 atomic_t __log_seq_no = ATOMIC_INIT(0);
@@ -322,9 +320,11 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 long litmus_admit_task(struct task_struct* tsk)
 {
 	long retval = 0;
-	unsigned long flags;
 
 	BUG_ON(is_realtime(tsk));
+
+	tsk_rt(tsk)->heap_node = NULL;
+	tsk_rt(tsk)->rel_heap = NULL;
 
 	if (get_rt_relative_deadline(tsk) == 0 ||
 	    get_exec_cost(tsk) >
@@ -347,9 +347,6 @@ long litmus_admit_task(struct task_struct* tsk)
 
 	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
 
-	/* avoid scheduler plugin changing underneath us */
-	raw_spin_lock_irqsave(&task_transition_lock, flags);
-
 	/* allocate heap node for this task */
 	tsk_rt(tsk)->heap_node = bheap_node_alloc(GFP_ATOMIC);
 	tsk_rt(tsk)->rel_heap = release_heap_alloc(GFP_ATOMIC);
@@ -357,14 +354,13 @@ long litmus_admit_task(struct task_struct* tsk)
 	if (!tsk_rt(tsk)->heap_node || !tsk_rt(tsk)->rel_heap) {
 		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
 
-		bheap_node_free(tsk_rt(tsk)->heap_node);
-		release_heap_free(tsk_rt(tsk)->rel_heap);
-
 		retval = -ENOMEM;
-		goto out_unlock;
+		goto out;
 	} else {
 		bheap_node_init(&tsk_rt(tsk)->heap_node, tsk);
 	}
+
+	preempt_disable();
 
 	retval = litmus->admit_task(tsk);
 
@@ -374,9 +370,13 @@ long litmus_admit_task(struct task_struct* tsk)
 		atomic_inc(&rt_task_count);
 	}
 
-out_unlock:
-	raw_spin_unlock_irqrestore(&task_transition_lock, flags);
+	preempt_enable();
+
 out:
+	if (retval) {
+		bheap_node_free(tsk_rt(tsk)->heap_node);
+		release_heap_free(tsk_rt(tsk)->rel_heap);
+	}
 	return retval;
 }
 
@@ -396,37 +396,10 @@ void litmus_exit_task(struct task_struct* tsk)
 	}
 }
 
-/* IPI callback to synchronize plugin switching */
-static void synch_on_plugin_switch(void* info)
+static int do_plugin_switch(void *_plugin)
 {
-	atomic_inc(&cannot_use_plugin);
-	while (atomic_read(&cannot_use_plugin) > 0)
-		cpu_relax();
-}
-
-/* Switching a plugin in use is tricky.
- * We must watch out that no real-time tasks exists
- * (and that none is created in parallel) and that the plugin is not
- * currently in use on any processor (in theory).
- */
-int switch_sched_plugin(struct sched_plugin* plugin)
-{
-	unsigned long flags;
-	int ret = 0;
-
-	BUG_ON(!plugin);
-
-	/* forbid other cpus to use the plugin */
-	atomic_set(&cannot_use_plugin, 1);
-	/* send IPI to force other CPUs to synch with us */
-	smp_call_function(synch_on_plugin_switch, NULL, 0);
-
-	/* wait until all other CPUs have started synch */
-	while (atomic_read(&cannot_use_plugin) < num_online_cpus())
-		cpu_relax();
-
-	/* stop task transitions */
-	raw_spin_lock_irqsave(&task_transition_lock, flags);
+	int ret;
+	struct sched_plugin* plugin = _plugin;
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
@@ -444,9 +417,22 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	} else
 		ret = -EBUSY;
 out:
-	raw_spin_unlock_irqrestore(&task_transition_lock, flags);
-	atomic_set(&cannot_use_plugin, 0);
 	return ret;
+}
+
+/* Switching a plugin in use is tricky.
+ * We must watch out that no real-time tasks exists
+ * (and that none is created in parallel) and that the plugin is not
+ * currently in use on any processor (in theory).
+ */
+int switch_sched_plugin(struct sched_plugin* plugin)
+{
+	BUG_ON(!plugin);
+
+	if (atomic_read(&rt_task_count) == 0)
+		return stop_machine(do_plugin_switch, plugin, NULL);
+	else
+		return -EBUSY;
 }
 
 /* Called upon fork.
