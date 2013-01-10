@@ -31,6 +31,8 @@ static const struct fdso_ops* fdso_ops[] = {
 
 static int fdso_create(void** obj_ref, obj_type_t type, void* __user config)
 {
+	BUILD_BUG_ON(ARRAY_SIZE(fdso_ops) != MAX_OBJ_TYPE + 1);
+
 	if (fdso_ops[type]->create)
 		return fdso_ops[type]->create(obj_ref, type, config);
 	else
