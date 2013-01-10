@@ -89,7 +89,7 @@ static long do_release_ts(lt_t start)
 {
 	long  task_count = 0;
 
-	struct list_head	*pos;
+	struct list_head	*pos, *safe;
 	struct ts_release_wait	*wait;
 
 	if (mutex_lock_interruptible(&task_release_lock)) {
@@ -101,7 +101,7 @@ static long do_release_ts(lt_t start)
 	sched_trace_sys_release(&start);
 
 	task_count = 0;
-	list_for_each(pos, &task_release_list) {
+	list_for_each_safe(pos, safe, &task_release_list) {
 		wait = (struct ts_release_wait*)
 			list_entry(pos, struct ts_release_wait, list);
 
