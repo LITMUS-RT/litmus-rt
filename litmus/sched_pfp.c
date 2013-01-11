@@ -182,7 +182,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	np 	    = exists && is_np(pfp->scheduled);
 	sleep	    = exists && is_completed(pfp->scheduled);
 	migrate     = exists && get_partition(pfp->scheduled) != pfp->cpu;
-	preempt     = migrate || fp_preemption_needed(&pfp->ready_queue, prev);
+	preempt     = !blocks && (migrate || fp_preemption_needed(&pfp->ready_queue, prev));
 
 	/* If we need to preempt do so.
 	 * The following checks set resched to 1 in case of special
@@ -1089,8 +1089,10 @@ static void pcp_priority_inheritance(void)
 		fp_set_prio_inh(pfp, blocker, blocked);
 	}
 
-	/* check if anything changed */
-	if (fp_higher_prio(fp_prio_peek(&pfp->ready_queue), pfp->scheduled))
+	/* Check if anything changed. If the blocked job is current, then it is
+	 * just blocking and hence is going to call the scheduler anyway. */
+	if (blocked != current &&
+	    fp_higher_prio(fp_prio_peek(&pfp->ready_queue), pfp->scheduled))
 		preempt(pfp);
 
 	raw_spin_unlock_irqrestore(&pfp->slock, flags);
@@ -1201,10 +1203,10 @@ static void pcp_lower_ceiling(struct pcp_semaphore* sem)
 
 	TRACE_CUR("PCP released sem %p\n", sem);
 
+	pcp_priority_inheritance();
+
 	/* Wake up all ceiling-blocked jobs that now pass the ceiling. */
 	pcp_resume_unblocked();
-
-	pcp_priority_inheritance();
 }
 
 static void pcp_update_prio_ceiling(struct pcp_semaphore* sem,
