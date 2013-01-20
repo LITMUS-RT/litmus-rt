@@ -28,8 +28,11 @@ extern atomic_t __log_seq_no;
 				TRACE_ARGS,  ## args)
 
 #define TRACE_TASK(t, fmt, args...)			\
-	TRACE("(%s/%d:%d) " fmt, (t)->comm, (t)->pid,	\
-	      (t)->rt_param.job_params.job_no,  ##args)
+	TRACE("(%s/%d:%d) " fmt,			 \
+	      t ? (t)->comm : "null",			 \
+	      t ? (t)->pid : 0,				 \
+	      t ? (t)->rt_param.job_params.job_no : 0,	 \
+	      ##args)
 
 #define TRACE_CUR(fmt, args...) \
 	TRACE_TASK(current, fmt, ## args)
