@@ -744,6 +744,23 @@ unsigned int __cpuinit init_intel_cacheinfo(struct cpuinfo_x86 *c)
 static DEFINE_PER_CPU(struct _cpuid4_info *, ici_cpuid4_info);
 #define CPUID4_INFO_IDX(x, y)	(&((per_cpu(ici_cpuid4_info, x))[y]))
 
+/* returns CPUs that share the index cache with cpu */
+int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, int index)
+{
+	int ret = 0;
+	struct _cpuid4_info *this_leaf;
+
+	if (index >= num_cache_leaves) {
+		index = num_cache_leaves - 1;
+		ret = index;
+	}
+
+	this_leaf = CPUID4_INFO_IDX(cpu,index);
+	cpumask_copy(mask, to_cpumask(this_leaf->shared_cpu_map));
+
+	return ret;
+}
+
 #ifdef CONFIG_SMP
 
 static int __cpuinit cache_shared_amd_cpu_map_setup(unsigned int cpu, int index)
