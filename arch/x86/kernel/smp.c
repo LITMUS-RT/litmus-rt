@@ -24,6 +24,8 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
+#include <litmus/debug_trace.h>
+
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
 #include <asm/mmu_context.h>
@@ -163,6 +165,16 @@ static int smp_stop_nmi_callback(unsigned int val, struct pt_regs *regs)
 	return NMI_HANDLED;
 }
 
+/* trigger timers on remote cpu */
+void smp_send_pull_timers(int cpu)
+{
+	if (unlikely(cpu_is_offline(cpu))) {
+		WARN_ON(1);
+		return;
+	}
+	apic->send_IPI_mask(cpumask_of(cpu), PULL_TIMERS_VECTOR);
+}
+
 /*
  * this function calls the 'stop' function on all other CPUs in the system.
  */
@@ -284,6 +296,17 @@ static int __init nonmi_ipi_setup(char *str)
 }
 
 __setup("nonmi_ipi", nonmi_ipi_setup);
+
+extern void hrtimer_pull(void);
+
+void smp_pull_timers_interrupt(struct pt_regs *regs)
+{
+	ack_APIC_irq();
+	irq_enter();
+	TRACE("pull timer interrupt\n");
+	hrtimer_pull();
+	irq_exit();
+}
 
 struct smp_ops smp_ops = {
 	.smp_prepare_boot_cpu	= native_smp_prepare_boot_cpu,
