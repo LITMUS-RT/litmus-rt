@@ -124,6 +124,12 @@
  */
 #define LOCAL_TIMER_VECTOR		0xef
 
+/*
+ * LITMUS^RT pull timers IRQ vector.
+ * Make sure it's not used by Linux.
+ */
+#define PULL_TIMERS_VECTOR		0xdf
+
 #define NR_VECTORS			 256
 
 #ifdef CONFIG_X86_LOCAL_APIC
