@@ -1183,6 +1183,8 @@ apicinterrupt CALL_FUNCTION_VECTOR \
 	call_function_interrupt smp_call_function_interrupt
 apicinterrupt RESCHEDULE_VECTOR \
 	reschedule_interrupt smp_reschedule_interrupt
+apicinterrupt PULL_TIMERS_VECTOR \
+	pull_timers_interrupt smp_pull_timers_interrupt
 #endif
 
 apicinterrupt ERROR_APIC_VECTOR \

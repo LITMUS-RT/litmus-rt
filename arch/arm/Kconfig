@@ -2249,5 +2249,8 @@ source "arch/arm/kvm/Kconfig"
 config ARCH_HAS_FEATHER_TRACE
 	def_bool n
 
+config ARCH_HAS_SEND_PULL_TIMERS
+	def_bool n
+
 source "litmus/Kconfig"
 

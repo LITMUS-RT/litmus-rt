@@ -176,6 +176,7 @@ enum  hrtimer_base_type {
  * @nr_hangs:		Total number of hrtimer interrupt hangs
  * @max_hang_time:	Maximum time spent in hrtimer_interrupt
  * @clock_base:		array of clock bases for this cpu
+ * @to_pull:		LITMUS^RT list of timers to be pulled on this cpu
  */
 struct hrtimer_cpu_base {
 	raw_spinlock_t			lock;
@@ -191,7 +192,31 @@ struct hrtimer_cpu_base {
 	ktime_t				max_hang_time;
 #endif
 	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
+	struct list_head		to_pull;
 };
+
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+
+#define HRTIMER_START_ON_INACTIVE	0
+#define HRTIMER_START_ON_QUEUED		1
+
+/*
+ * struct hrtimer_start_on_info - save timer info on remote cpu
+ * @list:	list of hrtimer_start_on_info on remote cpu (to_pull)
+ * @timer:	timer to be triggered on remote cpu
+ * @time:	time event
+ * @mode:	timer mode
+ * @state:	activity flag
+ */
+struct hrtimer_start_on_info {
+	struct list_head	list;
+	struct hrtimer		*timer;
+	ktime_t			time;
+	enum hrtimer_mode	mode;
+	atomic_t		state;
+};
+
+#endif
 
 static inline void hrtimer_set_expires(struct hrtimer *timer, ktime_t time)
 {
@@ -365,6 +390,13 @@ extern int
 __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 			 unsigned long delta_ns,
 			 const enum hrtimer_mode mode, int wakeup);
+
+#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+extern void hrtimer_start_on_info_init(struct hrtimer_start_on_info *info);
+extern int hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
+			struct hrtimer *timer, ktime_t time,
+			const enum hrtimer_mode mode);
+#endif
 
 extern int hrtimer_cancel(struct hrtimer *timer);
 extern int hrtimer_try_to_cancel(struct hrtimer *timer);

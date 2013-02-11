@@ -84,6 +84,11 @@ int smp_call_function_any(const struct cpumask *mask,
 void kick_all_cpus_sync(void);
 
 /*
+ * sends a 'pull timer' event to a remote CPU
+ */
+extern void smp_send_pull_timers(int cpu);
+
+/*
  * Generic and arch helpers
  */
 #ifdef CONFIG_USE_GENERIC_SMP_HELPERS
