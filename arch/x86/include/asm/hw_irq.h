@@ -77,6 +77,8 @@ extern void threshold_interrupt(void);
 extern void call_function_interrupt(void);
 extern void call_function_single_interrupt(void);
 
+extern void pull_timers_interrupt(void);
+
 /* IOAPIC */
 #define IO_APIC_IRQ(x) (((x) >= NR_IRQS_LEGACY) || ((1<<(x)) & io_apic_irqs))
 extern unsigned long io_apic_irqs;
@@ -166,6 +168,7 @@ extern asmlinkage void smp_irq_move_cleanup_interrupt(void);
 extern void smp_reschedule_interrupt(struct pt_regs *);
 extern void smp_call_function_interrupt(struct pt_regs *);
 extern void smp_call_function_single_interrupt(struct pt_regs *);
+extern void smp_pull_timers_interrupt(struct pt_regs *);
 #ifdef CONFIG_X86_32
 extern void smp_invalidate_interrupt(struct pt_regs *);
 #else

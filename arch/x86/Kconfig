@@ -2350,4 +2350,7 @@ source "lib/Kconfig"
 config ARCH_HAS_FEATHER_TRACE
 	def_bool y
 
+config ARCH_HAS_SEND_PULL_TIMERS
+	def_bool y
+
 source "litmus/Kconfig"

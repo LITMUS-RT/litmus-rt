@@ -48,6 +48,8 @@
 #include <linux/sched/rt.h>
 #include <linux/timer.h>
 
+#include <litmus/debug_trace.h>
+
 #include <asm/uaccess.h>
 
 #include <trace/events/timer.h>
@@ -1064,6 +1066,98 @@ hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode)
 }
 EXPORT_SYMBOL_GPL(hrtimer_start);
 
+#if defined(CONFIG_ARCH_HAS_SEND_PULL_TIMERS) && defined(CONFIG_SMP)
+
+/**
+ * hrtimer_start_on_info_init - Initialize hrtimer_start_on_info
+ */
+void hrtimer_start_on_info_init(struct hrtimer_start_on_info *info)
+{
+	memset(info, 0, sizeof(struct hrtimer_start_on_info));
+	atomic_set(&info->state, HRTIMER_START_ON_INACTIVE);
+}
+
+/**
+ *  hrtimer_pull - PULL_TIMERS_VECTOR callback on remote cpu
+ */
+void hrtimer_pull(void)
+{
+	struct hrtimer_cpu_base *base = &__get_cpu_var(hrtimer_bases);
+	struct hrtimer_start_on_info *info;
+	struct list_head *pos, *safe, list;
+
+	raw_spin_lock(&base->lock);
+	list_replace_init(&base->to_pull, &list);
+	raw_spin_unlock(&base->lock);
+
+	list_for_each_safe(pos, safe, &list) {
+		info = list_entry(pos, struct hrtimer_start_on_info, list);
+		TRACE("pulled timer 0x%x\n", info->timer);
+		list_del(pos);
+		hrtimer_start(info->timer, info->time, info->mode);
+	}
+}
+
+/**
+ *  hrtimer_start_on - trigger timer arming on remote cpu
+ *  @cpu:	remote cpu
+ *  @info:	save timer information for enqueuing on remote cpu
+ *  @timer:	timer to be pulled
+ *  @time:	expire time
+ *  @mode:	timer mode
+ */
+int hrtimer_start_on(int cpu, struct hrtimer_start_on_info* info,
+		struct hrtimer *timer, ktime_t time,
+		const enum hrtimer_mode mode)
+{
+	unsigned long flags;
+	struct hrtimer_cpu_base* base;
+	int in_use = 0, was_empty;
+
+	/* serialize access to info through the timer base */
+	lock_hrtimer_base(timer, &flags);
+
+	in_use = (atomic_read(&info->state) != HRTIMER_START_ON_INACTIVE);
+	if (!in_use) {
+		INIT_LIST_HEAD(&info->list);
+		info->timer = timer;
+		info->time  = time;
+		info->mode  = mode;
+		/* mark as in use */
+		atomic_set(&info->state, HRTIMER_START_ON_QUEUED);
+	}
+
+	unlock_hrtimer_base(timer, &flags);
+
+	if (!in_use) {
+		/* initiate pull  */
+		preempt_disable();
+		if (cpu == smp_processor_id()) {
+			/* start timer locally; we may get called
+			 * with rq->lock held, do not wake up anything
+			 */
+			TRACE("hrtimer_start_on: starting on local CPU\n");
+			__hrtimer_start_range_ns(info->timer, info->time,
+						 0, info->mode, 0);
+		} else {
+			TRACE("hrtimer_start_on: pulling to remote CPU\n");
+			base = &per_cpu(hrtimer_bases, cpu);
+			raw_spin_lock_irqsave(&base->lock, flags);
+			was_empty = list_empty(&base->to_pull);
+			list_add(&info->list, &base->to_pull);
+			raw_spin_unlock_irqrestore(&base->lock, flags);
+			if (was_empty)
+				/* only send IPI if other no else
+				 * has done so already
+				 */
+				smp_send_pull_timers(cpu);
+		}
+		preempt_enable();
+	}
+	return in_use;
+}
+
+#endif
 
 /**
  * hrtimer_try_to_cancel - try to deactivate a timer
@@ -1667,6 +1761,7 @@ static void __cpuinit init_hrtimers_cpu(int cpu)
 	}
 
 	hrtimer_init_hres(cpu_base);
+	INIT_LIST_HEAD(&cpu_base->to_pull);
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
