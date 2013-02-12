@@ -77,6 +77,11 @@ extern int tick_is_oneshot_available(void);
 extern struct tick_device *tick_get_device(int cpu);
 
 # ifdef CONFIG_HIGH_RES_TIMERS
+/* LITMUS^RT tick alignment */
+#define LINUX_DEFAULT_TICKS	0
+#define LITMUS_ALIGNED_TICKS	1
+#define	LITMUS_STAGGERED_TICKS	2
+
 extern int tick_init_highres(void);
 extern int tick_program_event(ktime_t expires, int force);
 extern void tick_setup_sched_timer(void);
