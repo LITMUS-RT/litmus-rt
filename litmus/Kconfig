@@ -2,6 +2,16 @@ menu "LITMUS^RT"
 
 menu "Scheduling"
 
+config PLUGIN_CEDF
+        bool "Clustered-EDF"
+	depends on X86 && SYSFS
+        default y
+        help
+          Include the Clustered EDF (C-EDF) plugin in the kernel.
+          This is appropriate for large platforms with shared caches.
+          On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
+          makes little sense since there aren't any shared caches.
+
 config RELEASE_MASTER
         bool "Release-master Support"
 	depends on ARCH_HAS_SEND_PULL_TIMERS && SMP
