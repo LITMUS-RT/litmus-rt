@@ -1118,12 +1118,56 @@ static int __init skew_tick(char *str)
 early_param("skew_tick", skew_tick);
 
 /**
+ * tick_set_quanta_type - get the quanta type as a boot option
+ * Default is standard setup with ticks staggered over first
+ * half of tick period.
+ */
+int quanta_type = LINUX_DEFAULT_TICKS;
+static int __init tick_set_quanta_type(char *str)
+{
+	if (strcmp("aligned", str) == 0) {
+		quanta_type = LITMUS_ALIGNED_TICKS;
+		printk(KERN_INFO "LITMUS^RT: setting aligned quanta\n");
+	}
+	else if (strcmp("staggered", str) == 0) {
+		quanta_type = LITMUS_STAGGERED_TICKS;
+		printk(KERN_INFO "LITMUS^RT: setting staggered quanta\n");
+	}
+	return 1;
+}
+early_param("quanta=", tick_set_quanta_type);
+
+u64 cpu_stagger_offset(int cpu)
+{
+	u64 offset = 0;
+	switch (quanta_type) {
+		case LITMUS_ALIGNED_TICKS:
+			offset = 0;
+			break;
+		case LITMUS_STAGGERED_TICKS:
+			offset = ktime_to_ns(tick_period);
+			do_div(offset, num_possible_cpus());
+			offset *= cpu;
+			break;
+		default:
+			/* default to Linux default behavior */
+			if (sched_skew_tick) {
+				offset = ktime_to_ns(tick_period) >> 1;
+				do_div(offset, num_possible_cpus());
+				offset *= cpu;
+			}
+	}
+	return offset;
+}
+
+/**
  * tick_setup_sched_timer - setup the tick emulation timer
  */
 void tick_setup_sched_timer(void)
 {
 	struct tick_sched *ts = &__get_cpu_var(tick_cpu_sched);
 	ktime_t now = ktime_get();
+	u64 offset;
 
 	/*
 	 * Emulate tick processing via per-CPU hrtimers:
@@ -1134,13 +1178,11 @@ void tick_setup_sched_timer(void)
 	/* Get the next period (per cpu) */
 	hrtimer_set_expires(&ts->sched_timer, tick_init_jiffy_update());
 
-	/* Offset the tick to avert jiffies_lock contention. */
-	if (sched_skew_tick) {
-		u64 offset = ktime_to_ns(tick_period) >> 1;
-		do_div(offset, num_possible_cpus());
-		offset *= smp_processor_id();
-		hrtimer_add_expires_ns(&ts->sched_timer, offset);
-	}
+	/* Offset must be set correctly to achieve desired quanta type. */
+	offset = cpu_stagger_offset(smp_processor_id());
+
+	/* Add the correct offset to expiration time */
+	hrtimer_add_expires_ns(&ts->sched_timer, offset);
 
 	for (;;) {
 		hrtimer_forward(&ts->sched_timer, now, tick_period);
