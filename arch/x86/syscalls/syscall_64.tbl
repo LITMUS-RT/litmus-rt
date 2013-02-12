@@ -321,6 +321,19 @@
 312	common	kcmp			sys_kcmp
 313	common	finit_module		sys_finit_module
 
+351	common	set_rt_task_param	sys_set_rt_task_param
+352	common	get_rt_task_param	sys_get_rt_task_param
+353	common	complete_job		sys_complete_job
+354	common	od_open			sys_od_open
+355	common	od_close		sys_od_close
+356	common	litmus_lock		sys_litmus_lock
+357	common	litmus_unlock		sys_litmus_unlock
+358	common	query_job_no		sys_query_job_no
+359	common	wait_for_job_release	sys_wait_for_job_release
+360	common	wait_for_ts_release	sys_wait_for_ts_release
+361	common	release_ts		sys_release_ts
+362	common	null_call		sys_null_call
+
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
 # for native 64-bit operation.
