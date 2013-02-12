@@ -56,6 +56,8 @@
 #include <linux/oom.h>
 #include <linux/compat.h>
 
+#include <litmus/litmus.h>
+
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1506,6 +1508,7 @@ static int do_execve_common(const char *filename,
 		goto out_unmark;
 
 	sched_exec();
+	litmus_exec();
 
 	bprm->file = file;
 	bprm->filename = filename;
