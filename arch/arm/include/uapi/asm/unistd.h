@@ -407,6 +407,9 @@
 #define __NR_kcmp			(__NR_SYSCALL_BASE+378)
 #define __NR_finit_module		(__NR_SYSCALL_BASE+379)
 
+#define __NR_LITMUS (__NR_SYSCALL_BASE+380)
+#include <litmus/unistd_32.h>
+
 /*
  * This may need to be greater than __NR_last_syscall+1 in order to
  * account for the padding in the syscall table
