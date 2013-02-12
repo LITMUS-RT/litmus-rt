@@ -357,3 +357,16 @@
 348	i386	process_vm_writev	sys_process_vm_writev		compat_sys_process_vm_writev
 349	i386	kcmp			sys_kcmp
 350	i386	finit_module		sys_finit_module
+
+351	i386	set_rt_task_param	sys_set_rt_task_param
+352	i386	get_rt_task_param	sys_get_rt_task_param
+353	i386	complete_job		sys_complete_job
+354	i386	od_open			sys_od_open
+355	i386	od_close		sys_od_close
+356	i386	litmus_lock		sys_litmus_lock
+357	i386	litmus_unlock		sys_litmus_unlock
+358	i386	query_job_no		sys_query_job_no
+359	i386	wait_for_job_release	sys_wait_for_job_release
+360	i386	wait_for_ts_release	sys_wait_for_ts_release
+361	i386	release_ts		sys_release_ts
+362	i386	null_call		sys_null_call
