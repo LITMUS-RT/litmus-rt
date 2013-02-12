@@ -12,6 +12,17 @@ config PLUGIN_CEDF
           On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
           makes little sense since there aren't any shared caches.
 
+config PLUGIN_PFAIR
+	bool "PFAIR"
+	depends on HIGH_RES_TIMERS && !NO_HZ
+	default y
+	help
+	  Include the PFAIR plugin (i.e., the PD^2 scheduler) in the kernel.
+	  The PFAIR plugin requires high resolution timers (for staggered quanta)
+	  and does not support NO_HZ (quanta could be missed when the system is idle).
+
+	  If unsure, say Yes.
+
 config RELEASE_MASTER
         bool "Release-master Support"
 	depends on ARCH_HAS_SEND_PULL_TIMERS
