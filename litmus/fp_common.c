@@ -32,7 +32,6 @@ int fp_higher_prio(struct task_struct* first,
 		return 0;
 	}
 
-
 	/* check for NULL tasks */
 	if (!first || !second)
 		return first && !second;
@@ -50,6 +49,15 @@ int fp_higher_prio(struct task_struct* first,
 	if (unlikely(second->rt_param.inh_task))
 		second_task = second->rt_param.inh_task;
 
+	/* Comparisons to itself are only possible with
+	 * priority inheritance when svc_preempt interrupt just
+	 * before scheduling (and everything that could follow in the
+	 * ready queue). Always favour the original job, as that one will just
+	 * suspend itself to resolve this.
+	 */
+	if(first_task == second_task)
+		return first_task == first;
+
 	/* Check for priority boosting. Tie-break by start of boosting.
 	 */
 	if (unlikely(is_priority_boosted(first_task))) {
@@ -65,11 +73,10 @@ int fp_higher_prio(struct task_struct* first,
 		/* second_task is boosted, first is not*/
 		return 0;
 
-#endif
-
-	/* Comparisons to itself are not expected; priority inheritance
-	 * should also not cause this to happen. */
+#else
+	/* No locks, no priority inheritance, no comparisons to itself */
 	BUG_ON(first_task == second_task);
+#endif
 
 	if (get_priority(first_task) < get_priority(second_task))
 		return 1;
