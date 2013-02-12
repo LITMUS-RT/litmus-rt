@@ -17,7 +17,8 @@ obj-y     = sched_plugin.o litmus.o \
 	    srp.o \
 	    bheap.o \
 	    binheap.o \
-	    ctrldev.o
+	    ctrldev.o \
+	    sched_psn_edf.o
 
 obj-$(CONFIG_SCHED_CPU_AFFINITY) += affinity.o
 
