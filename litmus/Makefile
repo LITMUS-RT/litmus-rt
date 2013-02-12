@@ -23,7 +23,7 @@ obj-y     = sched_plugin.o litmus.o \
 	    sched_psn_edf.o \
 	    sched_pfp.o
 
-
+obj-$(CONFIG_PLUGIN_CEDF) += sched_cedf.o
 
 obj-$(CONFIG_SCHED_CPU_AFFINITY) += affinity.o
 
