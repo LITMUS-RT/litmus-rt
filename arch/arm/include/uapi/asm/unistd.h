@@ -415,6 +415,9 @@
 #define __NR_bpf			(__NR_SYSCALL_BASE+386)
 #define __NR_execveat			(__NR_SYSCALL_BASE+387)
 
+#define __NR_LITMUS (__NR_SYSCALL_BASE+388)
+#include <litmus/unistd_32.h>
+
 /*
  * The following SWIs are ARM private.
  */
