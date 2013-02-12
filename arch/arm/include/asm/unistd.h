@@ -15,7 +15,8 @@
 
 #include <uapi/asm/unistd.h>
 
-#define __NR_syscalls  (380)
+#define __NR_syscalls  (380 + NR_litmus_syscalls)
+
 #define __ARM_NR_cmpxchg		(__ARM_NR_BASE+0x00fff0)
 
 #define __ARCH_WANT_STAT64
