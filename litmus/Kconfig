@@ -24,6 +24,40 @@ config FEATHER_TRACE
 	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
 	  actually enable any events.
 
+config SCHED_TASK_TRACE
+	bool "Trace real-time tasks"
+	depends on FEATHER_TRACE
+	default y
+	help
+	  Include support for the sched_trace_XXX() tracing functions. This
+          allows the collection of real-time task events such as job
+	  completions, job releases, early completions, etc. This results in  a
+	  small overhead in the scheduling code. Disable if the overhead is not
+	  acceptable (e.g., benchmarking).
+
+	  Say Yes for debugging.
+	  Say No for overhead tracing.
+
+config SCHED_TASK_TRACE_SHIFT
+       int "Buffer size for sched_trace_xxx() events"
+       depends on SCHED_TASK_TRACE
+       range 8 13
+       default 9
+       help
+
+         Select the buffer size of sched_trace_xxx() events as a power of two.
+	 These buffers are statically allocated as per-CPU data. Each event
+	 requires 24 bytes storage plus one additional flag byte. Too large
+	 buffers can cause issues with the per-cpu allocator (and waste
+	 memory). Too small buffers can cause scheduling events to be lost. The
+	 "right" size is workload dependent and depends on the number of tasks,
+	 each task's period, each task's number of suspensions, and how often
+	 the buffer is flushed.
+
+	 Examples: 12 =>   4k events
+		   10 =>   1k events
+		    8 =>  512 events
+
 config SCHED_OVERHEAD_TRACE
 	bool "Record timestamps for overhead measurements"
 	depends on FEATHER_TRACE
