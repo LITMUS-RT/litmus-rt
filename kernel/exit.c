@@ -59,6 +59,8 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+extern void exit_od_table(struct task_struct *t);
+
 static void exit_mm(struct task_struct * tsk);
 
 static void __unhash_process(struct task_struct *p, bool group_dead)
@@ -787,6 +789,8 @@ void do_exit(long code)
 	if (group_dead)
 		tty_audit_exit();
 	audit_free(tsk);
+
+	exit_od_table(tsk);
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);

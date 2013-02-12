@@ -81,6 +81,9 @@
 
 #include <trace/events/sched.h>
 
+#include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
@@ -238,6 +241,9 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(tsk == current);
 
 	security_task_free(tsk);
+
+	exit_litmus(tsk);
+
 	exit_creds(tsk);
 	delayacct_tsk_free(tsk);
 	put_signal_struct(tsk->signal);
@@ -311,6 +317,9 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 		goto free_ti;
 
 	tsk->stack = ti;
+
+	/* Don't let the new task be a real-time task. */
+	litmus_fork(tsk);
 
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
