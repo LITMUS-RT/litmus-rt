@@ -194,24 +194,28 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 2,			\
 				do_sched_trace_task_param, t);		\
+		trace_litmus_task_param(t);				\
 	} while (0)
 
 #define sched_trace_task_release(t)					\
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 3,			\
 				do_sched_trace_task_release, t);	\
+		trace_litmus_task_release(t);				\
 	} while (0)
 
 #define sched_trace_task_switch_to(t)					\
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 4,			\
 			do_sched_trace_task_switch_to, t);		\
+		trace_litmus_switch_to(t);				\
 	} while (0)
 
 #define sched_trace_task_switch_away(t)					\
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 5,			\
 			do_sched_trace_task_switch_away, t);		\
+		trace_litmus_switch_away(t);				\
 	} while (0)
 
 #define sched_trace_task_completion(t, forced)				\
@@ -219,18 +223,21 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 		SCHED_TRACE2(SCHED_TRACE_BASE_ID + 6,			\
 				do_sched_trace_task_completion, t,	\
 				(unsigned long) forced);		\
+		trace_litmus_task_completion(t, forced);		\
 	} while (0)
 
 #define sched_trace_task_block(t)					\
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 7,			\
 			do_sched_trace_task_block, t);			\
+		trace_litmus_task_block(t);				\
 	} while (0)
 
 #define sched_trace_task_resume(t)					\
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 8,			\
 				do_sched_trace_task_resume, t);		\
+		trace_litmus_task_resume(t);				\
 	} while (0)
 
 #define sched_trace_action(t, action)					\
@@ -242,6 +249,7 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	do {								\
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 10,			\
 			do_sched_trace_sys_release, when);		\
+		trace_litmus_sys_release(when);				\
 	} while (0)
 
 #define sched_trace_quantum_boundary() /* NOT IMPLEMENTED */
