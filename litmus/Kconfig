@@ -58,6 +58,24 @@ config SCHED_TASK_TRACE_SHIFT
 		   10 =>   1k events
 		    8 =>  512 events
 
+config SCHED_LITMUS_TRACEPOINT
+	bool "Enable Event/Tracepoint Tracing for real-time task tracing"
+	depends on TRACEPOINTS
+	default n
+	help
+	  Enable kernel-style events (tracepoint) for Litmus. Litmus events
+	  trace the same functions as the above sched_trace_XXX(), but can
+	  be enabled independently.
+	  Litmus tracepoints can be recorded and analyzed together (single
+	  time reference) with all other kernel tracing events (e.g.,
+	  sched:sched_switch, etc.).
+
+	  This also enables a quick way to visualize schedule traces using
+	  trace-cmd utility and kernelshark visualizer.
+
+	  Say Yes for debugging and visualization purposes.
+	  Say No for overhead tracing.
+
 config SCHED_OVERHEAD_TRACE
 	bool "Record timestamps for overhead measurements"
 	depends on FEATHER_TRACE
