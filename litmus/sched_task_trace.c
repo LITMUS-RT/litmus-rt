@@ -15,6 +15,9 @@
 #include <litmus/feather_trace.h>
 #include <litmus/ftdev.h>
 
+#ifdef CONFIG_SCHED_LITMUS_TRACEPOINT
+#define CREATE_TRACE_POINTS
+#endif
 
 #define NO_EVENTS		(1 << CONFIG_SCHED_TASK_TRACE_SHIFT)
 
