@@ -1292,7 +1292,9 @@ int pfp_pcp_open(struct litmus_lock* l, void* __user config)
 		/* we need to know the real-time priority */
 		return -EPERM;
 
-	if (get_user(cpu, (int*) config))
+	if (!config)
+		cpu = get_partition(t);
+	else if (get_user(cpu, (int*) config))
 		return -EFAULT;
 
 	/* make sure the resource location matches */
@@ -1613,7 +1615,9 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 
         case PCP_SEM:
 		/* Priority Ceiling Protocol */
-		if (get_user(cpu, (int*) config))
+		if (!config)
+			cpu = get_partition(current);
+		else if (get_user(cpu, (int*) config))
 			return -EFAULT;
 
 		if (!cpu_online(cpu))
