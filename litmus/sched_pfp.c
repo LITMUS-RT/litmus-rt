@@ -555,6 +555,11 @@ int pfp_fmlp_lock(struct litmus_lock* l)
 	if (!is_realtime(t))
 		return -EPERM;
 
+	/* prevent nested lock acquisition --- not supported by FMLP */
+	if (tsk_rt(t)->num_locks_held ||
+	    tsk_rt(t)->num_local_locks_held)
+		return -EBUSY;
+
 	spin_lock_irqsave(&sem->wait.lock, flags);
 
 	/* tie-break by this point in time */
@@ -599,6 +604,8 @@ int pfp_fmlp_lock(struct litmus_lock* l)
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 	}
 
+	tsk_rt(t)->num_locks_held++;
+
 	return 0;
 }
 
@@ -615,6 +622,8 @@ int pfp_fmlp_unlock(struct litmus_lock* l)
 		err = -EINVAL;
 		goto out;
 	}
+
+	tsk_rt(t)->num_locks_held--;
 
 	/* we lose the benefit of priority boosting */
 
@@ -790,6 +799,11 @@ int pfp_mpcp_lock(struct litmus_lock* l)
 	if (!is_realtime(t))
 		return -EPERM;
 
+	/* prevent nested lock acquisition */
+	if (tsk_rt(t)->num_locks_held ||
+	    tsk_rt(t)->num_local_locks_held)
+		return -EBUSY;
+
 	preempt_disable();
 
 	if (sem->vspin)
@@ -840,6 +854,8 @@ int pfp_mpcp_lock(struct litmus_lock* l)
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 	}
 
+	tsk_rt(t)->num_locks_held++;
+
 	return 0;
 }
 
@@ -856,6 +872,9 @@ int pfp_mpcp_unlock(struct litmus_lock* l)
 		err = -EINVAL;
 		goto out;
 	}
+
+
+	tsk_rt(t)->num_locks_held--;
 
 	/* we lose the benefit of priority boosting */
 
@@ -1249,11 +1268,17 @@ int pfp_pcp_lock(struct litmus_lock* l)
 	if (!is_realtime(t) || from != to)
 		return -EPERM;
 
+	/* prevent nested lock acquisition in global critical section */
+	if (tsk_rt(t)->num_locks_held)
+		return -EBUSY;
+
 	preempt_disable();
 
 	pcp_raise_ceiling(sem, eprio);
 
 	preempt_enable();
+
+	tsk_rt(t)->num_local_locks_held++;
 
 	return 0;
 }
@@ -1271,6 +1296,8 @@ int pfp_pcp_unlock(struct litmus_lock* l)
 		err = -EINVAL;
 		goto out;
 	}
+
+	tsk_rt(t)->num_local_locks_held--;
 
 	/* give it back */
 	pcp_lower_ceiling(sem);
@@ -1428,6 +1455,11 @@ int pfp_dpcp_lock(struct litmus_lock* l)
 	if (!is_realtime(t))
 		return -EPERM;
 
+	/* prevent nested lock accquisition */
+	if (tsk_rt(t)->num_locks_held ||
+	    tsk_rt(t)->num_local_locks_held)
+		return -EBUSY;
+
 	preempt_disable();
 
 	/* Priority-boost ourself *before* we suspend so that
@@ -1443,6 +1475,8 @@ int pfp_dpcp_lock(struct litmus_lock* l)
 	sem->owner_cpu = from;
 
 	preempt_enable();
+
+	tsk_rt(t)->num_locks_held++;
 
 	return 0;
 }
@@ -1460,6 +1494,8 @@ int pfp_dpcp_unlock(struct litmus_lock* l)
 		err = -EINVAL;
 		goto out;
 	}
+
+	tsk_rt(t)->num_locks_held--;
 
 	home = sem->owner_cpu;
 

@@ -419,6 +419,11 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 	if (!is_realtime(t))
 		return -EPERM;
 
+	/* prevent nested lock acquisition --- not supported by FMLP */
+	if (tsk_rt(t)->num_locks_held ||
+	    tsk_rt(t)->num_local_locks_held)
+		return -EBUSY;
+
 	spin_lock_irqsave(&sem->wait.lock, flags);
 
 	if (sem->owner) {
@@ -459,6 +464,8 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 		spin_unlock_irqrestore(&sem->wait.lock, flags);
 	}
 
+	tsk_rt(t)->num_locks_held++;
+
 	return 0;
 }
 
@@ -475,6 +482,8 @@ int psnedf_fmlp_unlock(struct litmus_lock* l)
 		err = -EINVAL;
 		goto out;
 	}
+
+	tsk_rt(t)->num_locks_held--;
 
 	/* we lose the benefit of priority boosting */
 

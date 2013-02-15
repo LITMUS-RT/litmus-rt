@@ -168,6 +168,11 @@ struct rt_param {
 	unsigned int		priority_boosted:1;
 	/* If so, when did this start? */
 	lt_t			boost_start_time;
+
+	/* How many LITMUS^RT locks does the task currently hold/wait for? */
+	unsigned int		num_locks_held;
+	/* How many PCP/SRP locks does the task currently hold/wait for? */
+	unsigned int		num_local_locks_held;
 #endif
 
 	/* user controlled parameters */

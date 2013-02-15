@@ -98,10 +98,15 @@ static void srp_add_prio(struct srp* srp, struct srp_priority* prio)
 
 static int lock_srp_semaphore(struct litmus_lock* l)
 {
+	struct task_struct* t = current;
 	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
 
-	if (!is_realtime(current))
+	if (!is_realtime(t))
 		return -EPERM;
+
+	/* prevent acquisition of local locks in global critical sections */
+	if (tsk_rt(t)->num_locks_held)
+		return -EBUSY;
 
 	preempt_disable();
 
@@ -111,8 +116,10 @@ static int lock_srp_semaphore(struct litmus_lock* l)
 	/* SRP invariant: all resources available */
 	BUG_ON(sem->owner != NULL);
 
-	sem->owner = current;
+	sem->owner = t;
 	TRACE_CUR("acquired srp 0x%p\n", sem);
+
+	tsk_rt(t)->num_local_locks_held++;
 
 	preempt_enable();
 
@@ -121,12 +128,13 @@ static int lock_srp_semaphore(struct litmus_lock* l)
 
 static int unlock_srp_semaphore(struct litmus_lock* l)
 {
+	struct task_struct* t = current;
 	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
 	int err = 0;
 
 	preempt_disable();
 
-	if (sem->owner != current) {
+	if (sem->owner != t) {
 		err = -EINVAL;
 	} else {
 		/* Determine new system priority ceiling for this CPU. */
@@ -138,6 +146,8 @@ static int unlock_srp_semaphore(struct litmus_lock* l)
 		/* Wake tasks on this CPU, if they exceed current ceiling. */
 		TRACE_CUR("released srp 0x%p\n", sem);
 		wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
+
+		tsk_rt(t)->num_local_locks_held--;
 	}
 
 	preempt_enable();
