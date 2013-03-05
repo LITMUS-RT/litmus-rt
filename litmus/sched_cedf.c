@@ -652,7 +652,8 @@ static void cedf_task_exit(struct task_struct * t)
 
 static long cedf_admit_task(struct task_struct* tsk)
 {
-	return task_cpu(tsk) == tsk->rt_param.task_params.cpu ? 0 : -EINVAL;
+	return (remote_cluster(task_cpu(tsk)) == task_cpu_cluster(tsk)) ?
+			0 : -EINVAL;
 }
 
 /* total number of cluster */
