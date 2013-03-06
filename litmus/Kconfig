@@ -79,6 +79,27 @@ config SCHED_CPU_AFFINITY
 
 	  Say Yes if unsure.
 
+config ALLOW_EARLY_RELEASE
+	bool "Allow Early Releasing"
+	default y
+	help
+	  Allow tasks to release jobs early (while still maintaining job
+	  precedence constraints). Only supported by EDF schedulers. Early
+	  releasing must be explicitly requested by real-time tasks via
+	  the task_params passed to sys_set_task_rt_param().
+
+	  Early releasing can improve job response times while maintaining
+	  real-time correctness. However, it can easily peg your CPUs
+	  since tasks never suspend to wait for their next job. As such, early
+	  releasing is really only useful in the context of implementing
+	  bandwidth servers, interrupt handling threads, or short-lived
+	  computations.
+
+	  Beware that early releasing may affect real-time analysis
+	  if using locking protocols or I/O.
+
+	  Say Yes if unsure.
+
 choice
 	prompt "EDF Tie-Break Behavior"
 	default EDF_TIE_BREAK_LATENESS_NORM

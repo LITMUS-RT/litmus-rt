@@ -33,6 +33,22 @@ typedef enum {
 	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
+typedef enum {
+	/* Jobs are released periodically (provided job precedence
+       constraints are met). */
+	PERIODIC,
+
+	/* Jobs are released sporadically (provided job precedence
+       constraints are met). NOTE: Litmus currently does not
+       distinguish between periodic and sporadic tasks. */
+	SPORADIC = PERIODIC,
+
+    /* Jobs are released immediatly after meeting precedence
+       constraints. Beware this can peg your CPUs if used in
+       the wrong applications. */
+	EARLY
+} release_policy_t;
+
 /* We use the common priority interpretation "lower index == higher priority",
  * which is commonly used in fixed-priority schedulability analysis papers.
  * So, a numerically lower priority value implies higher scheduling priority,
@@ -61,7 +77,8 @@ struct rt_task {
 	unsigned int	cpu;
 	unsigned int	priority;
 	task_class_t	cls;
-	budget_policy_t budget_policy; /* ignored by pfair */
+	budget_policy_t  budget_policy;  /* ignored by pfair */
+	release_policy_t release_policy; /* ignored by non-edf */
 };
 
 union np_flag {

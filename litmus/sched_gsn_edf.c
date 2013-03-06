@@ -251,7 +251,7 @@ static noinline void requeue(struct task_struct* task)
 	/* sanity check before insertion */
 	BUG_ON(is_queued(task));
 
-	if (is_released(task, litmus_clock()))
+	if (wants_early_release(task) || is_released(task, litmus_clock()))
 		__add_ready(&gsnedf, task);
 	else {
 		/* it has got to wait */
@@ -344,7 +344,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	tsk_rt(t)->completed = 1;
 	/* prepare for next period */
 	prepare_for_next_period(t);
-	if (is_released(t, litmus_clock()))
+	if (wants_early_release(t) || is_released(t, litmus_clock()))
 		sched_trace_task_release(t);
 	/* unlink */
 	unlink(t);

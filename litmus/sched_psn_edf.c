@@ -61,7 +61,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
 
 	tsk_rt(t)->completed = 0;
-	if (is_released(t, litmus_clock()))
+	if (wants_early_release(t) || is_released(t, litmus_clock()))
 		__add_ready(edf, t);
 	else
 		add_release(edf, t); /* it has got to wait */

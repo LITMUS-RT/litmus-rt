@@ -63,6 +63,12 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 
+#ifdef CONFIG_ALLOW_EARLY_RELEASE
+#define wants_early_release(t) (tsk_rt(t)->task_params.release_policy == EARLY)
+#else
+#define wants_early_release(t) (0)
+#endif
+
 #define is_hrt(t)     		\
 	(tsk_rt(t)->task_params.cls == RT_CLASS_HARD)
 #define is_srt(t)     		\
