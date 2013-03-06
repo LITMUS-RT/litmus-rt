@@ -56,6 +56,7 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_partition(t) 	(tsk_rt(t)->task_params.cpu)
 #define get_priority(t) 	(tsk_rt(t)->task_params.priority)
 #define get_class(t)        (tsk_rt(t)->task_params.cls)
+#define get_release_policy(t) (tsk_rt(t)->task_params.release_policy)
 
 /* job_param macros */
 #define get_exec_time(t)    (tsk_rt(t)->job_params.exec_time)
@@ -63,10 +64,13 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 
+/* release policy macros */
+#define is_periodic(t)		(get_release_policy(t) == PERIODIC)
+#define is_sporadic(t)		(get_release_policy(t) == SPORADIC)
 #ifdef CONFIG_ALLOW_EARLY_RELEASE
-#define wants_early_release(t) (tsk_rt(t)->task_params.release_policy == EARLY)
+#define is_early_releasing(t)	(get_release_policy(t) == EARLY)
 #else
-#define wants_early_release(t) (0)
+#define is_early_releasing(t)	(0)
 #endif
 
 #define is_hrt(t)     		\

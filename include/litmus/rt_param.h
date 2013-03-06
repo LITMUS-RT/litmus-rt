@@ -33,19 +33,21 @@ typedef enum {
 	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
+/* Release behaviors for jobs. PERIODIC and EARLY jobs
+   must end by calling sys_complete_job() (or equivalent)
+   to set up their next release and deadline. */
 typedef enum {
+	/* Jobs are released sporadically (provided job precedence
+       constraints are met). */
+	SPORADIC,
+
 	/* Jobs are released periodically (provided job precedence
        constraints are met). */
 	PERIODIC,
 
-	/* Jobs are released sporadically (provided job precedence
-       constraints are met). NOTE: Litmus currently does not
-       distinguish between periodic and sporadic tasks. */
-	SPORADIC = PERIODIC,
-
-    /* Jobs are released immediatly after meeting precedence
+    /* Jobs are released immediately after meeting precedence
        constraints. Beware this can peg your CPUs if used in
-       the wrong applications. */
+       the wrong applications. Only supported by EDF schedulers. */
 	EARLY
 } release_policy_t;
 
@@ -78,7 +80,7 @@ struct rt_task {
 	unsigned int	priority;
 	task_class_t	cls;
 	budget_policy_t  budget_policy;  /* ignored by pfair */
-	release_policy_t release_policy; /* ignored by non-edf */
+	release_policy_t release_policy;
 };
 
 union np_flag {

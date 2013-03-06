@@ -251,7 +251,7 @@ static noinline void requeue(struct task_struct* task)
 	/* sanity check before insertion */
 	BUG_ON(is_queued(task));
 
-	if (wants_early_release(task) || is_released(task, litmus_clock()))
+	if (is_early_releasing(task) || is_released(task, litmus_clock()))
 		__add_ready(&gsnedf, task);
 	else {
 		/* it has got to wait */
@@ -344,7 +344,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	tsk_rt(t)->completed = 1;
 	/* prepare for next period */
 	prepare_for_next_period(t);
-	if (wants_early_release(t) || is_released(t, litmus_clock()))
+	if (is_early_releasing(t) || is_released(t, litmus_clock()))
 		sched_trace_task_release(t);
 	/* unlink */
 	unlink(t);
@@ -578,7 +578,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	now = litmus_clock();
-	if (is_tardy(task, now)) {
+	if (is_sporadic(task) && is_tardy(task, now)) {
 		/* new sporadic release */
 		release_at(task, now);
 		sched_trace_task_release(task);

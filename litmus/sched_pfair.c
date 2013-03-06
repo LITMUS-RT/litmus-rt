@@ -710,7 +710,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	 */
 	requeue = tsk_rt(t)->flags == RT_F_REQUEUE;
 	now = litmus_clock();
-	if (lt_before(get_deadline(t), now)) {
+	if (is_tardy(t, now)) {
 		TRACE_TASK(t, "sporadic release!\n");
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));

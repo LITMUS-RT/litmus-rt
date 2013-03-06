@@ -343,7 +343,7 @@ static void pfp_task_wake_up(struct task_struct *task)
 	BUG_ON(is_queued(task));
 #endif
 	now = litmus_clock();
-	if (is_tardy(task, now)
+	if (is_sporadic(task) && is_tardy(task, now)
 #ifdef CONFIG_LITMUS_LOCKING
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring

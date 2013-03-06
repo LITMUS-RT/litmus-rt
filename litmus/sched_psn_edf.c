@@ -61,7 +61,7 @@ static void requeue(struct task_struct* t, rt_domain_t *edf)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
 
 	tsk_rt(t)->completed = 0;
-	if (wants_early_release(t) || is_released(t, litmus_clock()))
+	if (is_early_releasing(t) || is_released(t, litmus_clock()))
 		__add_ready(edf, t);
 	else
 		add_release(edf, t); /* it has got to wait */
@@ -320,7 +320,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	raw_spin_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(is_queued(task));
 	now = litmus_clock();
-	if (is_tardy(task, now)
+	if (is_sporadic(task) && is_tardy(task, now)
 #ifdef CONFIG_LITMUS_LOCKING
 	/* We need to take suspensions because of semaphores into
 	 * account! If a job resumes after being suspended due to acquiring
