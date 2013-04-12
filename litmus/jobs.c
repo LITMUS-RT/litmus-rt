@@ -28,7 +28,7 @@ void prepare_for_next_period(struct task_struct *t)
 	 * release and deadline. Lateness may be negative.
 	 */
 	t->rt_param.job_params.lateness =
-		(long long)litmus_clock() - 
+		(long long)litmus_clock() -
 		(long long)t->rt_param.job_params.deadline;
 
 	setup_release(t, get_release(t) + get_rt_period(t));

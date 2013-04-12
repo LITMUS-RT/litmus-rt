@@ -29,7 +29,7 @@ static inline int requeue_preempted_job(struct task_struct* t)
 	/* Add task to ready queue only if not subject to budget enforcement or
 	 * if the job has budget remaining. t may be NULL.
 	 */
-	return t && (!budget_exhausted(t) || !budget_enforced(t));
+	return t && !is_completed(t) && (!budget_exhausted(t) || !budget_enforced(t));
 }
 
 #endif

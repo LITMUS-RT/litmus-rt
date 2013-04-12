@@ -171,7 +171,6 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 
 	/* Link new task to CPU. */
 	if (linked) {
-		tsk_rt(linked)->completed = 0;
 		/* handle task is already scheduled somewhere! */
 		on_cpu = linked->rt_param.scheduled_on;
 		if (on_cpu != NO_CPU) {
@@ -350,7 +349,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	TRACE_TASK(t, "job_completion().\n");
 
 	/* set flags */
-	tsk_rt(t)->completed = 1;
+	tsk_rt(t)->completed = 0;
 	/* prepare for next period */
 	prepare_for_next_period(t);
 	if (is_early_releasing(t) || is_released(t, litmus_clock()))
