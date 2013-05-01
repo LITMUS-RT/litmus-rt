@@ -39,16 +39,16 @@ typedef enum {
 typedef enum {
 	/* Jobs are released sporadically (provided job precedence
        constraints are met). */
-	SPORADIC,
+	TASK_SPORADIC,
 
 	/* Jobs are released periodically (provided job precedence
        constraints are met). */
-	PERIODIC,
+	TASK_PERIODIC,
 
     /* Jobs are released immediately after meeting precedence
        constraints. Beware this can peg your CPUs if used in
        the wrong applications. Only supported by EDF schedulers. */
-	EARLY
+	TASK_EARLY
 } release_policy_t;
 
 /* We use the common priority interpretation "lower index == higher priority",

@@ -65,10 +65,10 @@ void litmus_exit_task(struct task_struct *tsk);
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 
 /* release policy macros */
-#define is_periodic(t)		(get_release_policy(t) == PERIODIC)
-#define is_sporadic(t)		(get_release_policy(t) == SPORADIC)
+#define is_periodic(t)		(get_release_policy(t) == TASK_PERIODIC)
+#define is_sporadic(t)		(get_release_policy(t) == TASK_SPORADIC)
 #ifdef CONFIG_ALLOW_EARLY_RELEASE
-#define is_early_releasing(t)	(get_release_policy(t) == EARLY)
+#define is_early_releasing(t)	(get_release_policy(t) == TASK_EARLY)
 #else
 #define is_early_releasing(t)	(0)
 #endif
