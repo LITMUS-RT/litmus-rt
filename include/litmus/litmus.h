@@ -45,8 +45,14 @@ void litmus_exit_task(struct task_struct *tsk);
 #define tsk_rt(t)		(&(t)->rt_param)
 
 /*	Realtime utility macros */
+#ifdef CONFIG_LITMUS_LOCKING
 #define is_priority_boosted(t)  (tsk_rt(t)->priority_boosted)
 #define get_boost_start(t)  (tsk_rt(t)->boost_start_time)
+#else
+#define is_priority_boosted(t)  0
+#define get_boost_start(t)      0
+#endif
+
 
 /* task_params macros */
 #define get_exec_cost(t)  	(tsk_rt(t)->task_params.exec_cost)
