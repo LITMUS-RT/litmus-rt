@@ -152,7 +152,9 @@ asmlinkage long sys_release_ts(lt_t __user *__delay)
 	ret = copy_from_user(&delay, __delay, sizeof(delay));
 	if (ret == 0) {
 		/* round up to next larger integral millisecond */
-		start_time = ((litmus_clock() / ONE_MS) + 1) * ONE_MS;
+		start_time = litmus_clock();
+		do_div(start_time, ONE_MS);
+		start_time *= ONE_MS;
 		ret = do_release_ts(start_time + delay);
 	}
 
