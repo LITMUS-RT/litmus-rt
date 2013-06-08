@@ -281,7 +281,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 
 /*	Prepare a task for running in RT mode
  */
-static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
+static void psnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 {
 	rt_domain_t* 		edf  = task_edf(t);
 	psnedf_domain_t* 	pedf = task_pedf(t);
@@ -297,14 +297,21 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int running)
 	 * code will try to wake it up with fatal consequences.
 	 */
 	raw_spin_lock_irqsave(&pedf->slock, flags);
-	if (running) {
-		/* there shouldn't be anything else running at the time */
+	if (is_scheduled) {
+		/* there shouldn't be anything else scheduled at the time */
 		BUG_ON(pedf->scheduled);
 		pedf->scheduled = t;
 	} else {
-		requeue(t, edf);
-		/* maybe we have to reschedule */
-		psnedf_preempt_check(pedf);
+		/* !is_scheduled means it is not scheduled right now, but it
+		 * does not mean that it is suspended. If it is not suspended,
+		 * it still needs to be requeued. If it is suspended, there is
+		 * nothing that we need to do as it will be handled by the
+		 * wake_up() handler. */
+		if (is_running(t)) {
+			requeue(t, edf);
+			/* maybe we have to reschedule */
+			psnedf_preempt_check(pedf);
+		}
 	}
 	raw_spin_unlock_irqrestore(&pedf->slock, flags);
 }
