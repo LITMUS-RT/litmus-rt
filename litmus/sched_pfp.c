@@ -296,7 +296,7 @@ static void pfp_finish_switch(struct task_struct *prev)
 
 /*	Prepare a task for running in RT mode
  */
-static void pfp_task_new(struct task_struct * t, int on_rq, int running)
+static void pfp_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 {
 	pfp_domain_t* 	pfp = task_pfp(t);
 	unsigned long		flags;
@@ -307,15 +307,12 @@ static void pfp_task_new(struct task_struct * t, int on_rq, int running)
 	/* setup job parameters */
 	release_at(t, litmus_clock());
 
-	/* The task should be running in the queue, otherwise signal
-	 * code will try to wake it up with fatal consequences.
-	 */
 	raw_spin_lock_irqsave(&pfp->slock, flags);
-	if (running) {
+	if (is_scheduled) {
 		/* there shouldn't be anything else running at the time */
 		BUG_ON(pfp->scheduled);
 		pfp->scheduled = t;
-	} else {
+	} else if (is_running(t)) {
 		requeue(t, pfp);
 		/* maybe we have to reschedule */
 		pfp_preempt_check(pfp);
