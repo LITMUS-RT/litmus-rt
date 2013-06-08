@@ -661,7 +661,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	return next;
 }
 
-static void pfair_task_new(struct task_struct * t, int on_rq, int running)
+static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 {
 	unsigned long flags;
 	struct pfair_cluster* cluster;
@@ -675,13 +675,21 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int running)
 	prepare_release(t, cluster->pfair_time + 1);
 
 	t->rt_param.scheduled_on = NO_CPU;
+	t->rt_param.linked_on    = NO_CPU;
 
-	if (running) {
+	if (is_scheduled) {
 #ifdef CONFIG_RELEASE_MASTER
 		if (task_cpu(t) != cluster->pfair.release_master)
 #endif
 			t->rt_param.scheduled_on = task_cpu(t);
+	}
+
+	if (is_running(t)) {
+		tsk_rt(t)->present = 1;
 		__add_ready(&cluster->pfair, t);
+	} else {
+		tsk_rt(t)->present = 0;
+		tsk_rt(t)->flags = RT_F_REQUEUE;
 	}
 
 	check_preempt(t);
