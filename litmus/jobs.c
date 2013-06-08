@@ -32,6 +32,7 @@ void prepare_for_next_period(struct task_struct *t)
 		(long long)t->rt_param.job_params.deadline;
 
 	setup_release(t, get_release(t) + get_rt_period(t));
+	tsk_rt(t)->dont_requeue = 0;
 }
 
 void release_at(struct task_struct *t, lt_t start)
