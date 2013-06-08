@@ -1657,7 +1657,7 @@ long hrtimer_nanosleep(struct timespec *rqtp, struct timespec __user *rmtp,
 	unsigned long slack;
 
 	slack = current->timer_slack_ns;
-	if (rt_task(current))
+	if (rt_task(current) || is_realtime(current))
 		slack = 0;
 
 	hrtimer_init_on_stack(&t.timer, clockid, mode);
