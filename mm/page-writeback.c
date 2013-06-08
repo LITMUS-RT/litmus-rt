@@ -36,6 +36,8 @@
 #include <linux/pagevec.h>
 #include <trace/events/writeback.h>
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * After a CPU has dirtied this many pages, balance_dirty_pages_ratelimited
  * will look to see if it needs to force writeback or throttling.
@@ -429,7 +431,7 @@ void global_dirty_limits(unsigned long *pbackground, unsigned long *pdirty)
 	if (background >= dirty)
 		background = dirty / 2;
 	tsk = current;
-	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk)) {
+	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk) || is_realtime(tsk)) {
 		background += background / 4;
 		dirty += dirty / 4;
 	}

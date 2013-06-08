@@ -58,6 +58,8 @@
 #include <linux/memcontrol.h>
 #include <linux/prefetch.h>
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
@@ -2038,7 +2040,8 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 		 * See also cpuset_zone_allowed() comment in kernel/cpuset.c.
 		 */
 		alloc_flags &= ~ALLOC_CPUSET;
-	} else if (unlikely(rt_task(current)) && !in_interrupt())
+	} else if (unlikely(rt_task(current) || is_realtime(current))
+		   && !in_interrupt())
 		alloc_flags |= ALLOC_HARDER;
 
 	if (likely(!(gfp_mask & __GFP_NOMEMALLOC))) {
