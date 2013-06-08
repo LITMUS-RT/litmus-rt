@@ -160,7 +160,7 @@ static void job_completion(struct task_struct* t, int forced)
 	sched_trace_task_completion(t,forced);
 	TRACE_TASK(t, "job_completion().\n");
 
-	tsk_rt(t)->completed = 1;
+	tsk_rt(t)->completed = 0;
 	prepare_for_next_period(t);
 }
 
@@ -266,7 +266,6 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 
 	if (next) {
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
-		tsk_rt(next)->completed = 0;
 	} else {
 		TRACE("becoming idle at %llu\n", litmus_clock());
 	}

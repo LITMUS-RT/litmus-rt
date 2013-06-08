@@ -15,9 +15,6 @@ static inline void setup_release(struct task_struct *t, lt_t release)
 
 	/* update job sequence number */
 	t->rt_param.job_params.job_no++;
-
-	/* don't confuse Linux */
-	t->rt.time_slice = 1;
 }
 
 void prepare_for_next_period(struct task_struct *t)

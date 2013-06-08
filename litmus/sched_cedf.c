@@ -601,13 +601,6 @@ static void cedf_task_wake_up(struct task_struct *task)
 		release_at(task, now);
 		sched_trace_task_release(task);
 	}
-	else {
-		if (task->rt.time_slice) {
-			/* came back in time before deadline
-			*/
-			tsk_rt(task)->completed = 0;
-		}
-	}
 	cedf_job_arrival(task);
 	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
 }
