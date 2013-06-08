@@ -325,7 +325,8 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		 * we're an RT task that will live-lock because we won't let
 		 * the owner complete.
 		 */
-		if (!owner && (need_resched() || rt_task(task)))
+		if (!owner && (need_resched() ||
+			       rt_task(task) || is_realtime(task)))
 			break;
 
 		/*
