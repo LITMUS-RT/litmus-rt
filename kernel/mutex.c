@@ -25,6 +25,8 @@
 #include <linux/interrupt.h>
 #include <linux/debug_locks.h>
 
+#include <litmus/litmus.h>
+
 /*
  * In the DEBUG case we are using the "NULL fastpath" for mutexes,
  * which forces all calls into the slowpath:
@@ -325,7 +327,8 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		 * we're an RT task that will live-lock because we won't let
 		 * the owner complete.
 		 */
-		if (!owner && (need_resched() || rt_task(task)))
+		if (!owner && (need_resched() ||
+			       rt_task(task) || is_realtime(task)))
 			break;
 
 		/*

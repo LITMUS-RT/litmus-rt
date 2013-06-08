@@ -38,6 +38,8 @@
 #include <linux/sched/rt.h>
 #include <trace/events/writeback.h>
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * Sleep at most 200ms at a time in balance_dirty_pages().
  */
@@ -300,7 +302,7 @@ void global_dirty_limits(unsigned long *pbackground, unsigned long *pdirty)
 	if (background >= dirty)
 		background = dirty / 2;
 	tsk = current;
-	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk)) {
+	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk) || is_realtime(tsk)) {
 		background += background / 4;
 		dirty += dirty / 4;
 	}
@@ -328,7 +330,7 @@ static unsigned long zone_dirty_limit(struct zone *zone)
 	else
 		dirty = vm_dirty_ratio * zone_memory / 100;
 
-	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk))
+	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk) || is_realtime(tsk))
 		dirty += dirty / 4;
 
 	return dirty;
