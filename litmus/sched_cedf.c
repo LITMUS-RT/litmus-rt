@@ -542,7 +542,7 @@ static void cedf_finish_switch(struct task_struct *prev)
 
 /*	Prepare a task for running in RT mode
  */
-static void cedf_task_new(struct task_struct * t, int on_rq, int running)
+static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 {
 	unsigned long 		flags;
 	cpu_entry_t* 		entry;
@@ -550,7 +550,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 
 	TRACE("gsn edf: task new %d\n", t->pid);
 
-	/* the cluster doesn't change even if t is running */
+	/* the cluster doesn't change even if t is scheduled */
 	cluster = task_cpu_cluster(t);
 
 	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
@@ -558,7 +558,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	/* setup job params */
 	release_at(t, litmus_clock());
 
-	if (running) {
+	if (is_scheduled) {
 		entry = &per_cpu(cedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
 
@@ -579,7 +579,8 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	}
 	t->rt_param.linked_on          = NO_CPU;
 
-	cedf_job_arrival(t);
+	if (is_running(t))
+		cedf_job_arrival(t);
 	raw_spin_unlock_irqrestore(&(cluster->cluster_lock), flags);
 }
 
