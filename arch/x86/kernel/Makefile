@@ -113,6 +113,8 @@ obj-$(CONFIG_TRACING)			+= tracepoint.o
 obj-$(CONFIG_IOSF_MBI)			+= iosf_mbi.o
 obj-$(CONFIG_PMC_ATOM)			+= pmc_atom.o
 
+obj-$(CONFIG_FEATHER_TRACE)	+= ft_event.o
+
 ###
 # 64 bit specific files
 ifeq ($(CONFIG_X86_64),y)
