@@ -4,6 +4,7 @@ menu "Tracing"
 
 config FEATHER_TRACE
 	bool "Feather-Trace Infrastructure"
+	depends on !RELOCATABLE
 	default y
 	help
 	  Feather-Trace basic tracing infrastructure. Includes device file
