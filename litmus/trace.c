@@ -3,10 +3,8 @@
 #include <linux/uaccess.h>
 
 #include <litmus/ftdev.h>
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
-
-/* dummy definition of is_realtime() */
-#define is_realtime(t) (0)
 
 /******************************************************************************/
 /*                          Allocation                                        */
