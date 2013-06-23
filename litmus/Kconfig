@@ -24,6 +24,31 @@ config FEATHER_TRACE
 	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
 	  actually enable any events.
 
+config SCHED_OVERHEAD_TRACE
+	bool "Record timestamps for overhead measurements"
+	depends on FEATHER_TRACE
+	default y
+	help
+	  Export event stream for overhead tracing.
+	  Say Yes for overhead tracing.
+
+config SCHED_OVERHEAD_TRACE_SHIFT
+       int "Buffer size for Feather-Trace overhead data"
+       depends on SCHED_OVERHEAD_TRACE
+       range 15 32
+       default 22
+       help
+
+         Select the buffer size for the Feather-Trace overhead tracing
+         infrastructure (/dev/litmus/ft_trace0 & ftcat) as a power of two.  The
+         larger the buffer, the less likely the chance of buffer overflows if
+         the ftcat process is starved by real-time activity. In machines with
+         large memories, large buffer sizes are recommended.
+
+	 Examples: 16 =>   2 MB
+		   24 => 512 MB
+		   26 =>  2G MB
+
 endmenu
 
 endmenu
