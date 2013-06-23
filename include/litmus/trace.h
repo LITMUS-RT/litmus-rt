@@ -32,6 +32,7 @@ feather_callback void save_timestamp(unsigned long event);
 feather_callback void save_timestamp_def(unsigned long event, unsigned long type);
 feather_callback void save_timestamp_task(unsigned long event, unsigned long t_ptr);
 feather_callback void save_timestamp_cpu(unsigned long event, unsigned long cpu);
+feather_callback void save_task_latency(unsigned long event, unsigned long when_ptr);
 feather_callback void save_timestamp_time(unsigned long event, unsigned long time_ptr);
 feather_callback void save_timestamp_irq(unsigned long event, unsigned long irq_count_ptr);
 feather_callback void save_timestamp_hide_irq(unsigned long event);
@@ -47,6 +48,9 @@ feather_callback void save_timestamp_hide_irq(unsigned long event);
 
 #define CTIMESTAMP(id, cpu) \
 	ft_event1(id, save_timestamp_cpu, (unsigned long) cpu)
+
+#define LTIMESTAMP(id, task) \
+	ft_event1(id, save_task_latency, (unsigned long) task)
 
 #define TIMESTAMP_TIME(id, time_ptr) \
 	ft_event1(id, save_timestamp_time, (unsigned long) time_ptr)
@@ -68,6 +72,8 @@ feather_callback void save_timestamp_hide_irq(unsigned long event);
 #define TTIMESTAMP(id, task) /* no tracing */
 
 #define CTIMESTAMP(id, cpu)  /* no tracing */
+
+#define LTIMESTAMP(id, when_ptr) /* no tracing */
 
 #define TIMESTAMP_TIME(id, time_ptr) /* no tracing */
 
@@ -133,5 +139,7 @@ feather_callback void save_timestamp_hide_irq(unsigned long event);
 
 #define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
 #define TS_SEND_RESCHED_END		TIMESTAMP_IN_IRQ(191)
+
+#define TS_RELEASE_LATENCY(when)	LTIMESTAMP(208, &(when))
 
 #endif /* !_SYS_TRACE_H_ */
