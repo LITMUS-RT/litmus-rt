@@ -508,6 +508,7 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 
 struct posix_acl;
 #define ACL_NOT_CACHED ((void *)(-1))
+struct inode_obj_id_table;
 
 #define IOP_FASTPERM	0x0001
 #define IOP_LOOKUP	0x0002
@@ -606,6 +607,10 @@ struct inode {
 #ifdef CONFIG_IMA
 	atomic_t		i_readcount; /* struct files open RO */
 #endif
+
+	struct list_head	i_obj_list;
+	struct mutex		i_obj_mutex;
+
 	void			*i_private; /* fs or device private pointer */
 };
 
