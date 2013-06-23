@@ -2246,5 +2246,8 @@ source "lib/Kconfig"
 
 source "arch/arm/kvm/Kconfig"
 
+config ARCH_HAS_FEATHER_TRACE
+	def_bool n
+
 source "litmus/Kconfig"
 

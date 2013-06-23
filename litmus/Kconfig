@@ -1,3 +1,28 @@
 menu "LITMUS^RT"
 
+menu "Tracing"
+
+config FEATHER_TRACE
+	bool "Feather-Trace Infrastructure"
+	default y
+	help
+	  Feather-Trace basic tracing infrastructure. Includes device file
+	  driver and instrumentation point support.
+
+	  There are actually two implementations of Feather-Trace.
+	  1) A slower, but portable, default implementation.
+	  2) Architecture-specific implementations that rewrite kernel .text at runtime.
+
+	  If enabled, Feather-Trace will be based on 2) if available (currently only for x86).
+	  However, if DEBUG_RODATA=y, then Feather-Trace will choose option 1) in any case
+	  to avoid problems with write-protected .text pages.
+
+	  Bottom line: to avoid increased overheads, choose DEBUG_RODATA=n.
+
+	  Note that this option only enables the basic Feather-Trace infrastructure;
+	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
+	  actually enable any events.
+
+endmenu
+
 endmenu
