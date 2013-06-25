@@ -2294,6 +2294,10 @@ asmlinkage __visible void schedule_tail(struct task_struct *prev)
 	preempt_disable();
 	rq = finish_task_switch(prev);
 	post_schedule(rq);
+
+	if (sched_state_validate_switch())
+		litmus_reschedule_local();
+
 	preempt_enable();
 
 	if (current->set_child_tid)
@@ -2745,11 +2749,16 @@ static void __sched __schedule(void)
 	int cpu;
 
 	preempt_disable();
+	sched_state_entered_schedule();
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch();
 	prev = rq->curr;
 
+	/* LITMUS^RT: quickly re-evaluate the scheduling decision
+	 * if the previous one is no longer valid after context switch.
+	 */
+litmus_need_resched_nonpreemptible:
 	TS_SCHED_START;
 
 	schedule_debug(prev);
@@ -2818,6 +2827,11 @@ static void __sched __schedule(void)
 	TS_SCHED2_START(prev);
 
 	post_schedule(rq);
+
+	if (sched_state_validate_switch()) {
+		TS_SCHED2_END(prev);
+		goto litmus_need_resched_nonpreemptible;
+	}
 
 	sched_preempt_enable_no_resched();
 
