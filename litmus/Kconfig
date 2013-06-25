@@ -1,5 +1,132 @@
 menu "LITMUS^RT"
 
+menu "Scheduling"
+
+config RELEASE_MASTER
+        bool "Release-master Support"
+	depends on ARCH_HAS_SEND_PULL_TIMERS
+	default n
+	help
+           Allow one processor to act as a dedicated interrupt processor
+           that services all timer interrupts, but that does not schedule
+           real-time tasks. See RTSS'09 paper for details
+	   (http://www.cs.unc.edu/~anderson/papers.html).
+           Currently only supported by GSN-EDF.
+
+endmenu
+
+menu "Real-Time Synchronization"
+
+config NP_SECTION
+        bool "Non-preemptive section support"
+	default n
+	help
+	  Allow tasks to become non-preemptable.
+          Note that plugins still need to explicitly support non-preemptivity.
+          Currently, only GSN-EDF and PSN-EDF have such support.
+
+	  This is required to support locking protocols such as the FMLP.
+	  If disabled, all tasks will be considered preemptable at all times.
+
+config LITMUS_LOCKING
+        bool "Support for real-time locking protocols"
+	depends on NP_SECTION
+	default n
+	help
+	  Enable LITMUS^RT's deterministic multiprocessor real-time
+	  locking protocols.
+
+	  Say Yes if you want to include locking protocols such as the FMLP and
+	  Baker's SRP.
+
+endmenu
+
+menu "Performance Enhancements"
+
+config SCHED_CPU_AFFINITY
+	bool "Local Migration Affinity"
+	depends on X86
+	default y
+	help
+	  Rescheduled tasks prefer CPUs near to their previously used CPU.  This
+	  may improve performance through possible preservation of cache affinity.
+
+	  Warning: May make bugs harder to find since tasks may migrate less often.
+
+	  NOTES:
+		* Feature is not utilized by PFair/PD^2.
+
+	  Say Yes if unsure.
+
+config ALLOW_EARLY_RELEASE
+	bool "Allow Early Releasing"
+	default y
+	help
+	  Allow tasks to release jobs early (while still maintaining job
+	  precedence constraints). Only supported by EDF schedulers. Early
+	  releasing must be explicitly requested by real-time tasks via
+	  the task_params passed to sys_set_task_rt_param().
+
+	  Early releasing can improve job response times while maintaining
+	  real-time correctness. However, it can easily peg your CPUs
+	  since tasks never suspend to wait for their next job. As such, early
+	  releasing is really only useful in the context of implementing
+	  bandwidth servers, interrupt handling threads, or short-lived
+	  computations.
+
+	  Beware that early releasing may affect real-time analysis
+	  if using locking protocols or I/O.
+
+	  Say Yes if unsure.
+
+choice
+	prompt "EDF Tie-Break Behavior"
+	default EDF_TIE_BREAK_LATENESS_NORM
+	help
+	  Allows the configuration of tie-breaking behavior when the deadlines
+	  of two EDF-scheduled tasks are equal.
+
+	config EDF_TIE_BREAK_LATENESS
+	bool "Lateness-based Tie Break"
+	help
+	  Break ties between two jobs, A and B, based upon the lateness of their
+	  prior jobs. The job with the greatest lateness has priority. Note that
+	  lateness has a negative value if the prior job finished before its
+	  deadline.
+
+	config EDF_TIE_BREAK_LATENESS_NORM
+	bool "Normalized Lateness-based Tie Break"
+	help
+	  Break ties between two jobs, A and B, based upon the lateness, normalized
+	  by relative deadline, of their prior jobs. The job with the greatest
+	  normalized lateness has priority. Note that lateness has a negative value
+	  if the prior job finished before its deadline.
+
+	  Normalized lateness tie-breaks are likely desireable over non-normalized
+	  tie-breaks if the execution times and/or relative deadlines of tasks in a
+	  task set vary greatly.
+
+	config EDF_TIE_BREAK_HASH
+	bool "Hash-based Tie Breaks"
+	help
+	  Break ties between two jobs, A and B, with equal deadlines by using a
+	  uniform hash; i.e.: hash(A.pid, A.job_num) < hash(B.pid, B.job_num). Job
+	  A has ~50% of winning a given tie-break.
+
+	config EDF_PID_TIE_BREAK
+	bool "PID-based Tie Breaks"
+	help
+	  Break ties based upon OS-assigned thread IDs. Use this option if
+	  required by algorithm's real-time analysis or per-task response-time
+	  jitter must be minimized.
+
+	  NOTES:
+	    * This tie-breaking method was default in Litmus 2012.2 and before.
+
+endchoice
+
+endmenu
+
 menu "Tracing"
 
 config FEATHER_TRACE
@@ -150,6 +277,20 @@ config SCHED_DEBUG_TRACE_CALLER
 	 to each message in the debug log. Enable this to aid in figuring out
          what was called in which order. The downside is that it adds a lot of
          clutter.
+
+	 If unsure, say No.
+
+config PREEMPT_STATE_TRACE
+       bool "Trace preemption state machine transitions"
+       depends on SCHED_DEBUG_TRACE && DEBUG_KERNEL
+       default n
+       help
+         With this option enabled, each CPU will log when it transitions
+	 states in the preemption state machine. This state machine is
+	 used to determine how to react to IPIs (avoid races with in-flight IPIs).
+
+	 Warning: this creates a lot of information in the debug trace. Only
+	 recommended when you are debugging preemption-related races.
 
 	 If unsure, say No.
 
