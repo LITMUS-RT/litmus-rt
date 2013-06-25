@@ -1960,8 +1960,12 @@ static inline void post_schedule(struct rq *rq)
 asmlinkage void schedule_tail(struct task_struct *prev)
 	__releases(rq->lock)
 {
-	struct rq *rq = this_rq();
+	struct rq *rq;
 
+
+	preempt_disable();
+
+	rq = this_rq();
 	finish_task_switch(rq, prev);
 
 	/*
@@ -1969,6 +1973,11 @@ asmlinkage void schedule_tail(struct task_struct *prev)
 	 * task_switch?
 	 */
 	post_schedule(rq);
+
+	if (sched_state_validate_switch())
+		litmus_reschedule_local();
+
+	preempt_enable();
 
 #ifdef __ARCH_WANT_UNLOCKED_CTXSW
 	/* In this case, finish_task_switch does not reenable preemption */
@@ -2967,11 +2976,16 @@ static void __sched __schedule(void)
 
 need_resched:
 	preempt_disable();
+	sched_state_entered_schedule();
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch(cpu);
 	prev = rq->curr;
 
+	/* LITMUS^RT: quickly re-evaluate the scheduling decision
+	 * if the previous one is no longer valid after context switch.
+	 */
+litmus_need_resched_nonpreemptible:
 	TS_SCHED_START;
 
 	schedule_debug(prev);
@@ -3040,6 +3054,11 @@ need_resched:
 	TS_SCHED2_START(prev);
 
 	post_schedule(rq);
+
+	if (sched_state_validate_switch()) {
+		TS_SCHED2_END(prev);
+		goto litmus_need_resched_nonpreemptible;
+	}
 
 	sched_preempt_enable_no_resched();
 
