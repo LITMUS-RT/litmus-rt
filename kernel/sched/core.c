@@ -2967,11 +2967,13 @@ static void __sched __schedule(void)
 
 need_resched:
 	preempt_disable();
+	sched_state_entered_schedule();
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch(cpu);
 	prev = rq->curr;
 
+litmus_need_resched_nonpreemptible:
 	TS_SCHED_START;
 
 	schedule_debug(prev);
@@ -3040,6 +3042,11 @@ need_resched:
 	TS_SCHED2_START(prev);
 
 	post_schedule(rq);
+
+	if (sched_state_validate_switch()) {
+		TS_SCHED2_END(prev);
+		goto litmus_need_resched_nonpreemptible;
+	}
 
 	sched_preempt_enable_no_resched();
 
