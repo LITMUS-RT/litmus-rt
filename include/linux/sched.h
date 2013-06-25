@@ -1025,6 +1025,7 @@ struct sched_rt_entity {
 
 
 struct rcu_node;
+struct od_table_entry;
 
 enum perf_event_task_context {
 	perf_invalid_context = -1,
@@ -1369,6 +1370,9 @@ struct task_struct {
 
 	/* LITMUS RT parameters and state */
 	struct rt_param rt_param;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry *od_table;
 
 #ifdef CONFIG_LATENCYTOP
 	int latency_record_count;
