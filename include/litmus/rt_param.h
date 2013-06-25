@@ -84,12 +84,12 @@ struct rt_task {
 };
 
 union np_flag {
-	uint64_t raw;
+	uint32_t raw;
 	struct {
 		/* Is the task currently in a non-preemptive section? */
-		uint64_t flag:31;
+		uint32_t flag:31;
 		/* Should the task call into the scheduler? */
-		uint64_t preempt:1;
+		uint32_t preempt:1;
 	} np;
 };
 
@@ -110,10 +110,10 @@ union np_flag {
 struct control_page {
 	/* This flag is used by userspace to communicate non-preempive
 	 * sections. */
-	volatile union np_flag sched;
+	volatile __attribute__ ((aligned (8))) union np_flag sched;
 
-	volatile uint64_t irq_count; /* Incremented by the kernel each time an IRQ is
-				      * handled. */
+	/* Incremented by the kernel each time an IRQ is handled. */
+	volatile __attribute__ ((aligned (8))) uint64_t irq_count;
 
 	/* Locking overhead tracing: userspace records here the time stamp
 	 * and IRQ counter prior to starting the system call. */
