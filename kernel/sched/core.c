@@ -87,6 +87,8 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+#include <litmus/trace.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
@@ -2748,6 +2750,8 @@ static void __sched __schedule(void)
 	rcu_note_context_switch();
 	prev = rq->curr;
 
+	TS_SCHED_START;
+
 	schedule_debug(prev);
 
 	if (sched_feat(HRTICK))
@@ -2800,14 +2804,24 @@ static void __sched __schedule(void)
 		rq->curr = next;
 		++*switch_count;
 
+		TS_SCHED_END(next);
+		TS_CXS_START(next);
 		rq = context_switch(rq, prev, next); /* unlocks the rq */
+		TS_CXS_END(current);
+
 		cpu = cpu_of(rq);
-	} else
+	} else {
+		TS_SCHED_END(prev);
 		raw_spin_unlock_irq(&rq->lock);
+	}
+
+	TS_SCHED2_START(prev);
 
 	post_schedule(rq);
 
 	sched_preempt_enable_no_resched();
+
+	TS_SCHED2_END(prev);
 }
 
 static inline void sched_submit_work(struct task_struct *tsk)
