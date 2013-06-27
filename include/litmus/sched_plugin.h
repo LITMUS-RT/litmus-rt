@@ -106,7 +106,8 @@ extern struct sched_plugin *litmus;
 
 int register_sched_plugin(struct sched_plugin* plugin);
 struct sched_plugin* find_sched_plugin(const char* name);
-int print_sched_plugins(char* buf, int max);
+void print_sched_plugins(struct seq_file *m);
+
 
 extern struct sched_plugin linux_sched_plugin;
 

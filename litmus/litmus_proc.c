@@ -4,6 +4,7 @@
 
 #include <linux/sched.h>
 #include <linux/uaccess.h>
+#include <linux/seq_file.h>
 
 #include <litmus/litmus.h>
 #include <litmus/litmus_proc.h>
@@ -25,89 +26,112 @@ static struct proc_dir_entry *litmus_dir = NULL,
 /* in litmus/sync.c */
 int count_tasks_waiting_for_release(void);
 
-static int proc_read_stats(char *page, char **start,
-			   off_t off, int count,
-			   int *eof, void *data)
+static int litmus_stats_proc_show(struct seq_file *m, void *v)
 {
-	int len;
-
-	len = snprintf(page, PAGE_SIZE,
-		       "real-time tasks   = %d\n"
-		       "ready for release = %d\n",
-		       atomic_read(&rt_task_count),
-		       count_tasks_waiting_for_release());
-	return len;
+        seq_printf(m,
+		   "real-time tasks   = %d\n"
+		   "ready for release = %d\n",
+		   atomic_read(&rt_task_count),
+		   count_tasks_waiting_for_release());
+	return 0;
 }
 
-static int proc_read_plugins(char *page, char **start,
-			   off_t off, int count,
-			   int *eof, void *data)
+static int litmus_stats_proc_open(struct inode *inode, struct file *file)
 {
-	int len;
-
-	len = print_sched_plugins(page, PAGE_SIZE);
-	return len;
+	return single_open(file, litmus_stats_proc_show, PDE_DATA(inode));
 }
 
-static int proc_read_curr(char *page, char **start,
-			  off_t off, int count,
-			  int *eof, void *data)
-{
-	int len;
+static const struct file_operations litmus_stats_proc_fops = {
+	.open		= litmus_stats_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
-	len = snprintf(page, PAGE_SIZE, "%s\n", litmus->plugin_name);
-	return len;
+
+static int litmus_loaded_proc_show(struct seq_file *m, void *v)
+{
+	print_sched_plugins(m);
+	return 0;
 }
+
+static int litmus_loaded_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, litmus_loaded_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations litmus_loaded_proc_fops = {
+	.open		= litmus_loaded_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+
+
 
 /* in litmus/litmus.c */
 int switch_sched_plugin(struct sched_plugin*);
 
-static int proc_write_curr(struct file *file,
-			   const char *buffer,
-			   unsigned long count,
-			   void *data)
+static ssize_t litmus_active_proc_write(struct file *file,
+					const char __user *buffer, size_t count,
+					loff_t *ppos)
 {
-	int len, ret;
 	char name[65];
 	struct sched_plugin* found;
+	ssize_t ret = -EINVAL;
+	int err;
 
-	len = copy_and_chomp(name, sizeof(name), buffer, count);
-	if (len < 0)
-		return len;
+
+	ret = copy_and_chomp(name, sizeof(name), buffer, count);
+	if (ret < 0)
+		return ret;
 
 	found = find_sched_plugin(name);
 
 	if (found) {
-		ret = switch_sched_plugin(found);
-		if (ret != 0)
-			printk(KERN_INFO "Could not switch plugin: %d\n", ret);
-	} else
+		err = switch_sched_plugin(found);
+		if (err) {
+			printk(KERN_INFO "Could not switch plugin: %d\n", err);
+			ret = err;
+		}
+	} else {
 		printk(KERN_INFO "Plugin '%s' is unknown.\n", name);
+		ret = -ESRCH;
+	}
 
-	return len;
+	return ret;
 }
+
+static int litmus_active_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%s\n", litmus->plugin_name);
+	return 0;
+}
+
+static int litmus_active_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, litmus_active_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations litmus_active_proc_fops = {
+	.open		= litmus_active_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+	.write		= litmus_active_proc_write,
+};
+
 
 #ifdef CONFIG_RELEASE_MASTER
-static int proc_read_release_master(char *page, char **start,
-				    off_t off, int count,
-				    int *eof, void *data)
+static ssize_t litmus_release_master_proc_write(
+	struct file *file,
+	const char __user *buffer, size_t count,
+	loff_t *ppos)
 {
-	int len, master;
-	master = atomic_read(&release_master_cpu);
-	if (master == NO_CPU)
-		len = snprintf(page, PAGE_SIZE, "NO_CPU\n");
-	else
-		len = snprintf(page, PAGE_SIZE, "%d\n", master);
-	return len;
-}
-
-static int proc_write_release_master(struct file *file,
-				     const char *buffer,
-				     unsigned long count,
-				     void *data)
-{
-	int cpu, err, len, online = 0;
+	int cpu, err, online = 0;
 	char msg[64];
+	ssize_t len;
 
 	len = copy_and_chomp(msg, sizeof(msg), buffer, count);
 
@@ -129,6 +153,30 @@ static int proc_write_release_master(struct file *file,
 	}
 	return len;
 }
+
+static int litmus_release_master_proc_show(struct seq_file *m, void *v)
+{
+	int master;
+	master = atomic_read(&release_master_cpu);
+	if (master == NO_CPU)
+		seq_printf(m, "NO_CPU\n");
+	else
+		seq_printf(m, "%d\n", master);
+	return 0;
+}
+
+static int litmus_release_master_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, litmus_release_master_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations litmus_release_master_proc_fops = {
+	.open		= litmus_release_master_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+	.write		= litmus_release_master_proc_write,
+};
 #endif
 
 int __init init_litmus_proc(void)
@@ -139,30 +187,26 @@ int __init init_litmus_proc(void)
 		return -ENOMEM;
 	}
 
-	curr_file = create_proc_entry("active_plugin",
-				      0644, litmus_dir);
+	curr_file = proc_create("active_plugin", 0644, litmus_dir,
+				&litmus_active_proc_fops);
+
 	if (!curr_file) {
 		printk(KERN_ERR "Could not allocate active_plugin "
 		       "procfs entry.\n");
 		return -ENOMEM;
 	}
-	curr_file->read_proc  = proc_read_curr;
-	curr_file->write_proc = proc_write_curr;
 
 #ifdef CONFIG_RELEASE_MASTER
-	release_master_file = create_proc_entry("release_master",
-						0644, litmus_dir);
+	release_master_file = proc_create("release_master", 0644, litmus_dir,
+					  &litmus_release_master_proc_fops);
 	if (!release_master_file) {
 		printk(KERN_ERR "Could not allocate release_master "
 		       "procfs entry.\n");
 		return -ENOMEM;
 	}
-	release_master_file->read_proc = proc_read_release_master;
-	release_master_file->write_proc  = proc_write_release_master;
 #endif
 
-	stat_file = create_proc_read_entry("stats", 0444, litmus_dir,
-					   proc_read_stats, NULL);
+	stat_file = proc_create("stats", 0444, litmus_dir, &litmus_stats_proc_fops);
 
 	plugs_dir = proc_mkdir("plugins", litmus_dir);
 	if (!plugs_dir){
@@ -171,8 +215,8 @@ int __init init_litmus_proc(void)
 		return -ENOMEM;
 	}
 
-	plugs_file = create_proc_read_entry("loaded", 0444, plugs_dir,
-					   proc_read_plugins, NULL);
+	plugs_file = proc_create("loaded", 0444, plugs_dir,
+				 &litmus_loaded_proc_fops);
 
 	return 0;
 }
@@ -303,44 +347,61 @@ const char* cache_level_name(enum cache_level level)
 }
 
 
-/* proc file interface to configure the cluster size */
-static int proc_read_cluster_size(char *page, char **start,
-				  off_t off, int count,
-				  int *eof, void *data)
-{
-	return snprintf(page, PAGE_SIZE, "%s\n",
-			cache_level_name(*((enum cache_level*) data)));;
-}
 
-static int proc_write_cluster_size(struct file *file,
-				   const char *buffer,
-				   unsigned long count,
-				   void *data)
+
+/* proc file interface to configure the cluster size */
+
+static ssize_t litmus_cluster_proc_write(struct file *file,
+					const char __user *buffer, size_t count,
+					loff_t *ppos)
 {
-	int len;
+	enum cache_level *level = (enum cache_level *) PDE_DATA(file_inode(file));
+	ssize_t len;
 	char cache_name[8];
 
 	len = copy_and_chomp(cache_name, sizeof(cache_name), buffer, count);
 
-	if (len > 0 && parse_cache_level(cache_name, (enum cache_level*) data))
+	if (len > 0 && parse_cache_level(cache_name, level)) {
 		printk(KERN_INFO "Cluster '%s' is unknown.\n", cache_name);
+		len = -EINVAL;
+	}
 
 	return len;
 }
+
+static int litmus_cluster_proc_show(struct seq_file *m, void *v)
+{
+	enum cache_level *level = (enum cache_level *)  m->private;
+
+	seq_printf(m, "%s\n", cache_level_name(*level));
+	return 0;
+}
+
+static int litmus_cluster_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, litmus_cluster_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations litmus_cluster_proc_fops = {
+	.open		= litmus_cluster_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+	.write		= litmus_cluster_proc_write,
+};
 
 struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
 					   enum cache_level* level)
 {
 	struct proc_dir_entry* cluster_file;
 
-	cluster_file = create_proc_entry("cluster", 0644, parent);
+
+	cluster_file = proc_create_data("cluster", 0644, parent,
+					&litmus_cluster_proc_fops,
+					(void *) level);
 	if (!cluster_file) {
-		printk(KERN_ERR "Could not allocate %s/cluster "
-		       "procfs entry.\n", parent->name);
-	} else {
-		cluster_file->read_proc = proc_read_cluster_size;
-		cluster_file->write_proc = proc_write_cluster_size;
-		cluster_file->data = level;
+		printk(KERN_ERR
+		       "Could not cluster procfs entry.\n");
 	}
 	return cluster_file;
 }

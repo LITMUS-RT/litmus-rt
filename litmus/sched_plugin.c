@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/sched.h>
+#include <linux/seq_file.h>
 
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
@@ -209,19 +210,15 @@ out_unlock:
 	return plugin;
 }
 
-int print_sched_plugins(char* buf, int max)
+void print_sched_plugins(struct seq_file *m)
 {
-	int count = 0;
 	struct list_head *pos;
 	struct sched_plugin *plugin;
 
 	raw_spin_lock(&sched_plugins_lock);
 	list_for_each(pos, &sched_plugins) {
 		plugin = list_entry(pos, struct sched_plugin, list);
-		count += snprintf(buf + count, max - count, "%s\n", plugin->plugin_name);
-		if (max - count <= 0)
-			break;
+		seq_printf(m, "%s\n", plugin->plugin_name);
 	}
 	raw_spin_unlock(&sched_plugins_lock);
-	return 	count;
 }
