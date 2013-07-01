@@ -88,6 +88,7 @@
 
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
+void litmus_tick(struct rq*, struct task_struct*);
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -401,6 +402,7 @@ static enum hrtimer_restart hrtick(struct hrtimer *timer)
 	raw_spin_lock(&rq->lock);
 	update_rq_clock(rq);
 	rq->curr->sched_class->task_tick(rq, rq->curr, 1);
+	litmus_tick(rq, rq->curr);
 	raw_spin_unlock(&rq->lock);
 
 	return HRTIMER_NORESTART;
@@ -2762,6 +2764,7 @@ void scheduler_tick(void)
 	update_rq_clock(rq);
 	update_cpu_load_active(rq);
 	curr->sched_class->task_tick(rq, curr, 0);
+	litmus_tick(rq, curr);
 	raw_spin_unlock(&rq->lock);
 
 	perf_event_task_tick();
