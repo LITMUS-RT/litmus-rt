@@ -303,13 +303,13 @@ select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
 }
 #endif
 
-static const struct sched_class litmus_sched_class = {
+const struct sched_class litmus_sched_class = {
 	/* From 34f971f6 the stop/migrate worker threads have a class on
 	 * their own, which is the highest prio class. We don't support
 	 * cpu-hotplug or cpu throttling. Allows Litmus to use up to 1.0
 	 * CPU capacity.
 	 */
-	.next			= &stop_sched_class,
+	.next			= &rt_sched_class,
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
 	.yield_task		= yield_task_litmus,
