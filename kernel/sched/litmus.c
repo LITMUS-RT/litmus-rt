@@ -1,5 +1,10 @@
 /* This file is included from kernel/sched.c */
 
+#include "sched.h"
+
+#include <litmus/trace.h>
+#include <litmus/sched_trace.h>
+
 #include <litmus/litmus.h>
 #include <litmus/budget.h>
 #include <litmus/sched_plugin.h>
@@ -26,7 +31,7 @@ static void double_rq_unlock(struct rq *rq1, struct rq *rq2);
  * litmus_tick gets called by scheduler_tick() with HZ freq
  * Interrupts are disabled
  */
-static void litmus_tick(struct rq *rq, struct task_struct *p)
+void litmus_tick(struct rq *rq, struct task_struct *p)
 {
 	TS_PLUGIN_TICK_START;
 
