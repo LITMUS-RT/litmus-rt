@@ -87,6 +87,7 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
 
@@ -2864,6 +2865,8 @@ asmlinkage __visible void __sched schedule(void)
 	do {
 		__schedule();
 	} while (need_resched());
+
+	srp_ceiling_block();
 }
 EXPORT_SYMBOL(schedule);
 
