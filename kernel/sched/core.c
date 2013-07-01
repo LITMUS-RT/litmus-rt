@@ -87,6 +87,7 @@
 #include "../smpboot.h"
 
 #include <litmus/trace.h>
+#include <litmus/sched_trace.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -1974,6 +1975,8 @@ asmlinkage void schedule_tail(struct task_struct *prev)
 	rq = this_rq();
 	finish_task_switch(rq, prev);
 
+	sched_trace_task_switch_to(current);
+
 	/*
 	 * FIXME: do we need to worry about rq being invalidated by the
 	 * task_switch?
@@ -2993,6 +2996,7 @@ need_resched:
 	 */
 litmus_need_resched_nonpreemptible:
 	TS_SCHED_START;
+	sched_trace_task_switch_away(prev);
 
 	schedule_debug(prev);
 
@@ -3064,6 +3068,7 @@ litmus_need_resched_nonpreemptible:
 	}
 
 	TS_SCHED2_START(prev);
+	sched_trace_task_switch_to(current);
 
 	post_schedule(rq);
 
