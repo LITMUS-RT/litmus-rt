@@ -4255,10 +4255,10 @@ long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
 	rcu_read_lock();
 
 	p = find_process_by_pid(pid);
-	if (!p) {
+	if (!p || is_realtime(p)) {
 		rcu_read_unlock();
 		put_online_cpus();
-		return -ESRCH;
+		return p ? -EPERM : -ESRCH;
 	}
 
 	/* Prevent p going away */
