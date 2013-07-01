@@ -1950,6 +1950,14 @@ static inline void pre_schedule(struct rq *rq, struct task_struct *prev)
 {
 	if (prev->sched_class->pre_schedule)
 		prev->sched_class->pre_schedule(rq, prev);
+
+       /* LITMUS^RT not very clean hack: we need to save the prev task as our
+        * scheduling decision rely on it (as we drop the rq lock something in
+        * prev can change...); there is no way to escape this hack apart from
+        * modifying pick_nex_task(rq, _prev_) or falling back on the previous
+        * solution of decoupling scheduling decisions.
+        */
+	rq->litmus.prev = prev;
 }
 
 /* rq->lock is NOT held, but preemption is disabled */
