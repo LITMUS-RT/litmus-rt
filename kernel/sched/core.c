@@ -3071,6 +3071,8 @@ litmus_need_resched_nonpreemptible:
 
 	if (need_resched())
 		goto need_resched;
+
+	srp_ceiling_block();
 }
 
 static inline void sched_submit_work(struct task_struct *tsk)
