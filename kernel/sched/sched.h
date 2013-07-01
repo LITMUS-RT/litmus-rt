@@ -1017,11 +1017,12 @@ struct sched_class {
 #endif
 };
 
-#define sched_class_highest (&stop_sched_class)
+#define sched_class_highest (&litmus_sched_class)
 #define for_each_class(class) \
    for (class = sched_class_highest; class; class = class->next)
 
 extern const struct sched_class stop_sched_class;
+extern const struct sched_class litmus_sched_class;
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
