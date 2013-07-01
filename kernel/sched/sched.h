@@ -505,6 +505,11 @@ struct dl_rq {
 #endif
 };
 
+struct litmus_rq {
+	unsigned long nr_running;
+	struct task_struct *prev;
+};
+
 #ifdef CONFIG_SMP
 
 /*
@@ -584,6 +589,7 @@ struct rq {
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 	struct dl_rq dl;
+	struct litmus_rq litmus;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
