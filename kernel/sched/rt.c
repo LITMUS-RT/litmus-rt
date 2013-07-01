@@ -8,6 +8,8 @@
 #include <linux/slab.h>
 #include <linux/irq_work.h>
 
+#include <litmus/litmus.h>
+
 int sched_rr_timeslice = RR_TIMESLICE;
 
 static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun);
@@ -487,8 +489,9 @@ static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 			enqueue_top_rt_rq(rt_rq);
 		else if (!on_rt_rq(rt_se))
 			enqueue_rt_entity(rt_se, false);
-
-		if (rt_rq->highest_prio.curr < curr->prio)
+		if (rt_rq->highest_prio.curr < curr->prio
+		    /* Don't subject LITMUS^RT tasks to remote reschedules. */
+		    && !is_realtime(curr))
 			resched_curr(rq);
 	}
 }
@@ -575,7 +578,7 @@ static inline void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 {
 	struct rq *rq = rq_of_rt_rq(rt_rq);
 
-	if (!rt_rq->rt_nr_running)
+	if (!rt_rq->rt_nr_running || is_realtime(rq_of_rt_rq(rt_rq)->curr))
 		return;
 
 	enqueue_top_rt_rq(rt_rq);
