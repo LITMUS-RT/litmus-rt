@@ -1561,7 +1561,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 
 	/* if LITMUS^RT tracer is active divert printk() msgs */
 	if (trace_override && !trace_recurse)
-		TRACE("%s", text_len);
+		TRACE("%s", text);
 
 	/* mark and strip a trailing newline */
 	if (text_len && text[text_len-1] == '\n') {
