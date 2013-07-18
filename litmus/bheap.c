@@ -1,5 +1,6 @@
-#include "linux/kernel.h"
-#include "litmus/bheap.h"
+#include <linux/bug.h>
+#include <linux/kernel.h>
+#include <litmus/bheap.h>
 
 void bheap_init(struct bheap* heap)
 {
@@ -275,6 +276,7 @@ void bheap_delete(bheap_prio_t higher_prio, struct bheap* heap,
 		prev = NULL;
 		pos  = heap->head;
 		while (pos != node) {
+			BUG_ON(!pos); /* fell off the list -> deleted from wrong heap */
 			prev = pos;
 			pos  = pos->next;
 		}
