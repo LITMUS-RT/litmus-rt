@@ -89,14 +89,17 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			if (next->rt_param.stack_in_use == NO_CPU)
 				TRACE_TASK(next,"descheduled. Proceeding.\n");
 
-			if (lt_before(_maybe_deadlock + 10000000,
+			if (lt_before(_maybe_deadlock + 1000000000L,
 				      litmus_clock())) {
-				/* We've been spinning for 10ms.
+				/* We've been spinning for 1s.
 				 * Something can't be right!
 				 * Let's abandon the task and bail out; at least
 				 * we will have debug info instead of a hard
 				 * deadlock.
 				 */
+#ifdef CONFIG_BUG_ON_MIGRATION_DEADLOCK
+				BUG();
+#else
 				TRACE_TASK(next,"stack too long in use. "
 					   "Deadlock?\n");
 				next = NULL;
@@ -104,6 +107,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				/* bail out */
 				raw_spin_lock(&rq->lock);
 				return next;
+#endif
 			}
 		}
 #ifdef  __ARCH_WANT_UNLOCKED_CTXSW

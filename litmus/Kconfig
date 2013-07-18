@@ -34,6 +34,28 @@ config RELEASE_MASTER
 	   (http://www.cs.unc.edu/~anderson/papers.html).
            Currently only supported by GSN-EDF.
 
+config BUG_ON_MIGRATION_DEADLOCK
+       bool "Panic on suspected migration deadlock"
+       default y
+       help
+          This is a debugging option. The LITMUS^RT migration support code for
+	  global scheduling contains a simple heuristic to detect when the
+	  system deadlocks due to circular stack dependencies.
+
+	  For example, such a deadlock exists if CPU 0 waits for task A's stack
+	  to become available while using task B's stack, and CPU 1 waits for
+	  task B's stack to become available while using task A's stack. Such
+	  a situation can arise in (buggy) global scheduling plugins.
+
+	  With this option enabled, such a scenario with result in a BUG().
+	  You can turn off this option when debugging on real hardware (e.g.,
+	  to rescue traces, etc. that would be hard to get after a panic).
+
+	  Only turn this off if you really know what you are doing. If this
+	  BUG() triggers, the scheduler is broken and turning off this option
+	  won't fix it.
+
+
 endmenu
 
 menu "Real-Time Synchronization"
