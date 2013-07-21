@@ -25,7 +25,7 @@ config PLUGIN_PFAIR
 
 config RELEASE_MASTER
         bool "Release-master Support"
-	depends on ARCH_HAS_SEND_PULL_TIMERS
+	depends on ARCH_HAS_SEND_PULL_TIMERS && SMP
 	default n
 	help
            Allow one processor to act as a dedicated interrupt processor
