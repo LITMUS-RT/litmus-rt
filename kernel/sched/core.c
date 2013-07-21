@@ -4090,7 +4090,11 @@ recheck:
 	__setscheduler(rq, p, policy, param->sched_priority);
 
 	if (policy == SCHED_LITMUS) {
+#ifdef CONFIG_SMP
 		p->rt_param.stack_in_use = running ? rq->cpu : NO_CPU;
+#else
+		p->rt_param.stack_in_use = running ? 0 : NO_CPU;
+#endif
 		p->rt_param.present = running;
 		litmus->task_new(p, on_rq, running);
 	}
