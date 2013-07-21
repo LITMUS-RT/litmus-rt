@@ -1067,7 +1067,7 @@ hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode)
 }
 EXPORT_SYMBOL_GPL(hrtimer_start);
 
-#ifdef CONFIG_ARCH_HAS_SEND_PULL_TIMERS
+#if defined(CONFIG_ARCH_HAS_SEND_PULL_TIMERS) && defined(CONFIG_SMP)
 
 /**
  * hrtimer_start_on_info_init - Initialize hrtimer_start_on_info
