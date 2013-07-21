@@ -133,7 +133,7 @@ static int __init init_litmus_ctrl_dev(void)
 
 	BUILD_BUG_ON(sizeof(struct control_page) > PAGE_SIZE);
 
-	BUILD_BUG_ON(sizeof(union np_flag) != sizeof(uint64_t));
+	BUILD_BUG_ON(sizeof(union np_flag) != sizeof(uint32_t));
 
 	BUILD_BUG_ON(offsetof(struct control_page, sched.raw)
 		     != LITMUS_CP_OFFSET_SCHED);
