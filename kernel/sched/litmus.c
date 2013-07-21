@@ -157,7 +157,11 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		raw_spin_unlock(&other_rq->lock);
 	}
 	if (next) {
+#ifdef CONFIG_SMP
 		next->rt_param.stack_in_use = rq->cpu;
+#else
+		next->rt_param.stack_in_use = 0;
+#endif
 		next->se.exec_start = rq->clock;
 	}
 
