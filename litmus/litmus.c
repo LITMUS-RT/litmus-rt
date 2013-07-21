@@ -25,6 +25,11 @@
 #include <litmus/affinity.h>
 #endif
 
+#ifdef CONFIG_SCHED_LITMUS_TRACEPOINT
+#define CREATE_TRACE_POINTS
+#include <trace/events/litmus.h>
+#endif
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 
