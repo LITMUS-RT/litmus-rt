@@ -49,17 +49,20 @@ void litmus_tick(struct rq *rq, struct task_struct *p)
 static struct task_struct *
 litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
-	struct rq* other_rq;
 	struct task_struct *next;
 
+#ifdef CONFIG_SMP
+	struct rq* other_rq;
 	long was_running;
 	lt_t _maybe_deadlock = 0;
+#endif
 
 	/* let the plugin schedule */
 	next = litmus->schedule(prev);
 
 	sched_state_plugin_check();
 
+#ifdef CONFIG_SMP
 	/* check if a global plugin pulled a task from a different RQ */
 	if (next && task_rq(next) != rq) {
 		/* we need to migrate the task */
@@ -156,6 +159,8 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		/* release the other CPU's runqueue, but keep ours */
 		raw_spin_unlock(&other_rq->lock);
 	}
+#endif
+
 	if (next) {
 #ifdef CONFIG_SMP
 		next->rt_param.stack_in_use = rq->cpu;
