@@ -232,12 +232,14 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
 {
 }
 
+#ifdef CONFIG_SMP
 static void pre_schedule_litmus(struct rq *rq, struct task_struct *prev)
 {
 	update_time_litmus(rq, prev);
 	if (!is_running(prev))
 		tsk_rt(prev)->present = 0;
 }
+#endif
 
 /* pick_next_task_litmus() - litmus_schedule() function
  *
