@@ -88,7 +88,7 @@ menu "Performance Enhancements"
 
 config SCHED_CPU_AFFINITY
 	bool "Local Migration Affinity"
-	depends on X86
+	depends on X86 && SYSFS
 	default y
 	help
 	  Rescheduled tasks prefer CPUs near to their previously used CPU.  This

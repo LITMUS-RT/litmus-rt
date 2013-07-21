@@ -4,7 +4,7 @@
 
 #include <litmus/clustered.h>
 
-#ifndef CONFIG_X86
+#if !defined(CONFIG_X86) || !defined(CONFIG_SYSFS)
 /* fake get_shared_cpu_map() on non-x86 architectures */
 
 int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, int index)
