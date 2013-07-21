@@ -86,6 +86,7 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
 #include <litmus/sched_plugin.h>
