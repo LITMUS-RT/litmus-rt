@@ -8,7 +8,7 @@
 
 #include <litmus/debug_trace.h>
 
-extern DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, resched_state);
+DECLARE_PER_CPU_SHARED_ALIGNED(atomic_t, resched_state);
 
 #ifdef CONFIG_PREEMPT_STATE_TRACE
 const char* sched_state_name(int s);
