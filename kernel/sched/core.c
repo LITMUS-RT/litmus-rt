@@ -529,9 +529,14 @@ void resched_task(struct task_struct *p)
 	if (test_tsk_need_resched(p))
 		return;
 
-	set_tsk_need_resched(p);
-
 	cpu = task_cpu(p);
+
+	/* Cannot call set_tsk_need_resched() on LITMUS^RT task
+	 * on remote core. Only policy plugins may do this via
+	 * litmus_reschedule(). */
+	if (!is_realtime(p) || cpu == smp_processor_id())
+		set_tsk_need_resched(p);
+
 	if (cpu == smp_processor_id())
 		return;
 
