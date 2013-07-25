@@ -569,6 +569,11 @@ void resched_curr(struct rq *rq)
 		set_tsk_need_resched(curr);
 		set_preempt_need_resched();
 		return;
+	} else if (is_realtime(curr)) {
+		/* Cannot call set_tsk_need_resched() on LITMUS^RT task
+		 * on remote core. Only policy plugins may do this via
+		 * litmus_reschedule(). */
+		return;
 	}
 
 	if (set_nr_and_not_polling(curr))
