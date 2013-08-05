@@ -32,7 +32,7 @@ config RELEASE_MASTER
            that services all timer interrupts, but that does not schedule
            real-time tasks. See RTSS'09 paper for details
 	   (http://www.cs.unc.edu/~anderson/papers.html).
-           Currently only supported by GSN-EDF.
+
 
 config BUG_ON_MIGRATION_DEADLOCK
        bool "Panic on suspected migration deadlock"
@@ -62,11 +62,11 @@ menu "Real-Time Synchronization"
 
 config NP_SECTION
         bool "Non-preemptive section support"
-	default n
+	default y
 	help
 	  Allow tasks to become non-preemptable.
           Note that plugins still need to explicitly support non-preemptivity.
-          Currently, only GSN-EDF and PSN-EDF have such support.
+          Currently, only the GSN-EDF, PSN-EDF, and P-FP plugins have such support.
 
 	  This is required to support locking protocols such as the FMLP.
 	  If disabled, all tasks will be considered preemptable at all times.
@@ -74,10 +74,10 @@ config NP_SECTION
 config LITMUS_LOCKING
         bool "Support for real-time locking protocols"
 	depends on NP_SECTION
-	default n
+	default y
 	help
-	  Enable LITMUS^RT's deterministic multiprocessor real-time
-	  locking protocols.
+	  Enable LITMUS^RT's multiprocessor real-time locking protocols with
+	  predicable maximum blocking times.
 
 	  Say Yes if you want to include locking protocols such as the FMLP and
 	  Baker's SRP.
@@ -91,8 +91,10 @@ config SCHED_CPU_AFFINITY
 	depends on X86 && SYSFS
 	default y
 	help
-	  Rescheduled tasks prefer CPUs near to their previously used CPU.  This
-	  may improve performance through possible preservation of cache affinity.
+	  Rescheduled tasks prefer CPUs near to their previously used CPU.
+	  This may improve cache performance through possible preservation of
+	  cache affinity, at the expense of (slightly) more involved scheduling
+	  logic.
 
 	  Warning: May make bugs harder to find since tasks may migrate less often.
 
@@ -249,7 +251,7 @@ config SCHED_LITMUS_TRACEPOINT
 config SCHED_OVERHEAD_TRACE
 	bool "Record timestamps for overhead measurements"
 	depends on FEATHER_TRACE
-	default n
+	default y
 	help
 	  Export event stream for overhead tracing.
 	  Say Yes for overhead tracing.
@@ -273,7 +275,7 @@ config SCHED_OVERHEAD_TRACE_SHIFT
 
 config SCHED_DEBUG_TRACE
 	bool "TRACE() debugging"
-	default y
+	default n
 	help
 	  Include support for sched_trace_log_messageg(), which is used to
 	  implement TRACE(). If disabled, no TRACE() messages will be included
