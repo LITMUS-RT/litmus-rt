@@ -784,14 +784,12 @@ static void pfair_release_at(struct task_struct* task, lt_t start)
 	BUG_ON(!is_realtime(task));
 
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
+
 	release_at(task, start);
 	release = time2quanta(start, CEIL);
+	prepare_release(task, release);
 
 	TRACE_TASK(task, "sys release at %lu\n", release);
-
-	drop_all_references(task);
-	prepare_release(task, release);
-	add_release(&cluster->pfair, task);
 
 	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
 }
