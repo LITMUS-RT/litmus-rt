@@ -31,8 +31,7 @@ static inline int fetch_and_dec(int *val)
 #else /* !__ARCH_HAS_FEATHER_TRACE */
 
 /* provide default implementation */
-
-#include <asm/timex.h> /* for get_cycles() */
+#include <linux/timex.h> /* for get_cycles() */
 
 static inline unsigned long long ft_timestamp(void)
 {
