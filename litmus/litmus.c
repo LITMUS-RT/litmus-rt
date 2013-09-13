@@ -376,8 +376,10 @@ long litmus_admit_task(struct task_struct* tsk)
 
 out:
 	if (retval) {
-		bheap_node_free(tsk_rt(tsk)->heap_node);
-		release_heap_free(tsk_rt(tsk)->rel_heap);
+		if (tsk_rt(tsk)->heap_node)
+			bheap_node_free(tsk_rt(tsk)->heap_node);
+		if (tsk_rt(tsk)->rel_heap)
+			release_heap_free(tsk_rt(tsk)->rel_heap);
 	}
 	return retval;
 }
