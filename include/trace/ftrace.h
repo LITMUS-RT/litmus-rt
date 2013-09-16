@@ -46,6 +46,9 @@ TRACE_MAKE_SYSTEM_STR();
 	__attribute__((section("_ftrace_enum_map")))	\
 	*TRACE_SYSTEM##_##a = &__##TRACE_SYSTEM##_##a
 
+/* for litmus_clock() */
+#include <litmus/litmus.h>
+
 /*
  * DECLARE_EVENT_CLASS can be used to add a generic function
  * handlers for events. That is, if all events have the same
@@ -91,7 +94,7 @@ TRACE_MAKE_SYSTEM_STR();
 #define __bitmask(item, nr_bits) __dynamic_array(char, item, -1)
 
 #undef TP_STRUCT__entry
-#define TP_STRUCT__entry(args...) args
+#define TP_STRUCT__entry(args...) args __field( unsigned long long, __rt_ts )
 
 #undef DECLARE_EVENT_CLASS
 #define DECLARE_EVENT_CLASS(name, proto, args, tstruct, assign, print)	\
@@ -644,7 +647,7 @@ static inline notrace int ftrace_get_offsets_##call(			\
 	memcpy(__get_bitmask(dst), (src), __bitmask_size_in_bytes(nr_bits))
 
 #undef TP_fast_assign
-#define TP_fast_assign(args...) args
+#define TP_fast_assign(args...) args; __entry->__rt_ts = litmus_clock();
 
 #undef __perf_addr
 #define __perf_addr(a)	(a)
