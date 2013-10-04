@@ -290,6 +290,27 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 	struct task_struct *task;
 	cpu_entry_t *last;
 
+#ifdef CONFIG_PREFER_LOCAL_LINKING
+	cpu_entry_t *local;
+
+	/* Before linking to other CPUs, check first whether the local CPU is
+	 * idle. */
+	local = &__get_cpu_var(cedf_cpu_entries);
+	task  = __peek_ready(&cluster->domain);
+
+	if (task && !local->linked
+#ifdef CONFIG_RELEASE_MASTER
+	    && likely(local->cpu != cluster->domain.release_master)
+#endif
+		) {
+		task = __take_ready(&cluster->domain);
+		TRACE_TASK(task, "linking to local CPU %d to avoid IPI\n", local->cpu);
+		link_task_to_cpu(task, local);
+		preempt(local);
+	}
+#endif
+
+
 	for(last = lowest_prio_cpu(cluster);
 	    edf_preemption_needed(&cluster->domain, last->linked);
 	    last = lowest_prio_cpu(cluster)) {
