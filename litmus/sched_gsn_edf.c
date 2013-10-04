@@ -280,18 +280,27 @@ static void check_for_preemptions(void)
 {
 	struct task_struct *task;
 	cpu_entry_t *last;
+
+
+#ifdef CONFIG_PREFER_LOCAL_LINKING
 	cpu_entry_t *local;
 
 	/* Before linking to other CPUs, check first whether the local CPU is
 	 * idle. */
 	local = &__get_cpu_var(gsnedf_cpu_entries);
 	task  = __peek_ready(&gsnedf);
-	if (task && !local->linked) {
+
+	if (task && !local->linked
+#ifdef CONFIG_RELEASE_MASTER
+	    && likely(local->cpu != gsnedf.release_master)
+#endif
+		) {
 		task = __take_ready(&gsnedf);
 		TRACE_TASK(task, "linking to local CPU %d to avoid IPI\n", local->cpu);
 		link_task_to_cpu(task, local);
 		preempt(local);
 	}
+#endif
 
 	for (last = lowest_prio_cpu();
 	     edf_preemption_needed(&gsnedf, last->linked);
