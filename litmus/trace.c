@@ -11,12 +11,15 @@
 /******************************************************************************/
 
 static struct ftdev overhead_dev;
+static struct ftdev cpu_overhead_dev;
 
 #define trace_ts_buf overhead_dev.minor[0].buf
 
 static unsigned int ts_seq_no = 0;
 
 DEFINE_PER_CPU(atomic_t, irq_fired_count);
+
+static DEFINE_PER_CPU(unsigned int, cpu_ts_seq_no);
 
 void ft_irq_fired(void)
 {
@@ -256,9 +259,10 @@ out:
 	return consumed;
 }
 
-static int __init init_ft_overhead_trace(void)
+
+static int __init init_global_ft_overhead_trace(void)
 {
-	int err, cpu;
+	int err;
 
 	printk("Initializing Feather-Trace overhead tracing device.\n");
 	err = ftdev_init(&overhead_dev, THIS_MODULE, 1, "ft_trace");
@@ -273,11 +277,6 @@ static int __init init_ft_overhead_trace(void)
 	if (err)
 		goto err_dealloc;
 
-	/* initialize IRQ flags */
-	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
-		clear_irq_fired();
-	}
-
 	return 0;
 
 err_dealloc:
@@ -287,9 +286,58 @@ err_out:
 	return err;
 }
 
+static int __init init_cpu_ft_overhead_trace(void)
+{
+	int err, cpu;
+
+	printk("Initializing Feather-Trace per-cpu overhead tracing device.\n");
+	err = ftdev_init(&cpu_overhead_dev, THIS_MODULE,
+			 num_online_cpus(), "ft_cpu_trace");
+	if (err)
+		goto err_out;
+
+	cpu_overhead_dev.alloc = alloc_timestamp_buffer;
+	cpu_overhead_dev.free  = free_timestamp_buffer;
+
+	err = register_ftdev(&cpu_overhead_dev);
+	if (err)
+		goto err_dealloc;
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
+		per_cpu(cpu_ts_seq_no, cpu) = 0;
+	}
+
+	return 0;
+
+err_dealloc:
+	ftdev_exit(&cpu_overhead_dev);
+err_out:
+	printk(KERN_WARNING "Could not register per-cpu ft_trace module.\n");
+	return err;
+}
+
+
+static int __init init_ft_overhead_trace(void)
+{
+	int err;
+
+	err = init_global_ft_overhead_trace();
+	if (err)
+		return err;
+
+	err = init_cpu_ft_overhead_trace();
+	if (err) {
+		ftdev_exit(&overhead_dev);
+		return err;
+	}
+
+	return 0;
+}
+
 static void __exit exit_ft_overhead_trace(void)
 {
 	ftdev_exit(&overhead_dev);
+	ftdev_exit(&cpu_overhead_dev);
 }
 
 module_init(init_ft_overhead_trace);
