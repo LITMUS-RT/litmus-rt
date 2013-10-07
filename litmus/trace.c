@@ -153,7 +153,7 @@ static inline void write_cpu_timestamp(
 	 * cannot be processed until we turn on interrupts again.
 	 */
 
-	if (buf && ft_buffer_start_write(buf, (void**)  &ts)) {
+	if (buf && ft_buffer_start_single_write(buf, (void**)  &ts)) {
 		ts->event     = event;
 		ts->seq_no    = seq_no;
 

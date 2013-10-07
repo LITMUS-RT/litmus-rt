@@ -64,6 +64,30 @@ static inline int ft_buffer_start_write(struct ft_buffer* buf, void **ptr)
 	}
 }
 
+/* For single writer scenarios, with fewer atomic ops. */
+static inline int ft_buffer_start_single_write(struct ft_buffer* buf, void **ptr)
+{
+	unsigned int idx;
+
+	if (buf->free_count <= 0) {
+		*ptr = 0;
+		/* single writer: no atomicity needed */
+		buf->failed_writes++;
+		return 0;
+	} else {
+		/* free_count is positive, and can only increase since we are
+		 * (by assumption) the only writer accessing the buffer.
+		 */
+
+		idx  = buf->write_idx++ % buf->slot_count;
+		buf->slots[idx] = SLOT_BUSY;
+		*ptr = ((char*) buf->buffer_mem) + idx * buf->slot_size;
+
+		ft_atomic_dec(&buf->free_count);
+		return 1;
+	}
+}
+
 static inline void ft_buffer_finish_write(struct ft_buffer* buf, void *ptr)
 {
 	unsigned int idx = ((char*) ptr - (char*) buf->buffer_mem) / buf->slot_size;

@@ -19,6 +19,11 @@ static inline int fetch_and_dec(int *val)
 	return atomic_sub_return(1, (atomic_t*) val) + 1;
 }
 
+static inline void ft_atomic_dec(int *val)
+{
+	atomic_sub(1, (atomic_t*) val);
+}
+
 /* Don't use rewriting implementation if kernel text pages are read-only.
  * Ftrace gets around this by using the identity mapping, but that's more
  * effort that is warrented right now for Feather-Trace.
