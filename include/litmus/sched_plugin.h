@@ -53,6 +53,12 @@ typedef void (*task_block_t)  (struct task_struct *task);
  */
 typedef void (*task_exit_t)    (struct task_struct *);
 
+/* task_exit() is called with interrupts disabled and runqueue locks held, and
+ * thus and cannot block or spin.  task_cleanup() is called sometime later
+ * without any locks being held.
+ */
+typedef void (*task_cleanup_t)	(struct task_struct *);
+
 #ifdef CONFIG_LITMUS_LOCKING
 /* Called when the current task attempts to create a new lock of a given
  * protocol type. */
@@ -93,7 +99,9 @@ struct sched_plugin {
         task_new_t 		task_new;
 	task_wake_up_t		task_wake_up;
 	task_block_t		task_block;
+
 	task_exit_t 		task_exit;
+	task_cleanup_t		task_cleanup;
 
 #ifdef CONFIG_LITMUS_LOCKING
 	/*	locking protocols	*/

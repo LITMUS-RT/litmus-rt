@@ -96,6 +96,10 @@ static void litmus_dummy_task_exit(struct task_struct *task)
 {
 }
 
+static void litmus_dummy_task_cleanup(struct task_struct *task)
+{
+}
+
 static long litmus_dummy_complete_job(void)
 {
 	return -ENOSYS;
@@ -170,6 +174,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(tick);
 	CHECK(task_wake_up);
 	CHECK(task_exit);
+	CHECK(task_cleanup);
 	CHECK(task_block);
 	CHECK(task_new);
 	CHECK(complete_job);
