@@ -59,6 +59,8 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+#include <litmus/litmus.h>
+
 extern void exit_od_table(struct task_struct *t);
 
 static void exit_mm(struct task_struct * tsk);
@@ -719,6 +721,15 @@ void do_exit(long code)
 		panic("Aiee, killing interrupt handler!");
 	if (unlikely(!tsk->pid))
 		panic("Attempted to kill the idle task!");
+
+	if (unlikely(is_realtime(tsk))) {
+		/* We would like the task to be polite
+		 * and transition out of RT mode first.
+		 * Let's give it a little help.
+		 */
+		litmus_do_exit(tsk);
+		BUG_ON(is_realtime(tsk));
+	}
 
 	/*
 	 * If do_exit is called because this processes oopsed, it's possible

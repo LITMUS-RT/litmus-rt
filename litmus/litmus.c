@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 #include <linux/reboot.h>
 #include <linux/stop_machine.h>
+#include <linux/sched/rt.h>
 
 #include <litmus/litmus.h>
 #include <litmus/bheap.h>
@@ -384,19 +385,22 @@ out:
 	return retval;
 }
 
+void litmus_clear_state(struct task_struct* tsk)
+{
+    BUG_ON(bheap_node_in_heap(tsk_rt(tsk)->heap_node));
+    bheap_node_free(tsk_rt(tsk)->heap_node);
+    release_heap_free(tsk_rt(tsk)->rel_heap);
+
+    atomic_dec(&rt_task_count);
+    reinit_litmus_state(tsk, 1);
+}
+
 void litmus_exit_task(struct task_struct* tsk)
 {
 	if (is_realtime(tsk)) {
 		sched_trace_task_completion(tsk, 1);
 
 		litmus->task_exit(tsk);
-
-		BUG_ON(bheap_node_in_heap(tsk_rt(tsk)->heap_node));
-	        bheap_node_free(tsk_rt(tsk)->heap_node);
-		release_heap_free(tsk_rt(tsk)->rel_heap);
-
-		atomic_dec(&rt_task_count);
-		reinit_litmus_state(tsk, 1);
 	}
 }
 
@@ -489,11 +493,29 @@ void exit_litmus(struct task_struct *dead_tsk)
 		free_page((unsigned long) tsk_rt(dead_tsk)->ctrl_page);
 	}
 
-	/* main cleanup only for RT tasks */
-	if (is_realtime(dead_tsk))
-		litmus_exit_task(dead_tsk);
+	/* Tasks should not be real-time tasks any longer at this point. */
+	BUG_ON(is_realtime(dead_tsk));
 }
 
+
+void litmus_do_exit(struct task_struct *exiting_tsk)
+{
+	/* This task called do_exit(), but is still a real-time task. To avoid
+	 * complications later, we force it to be a non-real-time task now. */
+
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
+
+	TRACE_TASK(exiting_tsk, "exiting, demoted to SCHED_FIFO\n");
+	sched_setscheduler_nocheck(exiting_tsk, SCHED_FIFO, &param);
+}
+
+void litmus_dealloc(struct task_struct *tsk)
+{
+	/* tsk is no longer a real-time task */
+	TRACE_TASK(tsk, "Deallocating real-time task data\n");
+	litmus->task_cleanup(tsk);
+	litmus_clear_state(tsk);
+}
 
 #ifdef CONFIG_MAGIC_SYSRQ
 int sys_kill(int pid, int sig);

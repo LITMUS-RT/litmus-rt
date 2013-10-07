@@ -33,10 +33,13 @@ struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq);
 void litmus_fork(struct task_struct *tsk);
 void litmus_exec(void);
 /* clean up real-time state of a task */
+void litmus_clear_state(struct task_struct *dead_tsk);
 void exit_litmus(struct task_struct *dead_tsk);
 
 long litmus_admit_task(struct task_struct *tsk);
 void litmus_exit_task(struct task_struct *tsk);
+void litmus_dealloc(struct task_struct *tsk);
+void litmus_do_exit(struct task_struct *tsk);
 
 #define is_realtime(t) 		((t)->policy == SCHED_LITMUS)
 #define rt_transition_pending(t) \
