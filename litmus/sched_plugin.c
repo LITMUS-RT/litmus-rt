@@ -185,8 +185,8 @@ int register_sched_plugin(struct sched_plugin* plugin)
 #endif
 	CHECK(admit_task);
 
-	if (!plugin->release_at)
-		plugin->release_at = release_at;
+	if (!plugin->wait_for_release_at)
+		plugin->wait_for_release_at = default_wait_for_release_at;
 
 	raw_spin_lock(&sched_plugins_lock);
 	list_add(&plugin->list, &sched_plugins);

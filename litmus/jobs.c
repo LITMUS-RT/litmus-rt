@@ -28,7 +28,16 @@ void prepare_for_next_period(struct task_struct *t)
 		(long long)litmus_clock() -
 		(long long)t->rt_param.job_params.deadline;
 
-	setup_release(t, get_release(t) + get_rt_period(t));
+	if (tsk_rt(t)->sporadic_release) {
+		TRACE_TASK(t, "sporadic release at %llu\n",
+			   tsk_rt(t)->sporadic_release_time);
+		/* sporadic release */
+		setup_release(t, tsk_rt(t)->sporadic_release_time);
+		tsk_rt(t)->sporadic_release = 0;
+	} else {
+		/* periodic release => add period */
+		setup_release(t, get_release(t) + get_rt_period(t));
+	}
 	tsk_rt(t)->dont_requeue = 0;
 }
 
@@ -37,6 +46,20 @@ void release_at(struct task_struct *t, lt_t start)
 	BUG_ON(!t);
 	setup_release(t, start);
 	tsk_rt(t)->completed = 0;
+}
+
+long default_wait_for_release_at(lt_t release_time)
+{
+	struct task_struct *t = current;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	tsk_rt(t)->sporadic_release_time = release_time;
+	smp_wmb();
+	tsk_rt(t)->sporadic_release = 1;
+	local_irq_restore(flags);
+
+	return complete_job();
 }
 
 

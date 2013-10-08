@@ -300,7 +300,7 @@ static void pfair_prepare_next_period(struct task_struct* t)
 
 	prepare_for_next_period(t);
 	tsk_rt(t)->completed = 0;
-	p->release += p->period;
+	p->release = time2quanta(get_release(t), CEIL);
 }
 
 /* returns 1 if the task needs to go the release queue */
@@ -771,29 +771,6 @@ static void pfair_task_exit(struct task_struct * t)
 	t->rt_param.pfair = NULL;
 }
 
-
-static void pfair_release_at(struct task_struct* task, lt_t start)
-{
-	unsigned long flags;
-	quanta_t release;
-
-	struct pfair_cluster *cluster;
-
-	cluster = tsk_pfair(task)->cluster;
-
-	BUG_ON(!is_realtime(task));
-
-	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
-
-	release_at(task, start);
-	release = time2quanta(start, CEIL);
-	prepare_release(task, release);
-
-	TRACE_TASK(task, "sys release at %lu\n", release);
-
-	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
-}
-
 static void init_subtask(struct subtask* sub, unsigned long i,
 			 lt_t quanta, lt_t period)
 {
@@ -1014,7 +991,6 @@ static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.task_wake_up		= pfair_task_wake_up,
 	.task_block		= pfair_task_block,
 	.admit_task		= pfair_admit_task,
-	.release_at		= pfair_release_at,
 	.complete_job		= complete_job,
 	.activate_plugin	= pfair_activate_plugin,
 	.deactivate_plugin	= pfair_deactivate_plugin,

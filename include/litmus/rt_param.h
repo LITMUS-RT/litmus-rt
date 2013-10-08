@@ -141,6 +141,7 @@ struct release_heap;
 struct rt_job {
 	/* Time instant the the job was or will be released.  */
 	lt_t	release;
+
 	/* What is the current deadline? */
 	lt_t   	deadline;
 
@@ -203,6 +204,13 @@ struct rt_param {
 
 	/* timing parameters */
 	struct rt_job 		job_params;
+
+	/* Should the next job be released at some time other than
+	 * just period time units after the last release?
+	 */
+	unsigned int		sporadic_release:1;
+	lt_t			sporadic_release_time;
+
 
 	/* task representing the current "inherited" task
 	 * priority, assigned by inherit_priority and

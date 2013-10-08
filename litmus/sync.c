@@ -56,18 +56,9 @@ static long do_wait_for_ts_release(void)
 		 */
 		tsk_rt(current)->dont_requeue = 1;
 
-		/* Completion succeeded, setup release time. complete_job()
-		 * will indirectly cause the period to be added to the next
-		 * release time, so subtract it here. */
-		litmus->release_at(current, wait.ts_release_time
-				   + current->rt_param.task_params.phase
-				   - current->rt_param.task_params.period);
-
-		/* Advance to next job --- when complete_job() returns, the
-		 * first job has been released. Since we patched up the release
-		 * time, this occurs when all tasks synchronously release their
-		 * first job.*/
-		ret = complete_job();
+		/* Completion succeeded, setup release time. */
+		ret = litmus->wait_for_release_at(
+			wait.ts_release_time + get_rt_phase(current));
 	} else {
 		/* We were interrupted, must cleanup list. */
 		mutex_lock(&task_release_lock);
