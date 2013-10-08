@@ -324,7 +324,7 @@ const struct sched_class litmus_sched_class = {
 	 * cpu-hotplug or cpu throttling. Allows Litmus to use up to 1.0
 	 * CPU capacity.
 	 */
-	.next			= &rt_sched_class,
+	.next			= &stop_sched_class,
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
 	.yield_task		= yield_task_litmus,

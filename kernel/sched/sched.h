@@ -1017,7 +1017,7 @@ struct sched_class {
 #endif
 };
 
-#define sched_class_highest (&stop_sched_class)
+#define sched_class_highest (&litmus_sched_class)
 #define for_each_class(class) \
    for (class = sched_class_highest; class; class = class->next)
 
