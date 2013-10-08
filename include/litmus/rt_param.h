@@ -183,10 +183,6 @@ struct rt_param {
 	/* has the task completed? */
 	unsigned int		completed:1;
 
-	/* prevent this task from being requeued on another processor (used to
-	 * coordinate GSN-EDF, C-EDF, and sync.c) */
-	unsigned int		dont_requeue:1;
-
 #ifdef CONFIG_LITMUS_LOCKING
 	/* Is the task being priority-boosted by a locking protocol? */
 	unsigned int		priority_boosted:1;

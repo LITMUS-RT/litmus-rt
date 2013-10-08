@@ -50,12 +50,6 @@ static long do_wait_for_ts_release(void)
 	ret = wait_for_completion_interruptible(&wait.completion);
 
 	if (!ret) {
-		/* Setting this flag before releasing ensures that this CPU
-		 * will be the next CPU to requeue the task on a ready or
-		 * release queue. Cleared by prepare_for_next_period()
-		 */
-		tsk_rt(current)->dont_requeue = 1;
-
 		/* Completion succeeded, setup release time. */
 		ret = litmus->wait_for_release_at(
 			wait.ts_release_time + get_rt_phase(current));
