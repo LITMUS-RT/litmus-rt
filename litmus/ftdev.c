@@ -269,6 +269,12 @@ static long ftdev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		err = 0;
 		break;
 
+	case FTDEV_CALIBRATE:
+		if (ftdm->ftdev->calibrate) {
+			err = ftdm->ftdev->calibrate(ftdm->ftdev, iminor(filp->f_dentry->d_inode), arg);
+		}
+		break;
+
 	default:
 		printk(KERN_DEBUG "ftdev: strange ioctl (%u, %lu)\n", cmd, arg);
 	};
@@ -317,6 +323,7 @@ int ftdev_init(	struct ftdev* ftdev, struct module* owner,
 	ftdev->free     = NULL;
 	ftdev->can_open = NULL;
 	ftdev->write	= NULL;
+	ftdev->calibrate = NULL;
 
 	ftdev->minor = kcalloc(ftdev->minor_cnt, sizeof(*ftdev->minor),
 			GFP_KERNEL);
