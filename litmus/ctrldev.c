@@ -97,14 +97,14 @@ static int litmus_ctrl_mmap(struct file* filp, struct vm_area_struct* vma)
 	vma->vm_ops = &litmus_ctrl_vm_ops;
 	/* This mapping should not be kept across forks,
 	 * cannot be expanded, and is not a "normal" page. */
-	vma->vm_flags |= VM_DONTCOPY | VM_DONTEXPAND | VM_IO;
+	vma->vm_flags |= VM_DONTCOPY | VM_DONTEXPAND | VM_READ | VM_WRITE;
 
 	/* We don't want the first write access to trigger a "minor" page fault
 	 * to mark the page as dirty.  This is transient, private memory, we
-	 * don't care if it was touched or not. __S011 means RW access, but not
-	 * execute, and avoids copy-on-write behavior.
+	 * don't care if it was touched or not. PAGE_SHARED means RW access, but
+	 * not execute, and avoids copy-on-write behavior.
 	 * See protection_map in mmap.c.  */
-	vma->vm_page_prot = __S011;
+	vma->vm_page_prot = PAGE_SHARED;
 
 	err = alloc_ctrl_page(current);
 	if (!err)
