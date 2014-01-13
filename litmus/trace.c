@@ -12,17 +12,20 @@
 
 static struct ftdev overhead_dev;
 static struct ftdev cpu_overhead_dev;
+static struct ftdev msg_overhead_dev;
 
 #define trace_ts_buf overhead_dev.minor[0].buf
 
 #define cpu_trace_ts_buf(cpu) cpu_overhead_dev.minor[(cpu)].buf
+#define msg_trace_ts_buf(cpu) msg_overhead_dev.minor[(cpu)].buf
 
 static unsigned int ts_seq_no = 0;
 
 DEFINE_PER_CPU(atomic_t, irq_fired_count;)
-DEFINE_PER_CPU(atomic_t, cpu_irq_fired_count);
+DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, cpu_irq_fired_count);
 
 static DEFINE_PER_CPU(unsigned int, cpu_ts_seq_no);
+static DEFINE_PER_CPU(unsigned int, msg_ts_seq_no);
 
 static int64_t cycle_offset[NR_CPUS][NR_CPUS];
 
@@ -132,6 +135,84 @@ static inline void write_timestamp(uint8_t event,
 	local_irq_restore(flags);
 }
 
+static inline void __write_record(
+	uint8_t event,
+	uint8_t type,
+	uint16_t pid_fragment,
+	unsigned int irq_count,
+	int record_irq,
+	int hide_irq,
+	uint64_t timestamp,
+	int record_timestamp,
+
+	int only_single_writer,
+	int is_cpu_timestamp,
+	int local_cpu,
+	uint8_t other_cpu)
+{
+	unsigned long flags;
+	unsigned int seq_no;
+	struct timestamp *ts;
+	int cpu;
+	struct ft_buffer* buf;
+
+	local_irq_save(flags);
+
+	if (local_cpu)
+		cpu = smp_processor_id();
+	else
+		cpu = other_cpu;
+
+	/* resolved during function inlining */
+	if (is_cpu_timestamp) {
+		seq_no = __get_cpu_var(cpu_ts_seq_no)++;
+		buf = cpu_trace_ts_buf(cpu);
+	} else {
+		seq_no = fetch_and_inc((int *) &per_cpu(msg_ts_seq_no, cpu));
+		buf = msg_trace_ts_buf(cpu);
+	}
+
+	/* If buf is non-NULL here, then the buffer cannot be deallocated until
+	 * we turn interrupts on again. This is because free_timestamp_buffer()
+	 * indirectly causes TLB invalidations due to modifications of the
+	 * kernel address space, namely via vfree() in free_ft_buffer(), which
+	 * cannot be processed until we turn on interrupts again.
+	 */
+
+	if (buf &&
+	    (only_single_writer /* resolved during function inlining */
+	     ? ft_buffer_start_single_write(buf, (void**)  &ts)
+	     : ft_buffer_start_write(buf, (void**) &ts))) {
+		ts->event     = event;
+		ts->seq_no    = seq_no;
+
+		ts->task_type = type;
+		ts->pid	      = pid_fragment;
+
+		ts->cpu       = cpu;
+
+		if (record_irq) {
+			if (local_cpu)
+				irq_count = cpu_get_and_clear_irq_fired();
+			else
+				irq_count = get_and_clear_irq_fired_for_cpu(cpu);
+		}
+
+		save_irq_flags(ts, irq_count - hide_irq);
+
+		if (record_timestamp)
+			timestamp = ft_timestamp();
+		if (record_timestamp == RECORD_OFFSET_TIMESTAMP)
+			timestamp += cycle_offset[smp_processor_id()][cpu];
+
+		ts->timestamp = timestamp;
+		ft_buffer_finish_write(buf, ts);
+	}
+
+	local_irq_restore(flags);
+}
+
+
 static inline void write_cpu_timestamp(
 	uint8_t event,
 	uint8_t type,
@@ -142,48 +223,46 @@ static inline void write_cpu_timestamp(
 	uint64_t timestamp,
 	int record_timestamp)
 {
-	unsigned long flags;
-	unsigned int seq_no;
-	struct timestamp *ts;
-	int cpu;
-	struct ft_buffer* buf;
-
-	local_irq_save(flags);
-	cpu = smp_processor_id();
-
-	seq_no = __get_cpu_var(cpu_ts_seq_no)++;
-
-	buf = cpu_trace_ts_buf(cpu);
-	/* If buf is non-NULL here, then the buffer cannot be deallocated until
-	 * we turn interrupts on again. This is because free_timestamp_buffer()
-	 * indirectly causes TLB invalidations due to modifications of the
-	 * kernel address space, namely via vfree() in free_ft_buffer(), which
-	 * cannot be processed until we turn on interrupts again.
-	 */
-
-	if (buf && ft_buffer_start_single_write(buf, (void**)  &ts)) {
-		ts->event     = event;
-		ts->seq_no    = seq_no;
-
-		ts->task_type = type;
-		ts->pid	      = pid_fragment;
-
-		ts->cpu       = cpu;
-
-		if (record_irq)
-			irq_count = cpu_get_and_clear_irq_fired();
-
-		save_irq_flags(ts, irq_count - hide_irq);
-
-		if (record_timestamp)
-			timestamp = ft_timestamp();
-
-		ts->timestamp = timestamp;
-		ft_buffer_finish_write(buf, ts);
-	}
-
-	local_irq_restore(flags);
+	__write_record(event, type,
+		       pid_fragment,
+		       irq_count, record_irq, hide_irq,
+		       timestamp, record_timestamp,
+		       1 /* only_single_writer */,
+		       1 /* is_cpu_timestamp */,
+		       1 /* local_cpu */,
+		       0xff /* other_cpu */);
 }
+
+static inline void save_msg_timestamp(
+	uint8_t event,
+	int hide_irq)
+{
+	struct task_struct *t  = current;
+	__write_record(event, is_realtime(t) ? TSK_RT : TSK_BE,
+		       t->pid,
+		       0, LOCAL_IRQ_COUNT, hide_irq,
+		       0, RECORD_LOCAL_TIMESTAMP,
+		       0 /* only_single_writer */,
+		       0 /* is_cpu_timestamp */,
+		       1 /* local_cpu */,
+		       0xff /* other_cpu */);
+}
+
+static inline void save_remote_msg_timestamp(
+	uint8_t event,
+	uint8_t remote_cpu)
+{
+	struct task_struct *t  = current;
+	__write_record(event, is_realtime(t) ? TSK_RT : TSK_BE,
+		       t->pid,
+		       0, REMOTE_IRQ_COUNT, 0,
+		       0, RECORD_OFFSET_TIMESTAMP,
+		       0 /* only_single_writer */,
+		       0 /* is_cpu_timestamp */,
+		       0 /* local_cpu */,
+		       remote_cpu);
+}
+
 
 static void __add_timestamp_user(struct timestamp *pre_recorded)
 {
@@ -263,22 +342,17 @@ feather_callback void save_cpu_timestamp_irq(unsigned long event,
 			    0, RECORD_LOCAL_TIMESTAMP);
 }
 
-feather_callback void save_timestamp_cpu(unsigned long event,
-					 unsigned long cpu)
+
+feather_callback void msg_sent(unsigned long event, unsigned long to)
 {
-	write_timestamp(event, TSK_UNKNOWN, cpu, current->pid,
-			0, REMOTE_IRQ_COUNT, 0,
-			0, RECORD_OFFSET_TIMESTAMP);
+	save_remote_msg_timestamp(event, to);
 }
 
-/* Suppress one IRQ from the irq count. Used by TS_SEND_RESCHED_END, which is
+/* Suppresses one IRQ from the irq count. Used by TS_SEND_RESCHED_END, which is
  * called from within an interrupt that is expected. */
-feather_callback void save_timestamp_hide_irq(unsigned long event)
+feather_callback void msg_received(unsigned long event)
 {
-	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
-			raw_smp_processor_id(), current->pid,
-			0, LOCAL_IRQ_COUNT, 1,
-			0, RECORD_LOCAL_TIMESTAMP);
+	save_msg_timestamp(event, 1);
 }
 
 /******************************************************************************/
@@ -456,7 +530,7 @@ static int __init init_global_ft_overhead_trace(void)
 err_dealloc:
 	ftdev_exit(&overhead_dev);
 err_out:
-	printk(KERN_WARNING "Could not register ft_trace module.\n");
+	printk(KERN_WARNING "Could not register global ft_trace device.\n");
 	return err;
 }
 
@@ -486,7 +560,37 @@ static int __init init_cpu_ft_overhead_trace(void)
 err_dealloc:
 	ftdev_exit(&cpu_overhead_dev);
 err_out:
-	printk(KERN_WARNING "Could not register per-cpu ft_trace module.\n");
+	printk(KERN_WARNING "Could not register per-cpu ft_trace device.\n");
+	return err;
+}
+
+static int __init init_msg_ft_overhead_trace(void)
+{
+	int err, cpu;
+
+	printk("Initializing Feather-Trace per-cpu message overhead tracing device.\n");
+	err = ftdev_init(&msg_overhead_dev, THIS_MODULE,
+			 num_online_cpus(), "ft_msg_trace");
+	if (err)
+		goto err_out;
+
+	msg_overhead_dev.alloc = alloc_timestamp_buffer;
+	msg_overhead_dev.free  = free_timestamp_buffer;
+
+	err = register_ftdev(&msg_overhead_dev);
+	if (err)
+		goto err_dealloc;
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++)  {
+		per_cpu(msg_ts_seq_no, cpu) = 0;
+	}
+
+	return 0;
+
+err_dealloc:
+	ftdev_exit(&msg_overhead_dev);
+err_out:
+	printk(KERN_WARNING "Could not register message ft_trace device.\n");
 	return err;
 }
 
@@ -509,6 +613,13 @@ static int __init init_ft_overhead_trace(void)
 		return err;
 	}
 
+	err = init_msg_ft_overhead_trace();
+	if (err) {
+		ftdev_exit(&overhead_dev);
+		ftdev_exit(&cpu_overhead_dev);
+		return err;
+	}
+
 	return 0;
 }
 
@@ -516,6 +627,7 @@ static void __exit exit_ft_overhead_trace(void)
 {
 	ftdev_exit(&overhead_dev);
 	ftdev_exit(&cpu_overhead_dev);
+	ftdev_exit(&msg_overhead_dev);
 }
 
 module_init(init_ft_overhead_trace);

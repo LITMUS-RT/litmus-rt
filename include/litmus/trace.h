@@ -28,15 +28,14 @@ struct timestamp {
 };
 
 /* tracing callbacks */
-feather_callback void save_timestamp_hide_irq(unsigned long event);
-feather_callback void save_timestamp_cpu(unsigned long event,
-					 unsigned long cpu);
+feather_callback void msg_sent(unsigned long event, unsigned long to);
+feather_callback void msg_received(unsigned long event);
 
-#define TIMESTAMP_IN_IRQ(id) \
-	ft_event0(id, save_timestamp_hide_irq)
-#define CTIMESTAMP(id, cpu) \
-	ft_event1(id, save_timestamp_cpu, (unsigned long) cpu)
+#define MSG_TIMESTAMP_SENT(id, to) \
+	ft_event1(id, msg_sent, (unsigned long) to);
 
+#define MSG_TIMESTAMP_RECEIVED(id) \
+	ft_event0(id, msg_received);
 
 feather_callback void save_cpu_timestamp(unsigned long event);
 feather_callback void save_cpu_timestamp_time(unsigned long event, unsigned long time_ptr);
@@ -65,8 +64,8 @@ feather_callback void save_cpu_task_latency(unsigned long event, unsigned long w
 
 #else /* !CONFIG_SCHED_OVERHEAD_TRACE */
 
-#define TIMESTAMP_IN_IRQ(id)
-#define CTIMESTAMP(id, cpu)
+#define MSG_TIMESTAMP_SENT(id, to)
+#define MSG_TIMESTAMP_RECEIVED(id)
 
 #define CPU_TIMESTAMP_TIME(id, time_ptr)
 #define CPU_TIMESTAMP_IRQ(id, irq_count_ptr)
@@ -132,8 +131,8 @@ feather_callback void save_cpu_task_latency(unsigned long event, unsigned long w
 #define TS_EXIT_NP_START		CPU_TIMESTAMP(150)
 #define TS_EXIT_NP_END			CPU_TIMESTAMP(151)
 
-#define TS_SEND_RESCHED_START(c)	CTIMESTAMP(190, c)
-#define TS_SEND_RESCHED_END		TIMESTAMP_IN_IRQ(191)
+#define TS_SEND_RESCHED_START(c)	MSG_TIMESTAMP_SENT(190, c)
+#define TS_SEND_RESCHED_END		MSG_TIMESTAMP_RECEIVED(191)
 
 #define TS_RELEASE_LATENCY(when)	CPU_LTIMESTAMP(208, &(when))
 
