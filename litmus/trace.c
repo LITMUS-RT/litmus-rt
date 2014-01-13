@@ -24,6 +24,8 @@ DEFINE_PER_CPU(atomic_t, cpu_irq_fired_count);
 
 static DEFINE_PER_CPU(unsigned int, cpu_ts_seq_no);
 
+static int64_t cycle_offset[NR_CPUS][NR_CPUS];
+
 void ft_irq_fired(void)
 {
 	/* Only called with preemptions disabled.  */
@@ -77,6 +79,10 @@ static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
 #define LOCAL_IRQ_COUNT 1
 #define REMOTE_IRQ_COUNT 2
 
+#define DO_NOT_RECORD_TIMESTAMP 0
+#define RECORD_LOCAL_TIMESTAMP 1
+#define RECORD_OFFSET_TIMESTAMP 2
+
 static inline void write_timestamp(uint8_t event,
 				   uint8_t type,
 				   uint8_t cpu,
@@ -116,6 +122,8 @@ static inline void write_timestamp(uint8_t event,
 
 		if (record_timestamp)
 			timestamp = ft_timestamp();
+		if (record_timestamp == RECORD_OFFSET_TIMESTAMP)
+			timestamp += cycle_offset[smp_processor_id()][cpu];
 
 		ts->timestamp = timestamp;
 		ft_buffer_finish_write(trace_ts_buf, ts);
@@ -204,7 +212,7 @@ feather_callback void save_cpu_timestamp_def(unsigned long event,
 	write_cpu_timestamp(event, type,
 			    current->pid,
 			    0, LOCAL_IRQ_COUNT, 0,
-			    0, 1);
+			    0, RECORD_LOCAL_TIMESTAMP);
 }
 
 feather_callback void save_cpu_timestamp_task(unsigned long event,
@@ -216,7 +224,7 @@ feather_callback void save_cpu_timestamp_task(unsigned long event,
 	write_cpu_timestamp(event, rt ? TSK_RT : TSK_BE,
 			    t->pid,
 			    0, LOCAL_IRQ_COUNT, 0,
-			    0, 1);
+			    0, RECORD_LOCAL_TIMESTAMP);
 }
 
 feather_callback void save_cpu_task_latency(unsigned long event,
@@ -228,7 +236,7 @@ feather_callback void save_cpu_task_latency(unsigned long event,
 	write_cpu_timestamp(event, TSK_RT,
 			    0,
 			    0, LOCAL_IRQ_COUNT, 0,
-			    now - *when, 0);
+			    now - *when, DO_NOT_RECORD_TIMESTAMP);
 }
 
 /* fake timestamp to user-reported time */
@@ -240,7 +248,7 @@ feather_callback void save_cpu_timestamp_time(unsigned long event,
 	write_cpu_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			    current->pid,
 			    0, LOCAL_IRQ_COUNT, 0,
-			    *time, 0);
+			    *time, DO_NOT_RECORD_TIMESTAMP);
 }
 
 /* Record user-reported IRQ count */
@@ -252,7 +260,7 @@ feather_callback void save_cpu_timestamp_irq(unsigned long event,
 	write_cpu_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			    current->pid,
 			    *irqs, NO_IRQ_COUNT, 0,
-			    0, 1);
+			    0, RECORD_LOCAL_TIMESTAMP);
 }
 
 feather_callback void save_timestamp_cpu(unsigned long event,
@@ -260,7 +268,7 @@ feather_callback void save_timestamp_cpu(unsigned long event,
 {
 	write_timestamp(event, TSK_UNKNOWN, cpu, current->pid,
 			0, REMOTE_IRQ_COUNT, 0,
-			0, 1);
+			0, RECORD_OFFSET_TIMESTAMP);
 }
 
 /* Suppress one IRQ from the irq count. Used by TS_SEND_RESCHED_END, which is
@@ -270,12 +278,107 @@ feather_callback void save_timestamp_hide_irq(unsigned long event)
 	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			raw_smp_processor_id(), current->pid,
 			0, LOCAL_IRQ_COUNT, 1,
-			0, 1);
+			0, RECORD_LOCAL_TIMESTAMP);
 }
 
 /******************************************************************************/
 /*                        DEVICE FILE DRIVER                                  */
 /******************************************************************************/
+
+struct calibrate_info {
+	atomic_t ready;
+
+	uint64_t cycle_count;
+};
+
+static void calibrate_helper(void *_info)
+{
+	struct calibrate_info *info = _info;
+	/* check in with master */
+	atomic_inc(&info->ready);
+
+	/* wait for master to signal start */
+	while (atomic_read(&info->ready))
+		cpu_relax();
+
+	/* report time stamp */
+	info->cycle_count = ft_timestamp();
+
+	/* tell master that we are done */
+	atomic_inc(&info->ready);
+}
+
+
+static int64_t calibrate_cpu(int cpu)
+{
+	uint64_t cycles;
+	struct calibrate_info info;
+	unsigned long flags;
+	int64_t  delta;
+
+	atomic_set(&info.ready, 0);
+	info.cycle_count = 0;
+	smp_wmb();
+
+	smp_call_function_single(cpu, calibrate_helper, &info, 0);
+
+	/* wait for helper to become active */
+	while (!atomic_read(&info.ready))
+		cpu_relax();
+
+	/* avoid interrupt interference */
+	local_irq_save(flags);
+
+	/* take measurement */
+	atomic_set(&info.ready, 0);
+	smp_wmb();
+	cycles = ft_timestamp();
+
+	/* wait for helper reading */
+	while (!atomic_read(&info.ready))
+		cpu_relax();
+
+	/* positive offset: the other guy is ahead of us */
+	delta  = (int64_t) info.cycle_count;
+	delta -= (int64_t) cycles;
+
+	local_irq_restore(flags);
+
+	return delta;
+}
+
+#define NUM_SAMPLES 10
+
+static long calibrate_tsc_offsets(struct ftdev* ftdev, unsigned int idx,
+				  unsigned long uarg)
+{
+	int cpu, self, i;
+	int64_t delta, sample;
+
+	preempt_disable();
+	self = smp_processor_id();
+
+	if (uarg)
+		printk(KERN_INFO "Feather-Trace: determining TSC offsets for P%d\n", self);
+
+	for_each_online_cpu(cpu)
+		if (cpu != self) {
+			delta = calibrate_cpu(cpu);
+			for (i = 1; i < NUM_SAMPLES; i++) {
+			        sample = calibrate_cpu(cpu);
+				delta = sample < delta ? sample : delta;
+			}
+
+			cycle_offset[self][cpu] = delta;
+
+			if (uarg)
+				printk(KERN_INFO "Feather-Trace: TSC offset for P%d->P%d is %lld cycles.\n",
+				       self, cpu, cycle_offset[self][cpu]);
+		}
+
+	preempt_enable();
+	return 0;
+}
 
 #define NO_TIMESTAMPS (2 << CONFIG_SCHED_OVERHEAD_TRACE_SHIFT)
 
@@ -342,6 +445,7 @@ static int __init init_global_ft_overhead_trace(void)
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
 	overhead_dev.write = write_timestamp_from_user;
+	overhead_dev.calibrate = calibrate_tsc_offsets;
 
 	err = register_ftdev(&overhead_dev);
 	if (err)
@@ -389,7 +493,11 @@ err_out:
 
 static int __init init_ft_overhead_trace(void)
 {
-	int err;
+	int err, i, j;
+
+	for (i = 0; i < NR_CPUS; i++)
+		for (j = 0; j < NR_CPUS; j++)
+			cycle_offset[i][j] = 0;
 
 	err = init_global_ft_overhead_trace();
 	if (err)
