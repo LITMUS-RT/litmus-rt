@@ -15,9 +15,12 @@ static struct ftdev cpu_overhead_dev;
 
 #define trace_ts_buf overhead_dev.minor[0].buf
 
+#define cpu_trace_ts_buf(cpu) cpu_overhead_dev.minor[(cpu)].buf
+
 static unsigned int ts_seq_no = 0;
 
-DEFINE_PER_CPU(atomic_t, irq_fired_count);
+DEFINE_PER_CPU(atomic_t, irq_fired_count;)
+DEFINE_PER_CPU(atomic_t, cpu_irq_fired_count);
 
 static DEFINE_PER_CPU(unsigned int, cpu_ts_seq_no);
 
@@ -25,6 +28,7 @@ void ft_irq_fired(void)
 {
 	/* Only called with preemptions disabled.  */
 	atomic_inc(&__get_cpu_var(irq_fired_count));
+	atomic_inc(&__get_cpu_var(cpu_irq_fired_count));
 
 	if (has_control_page(current))
 		get_control_page(current)->irq_count++;
@@ -46,14 +50,32 @@ static inline unsigned int get_and_clear_irq_fired(void)
 	return atomic_xchg(&__raw_get_cpu_var(irq_fired_count), 0);
 }
 
+static inline unsigned int get_and_clear_irq_fired_for_cpu(int cpu)
+{
+	return atomic_xchg(&per_cpu(irq_fired_count, cpu), 0);
+}
+
+static inline void cpu_clear_irq_fired(void)
+{
+	atomic_set(&__raw_get_cpu_var(cpu_irq_fired_count), 0);
+}
+
+static inline unsigned int cpu_get_and_clear_irq_fired(void)
+{
+	return atomic_xchg(&__raw_get_cpu_var(cpu_irq_fired_count), 0);
+}
+
 static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
 {
 	/* Store how many interrupts occurred. */
 	ts->irq_count = irq_count;
 	/* Extra flag because ts->irq_count overflows quickly. */
 	ts->irq_flag  = irq_count > 0;
-
 }
+
+#define NO_IRQ_COUNT 0
+#define LOCAL_IRQ_COUNT 1
+#define REMOTE_IRQ_COUNT 2
 
 static inline void write_timestamp(uint8_t event,
 				   uint8_t type,
@@ -85,8 +107,10 @@ static inline void write_timestamp(uint8_t event,
 
 		ts->cpu       = cpu;
 
-		if (record_irq)
+		if (likely(record_irq == LOCAL_IRQ_COUNT))
 			irq_count = get_and_clear_irq_fired();
+		else if (record_irq == REMOTE_IRQ_COUNT)
+			irq_count = get_and_clear_irq_fired_for_cpu(cpu);
 
 		save_irq_flags(ts, irq_count - hide_irq);
 
@@ -95,6 +119,59 @@ static inline void write_timestamp(uint8_t event,
 
 		ts->timestamp = timestamp;
 		ft_buffer_finish_write(trace_ts_buf, ts);
+	}
+
+	local_irq_restore(flags);
+}
+
+static inline void write_cpu_timestamp(
+	uint8_t event,
+	uint8_t type,
+	uint16_t pid_fragment,
+	unsigned int irq_count,
+	int record_irq,
+	int hide_irq,
+	uint64_t timestamp,
+	int record_timestamp)
+{
+	unsigned long flags;
+	unsigned int seq_no;
+	struct timestamp *ts;
+	int cpu;
+	struct ft_buffer* buf;
+
+	local_irq_save(flags);
+	cpu = smp_processor_id();
+
+	seq_no = __get_cpu_var(cpu_ts_seq_no)++;
+
+	buf = cpu_trace_ts_buf(cpu);
+	/* If buf is non-NULL here, then the buffer cannot be deallocated until
+	 * we turn interrupts on again. This is because free_timestamp_buffer()
+	 * indirectly causes TLB invalidations due to modifications of the
+	 * kernel address space, namely via vfree() in free_ft_buffer(), which
+	 * cannot be processed until we turn on interrupts again.
+	 */
+
+	if (buf && ft_buffer_start_write(buf, (void**)  &ts)) {
+		ts->event     = event;
+		ts->seq_no    = seq_no;
+
+		ts->task_type = type;
+		ts->pid	      = pid_fragment;
+
+		ts->cpu       = cpu;
+
+		if (record_irq)
+			irq_count = cpu_get_and_clear_irq_fired();
+
+		save_irq_flags(ts, irq_count - hide_irq);
+
+		if (record_timestamp)
+			timestamp = ft_timestamp();
+
+		ts->timestamp = timestamp;
+		ft_buffer_finish_write(buf, ts);
 	}
 
 	local_irq_restore(flags);
@@ -121,78 +198,68 @@ static void __add_timestamp_user(struct timestamp *pre_recorded)
 	local_irq_restore(flags);
 }
 
-feather_callback void save_timestamp(unsigned long event)
+feather_callback void save_cpu_timestamp_def(unsigned long event,
+					     unsigned long type)
 {
-	write_timestamp(event, TSK_UNKNOWN,
-			raw_smp_processor_id(),
-			current->pid,
-			0, 1, 0,
-			0, 1);
+	write_cpu_timestamp(event, type,
+			    current->pid,
+			    0, LOCAL_IRQ_COUNT, 0,
+			    0, 1);
 }
 
-feather_callback void save_timestamp_def(unsigned long event,
-					 unsigned long type)
-{
-	write_timestamp(event, type,
-			raw_smp_processor_id(),
-			current->pid,
-			0, 1, 0,
-			0, 1);
-}
-
-feather_callback void save_timestamp_task(unsigned long event,
-					  unsigned long t_ptr)
+feather_callback void save_cpu_timestamp_task(unsigned long event,
+					      unsigned long t_ptr)
 {
 	struct task_struct *t = (struct task_struct *) t_ptr;
 	int rt = is_realtime(t);
 
-	write_timestamp(event, rt ? TSK_RT : TSK_BE,
-			raw_smp_processor_id(),
-			t->pid,
-			0, 1, 0,
-			0, 1);
+	write_cpu_timestamp(event, rt ? TSK_RT : TSK_BE,
+			    t->pid,
+			    0, LOCAL_IRQ_COUNT, 0,
+			    0, 1);
+}
+
+feather_callback void save_cpu_task_latency(unsigned long event,
+					    unsigned long when_ptr)
+{
+	lt_t now = litmus_clock();
+	lt_t *when = (lt_t*) when_ptr;
+
+	write_cpu_timestamp(event, TSK_RT,
+			    0,
+			    0, LOCAL_IRQ_COUNT, 0,
+			    now - *when, 0);
+}
+
+/* fake timestamp to user-reported time */
+feather_callback void save_cpu_timestamp_time(unsigned long event,
+			 unsigned long ptr)
+{
+	uint64_t* time = (uint64_t*) ptr;
+
+	write_cpu_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
+			    current->pid,
+			    0, LOCAL_IRQ_COUNT, 0,
+			    *time, 0);
+}
+
+/* Record user-reported IRQ count */
+feather_callback void save_cpu_timestamp_irq(unsigned long event,
+			unsigned long irq_counter_ptr)
+{
+	uint64_t* irqs = (uint64_t*) irq_counter_ptr;
+
+	write_cpu_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
+			    current->pid,
+			    *irqs, NO_IRQ_COUNT, 0,
+			    0, 1);
 }
 
 feather_callback void save_timestamp_cpu(unsigned long event,
 					 unsigned long cpu)
 {
 	write_timestamp(event, TSK_UNKNOWN, cpu, current->pid,
-			0, 1, 0,
-			0, 1);
-}
-
-feather_callback void save_task_latency(unsigned long event,
-					unsigned long when_ptr)
-{
-	lt_t now = litmus_clock();
-	lt_t *when = (lt_t*) when_ptr;
-
-	write_timestamp(event, TSK_RT, raw_smp_processor_id(), 0,
-			0, 1, 0,
-			now - *when, 0);
-}
-
-/* fake timestamp to user-reported time */
-feather_callback void save_timestamp_time(unsigned long event,
-			 unsigned long ptr)
-{
-	uint64_t* time = (uint64_t*) ptr;
-
-	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
-			raw_smp_processor_id(), current->pid,
-			0, 1, 0,
-			*time, 0);
-}
-
-/* Record user-reported IRQ count */
-feather_callback void save_timestamp_irq(unsigned long event,
-			unsigned long irq_counter_ptr)
-{
-	uint64_t* irqs = (uint64_t*) irq_counter_ptr;
-
-	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
-			raw_smp_processor_id(), current->pid,
-			*irqs, 0, 0,
+			0, REMOTE_IRQ_COUNT, 0,
 			0, 1);
 }
 
@@ -202,7 +269,7 @@ feather_callback void save_timestamp_hide_irq(unsigned long event)
 {
 	write_timestamp(event, is_realtime(current) ? TSK_RT : TSK_BE,
 			raw_smp_processor_id(), current->pid,
-			0, 1, 1,
+			0, LOCAL_IRQ_COUNT, 1,
 			0, 1);
 }
 
@@ -219,8 +286,8 @@ static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 	/* An overhead-tracing timestamp should be exactly 16 bytes long. */
 	BUILD_BUG_ON(sizeof(struct timestamp) != 16);
 
-	while (count && !trace_ts_buf) {
-		printk("time stamp buffer: trying to allocate %u time stamps.\n", count);
+	while (count && !ftdev->minor[idx].buf) {
+		printk("time stamp buffer: trying to allocate %u time stamps for minor=%u.\n", count, idx);
 		ftdev->minor[idx].buf = alloc_ft_buffer(count, sizeof(struct timestamp));
 		count /= 2;
 	}
@@ -229,8 +296,11 @@ static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 
 static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 {
-	free_ft_buffer(ftdev->minor[idx].buf);
 	ftdev->minor[idx].buf = NULL;
+	/* Make sure all cores have actually seen buf == NULL before
+	 * yanking out the mappings from underneath them. */
+	smp_wmb();
+	free_ft_buffer(ftdev->minor[idx].buf);
 }
 
 static ssize_t write_timestamp_from_user(struct ft_buffer* buf, size_t len,
