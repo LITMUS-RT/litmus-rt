@@ -3951,6 +3951,7 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	const struct sched_class *prev_class;
 	struct rq *rq;
 	int reset_on_fork;
+	int litmus_task = 0;
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
@@ -4087,8 +4088,10 @@ recheck:
 
 	p->sched_reset_on_fork = reset_on_fork;
 
-	if (p->policy == SCHED_LITMUS)
+	if (p->policy == SCHED_LITMUS) {
 		litmus_exit_task(p);
+		litmus_task = 1;
+	}
 
 	oldprio = p->prio;
 	prev_class = p->sched_class;
@@ -4113,6 +4116,9 @@ recheck:
 	task_rq_unlock(rq, p, &flags);
 
 	rt_mutex_adjust_pi(p);
+
+	if (litmus_task)
+		litmus_dealloc(p);
 
 	return 0;
 }

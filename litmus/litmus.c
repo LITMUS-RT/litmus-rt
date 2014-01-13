@@ -395,6 +395,7 @@ void litmus_clear_state(struct task_struct* tsk)
     reinit_litmus_state(tsk, 1);
 }
 
+/* called from sched_setscheduler() */
 void litmus_exit_task(struct task_struct* tsk)
 {
 	if (is_realtime(tsk)) {
@@ -478,6 +479,8 @@ void litmus_exec(void)
 	}
 }
 
+/* Called when dead_tsk is being deallocated
+ */
 void exit_litmus(struct task_struct *dead_tsk)
 {
 	/* We also allow non-RT tasks to
@@ -496,7 +499,6 @@ void exit_litmus(struct task_struct *dead_tsk)
 	/* Tasks should not be real-time tasks any longer at this point. */
 	BUG_ON(is_realtime(dead_tsk));
 }
-
 
 void litmus_do_exit(struct task_struct *exiting_tsk)
 {
