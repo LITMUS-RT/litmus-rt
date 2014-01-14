@@ -10,16 +10,11 @@
 /*                          Allocation                                        */
 /******************************************************************************/
 
-static struct ftdev overhead_dev;
 static struct ftdev cpu_overhead_dev;
 static struct ftdev msg_overhead_dev;
 
-#define trace_ts_buf overhead_dev.minor[0].buf
-
 #define cpu_trace_ts_buf(cpu) cpu_overhead_dev.minor[(cpu)].buf
 #define msg_trace_ts_buf(cpu) msg_overhead_dev.minor[(cpu)].buf
-
-static unsigned int ts_seq_no = 0;
 
 DEFINE_PER_CPU(atomic_t, irq_fired_count;)
 DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, cpu_irq_fired_count);
@@ -86,55 +81,6 @@ static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
 #define RECORD_LOCAL_TIMESTAMP 1
 #define RECORD_OFFSET_TIMESTAMP 2
 
-static inline void write_timestamp(uint8_t event,
-				   uint8_t type,
-				   uint8_t cpu,
-				   uint16_t pid_fragment,
-				   unsigned int irq_count,
-				   int record_irq,
-				   int hide_irq,
-				   uint64_t timestamp,
-				   int record_timestamp)
-{
-	unsigned long flags;
-	unsigned int seq_no;
-	struct timestamp *ts;
-
-	/* Avoid preemptions while recording the timestamp. This reduces the
-	 * number of "out of order" timestamps in the stream and makes
-	 * post-processing easier. */
-
-	local_irq_save(flags);
-
-	seq_no = fetch_and_inc((int *) &ts_seq_no);
-	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
-		ts->event     = event;
-		ts->seq_no    = seq_no;
-
-		ts->task_type = type;
-		ts->pid	      = pid_fragment;
-
-		ts->cpu       = cpu;
-
-		if (likely(record_irq == LOCAL_IRQ_COUNT))
-			irq_count = get_and_clear_irq_fired();
-		else if (record_irq == REMOTE_IRQ_COUNT)
-			irq_count = get_and_clear_irq_fired_for_cpu(cpu);
-
-		save_irq_flags(ts, irq_count - hide_irq);
-
-		if (record_timestamp)
-			timestamp = ft_timestamp();
-		if (record_timestamp == RECORD_OFFSET_TIMESTAMP)
-			timestamp += cycle_offset[smp_processor_id()][cpu];
-
-		ts->timestamp = timestamp;
-		ft_buffer_finish_write(trace_ts_buf, ts);
-	}
-
-	local_irq_restore(flags);
-}
-
 static inline void __write_record(
 	uint8_t event,
 	uint8_t type,
@@ -155,6 +101,10 @@ static inline void __write_record(
 	struct timestamp *ts;
 	int cpu;
 	struct ft_buffer* buf;
+
+	/* Avoid preemptions while recording the timestamp. This reduces the
+	 * number of "out of order" timestamps in the stream and makes
+	 * post-processing easier. */
 
 	local_irq_save(flags);
 
@@ -520,31 +470,6 @@ out:
 	return consumed;
 }
 
-static int __init init_global_ft_overhead_trace(void)
-{
-	int err;
-
-	printk("Initializing Feather-Trace overhead tracing device.\n");
-	err = ftdev_init(&overhead_dev, THIS_MODULE, 1, "ft_trace");
-	if (err)
-		goto err_out;
-
-	overhead_dev.alloc = alloc_timestamp_buffer;
-	overhead_dev.free  = free_timestamp_buffer;
-
-	err = register_ftdev(&overhead_dev);
-	if (err)
-		goto err_dealloc;
-
-	return 0;
-
-err_dealloc:
-	ftdev_exit(&overhead_dev);
-err_out:
-	printk(KERN_WARNING "Could not register global ft_trace device.\n");
-	return err;
-}
-
 static int __init init_cpu_ft_overhead_trace(void)
 {
 	int err, cpu;
@@ -616,29 +541,20 @@ static int __init init_ft_overhead_trace(void)
 		for (j = 0; j < NR_CPUS; j++)
 			cycle_offset[i][j] = 0;
 
-	err = init_global_ft_overhead_trace();
+	err = init_cpu_ft_overhead_trace();
 	if (err)
 		return err;
 
-	err = init_cpu_ft_overhead_trace();
-	if (err) {
-		ftdev_exit(&overhead_dev);
-		return err;
-	}
-
 	err = init_msg_ft_overhead_trace();
-	if (err) {
-		ftdev_exit(&overhead_dev);
+	if (err)
 		ftdev_exit(&cpu_overhead_dev);
 		return err;
-	}
 
 	return 0;
 }
 
 static void __exit exit_ft_overhead_trace(void)
 {
-	ftdev_exit(&overhead_dev);
 	ftdev_exit(&cpu_overhead_dev);
 	ftdev_exit(&msg_overhead_dev);
 }
