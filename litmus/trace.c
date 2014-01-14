@@ -263,28 +263,6 @@ static inline void save_remote_msg_timestamp(
 		       remote_cpu);
 }
 
-
-static void __add_timestamp_user(struct timestamp *pre_recorded)
-{
-	unsigned long flags;
-	unsigned int seq_no;
-	struct timestamp *ts;
-
-
-	local_irq_save(flags);
-
-	seq_no = fetch_and_inc((int *) &ts_seq_no);
-	if (ft_buffer_start_write(trace_ts_buf, (void**)  &ts)) {
-		*ts = *pre_recorded;
-		ts->seq_no = seq_no;
-		ts->cpu	   = raw_smp_processor_id();
-	        save_irq_flags(ts, get_and_clear_irq_fired());
-		ft_buffer_finish_write(trace_ts_buf, ts);
-	}
-
-	local_irq_restore(flags);
-}
-
 feather_callback void save_cpu_timestamp_def(unsigned long event,
 					     unsigned long type)
 {
@@ -353,6 +331,31 @@ feather_callback void msg_sent(unsigned long event, unsigned long to)
 feather_callback void msg_received(unsigned long event)
 {
 	save_msg_timestamp(event, 1);
+}
+
+static void __add_timestamp_user(struct timestamp *pre_recorded)
+{
+	unsigned long flags;
+	unsigned int seq_no;
+	struct timestamp *ts;
+	struct ft_buffer* buf;
+	int cpu;
+
+	local_irq_save(flags);
+
+	cpu = smp_processor_id();
+	buf = cpu_trace_ts_buf(cpu);
+
+	seq_no = __get_cpu_var(cpu_ts_seq_no)++;
+	if (buf && ft_buffer_start_single_write(buf, (void**)  &ts)) {
+		*ts = *pre_recorded;
+		ts->seq_no = seq_no;
+		ts->cpu	   = raw_smp_processor_id();
+	        save_irq_flags(ts, get_and_clear_irq_fired());
+		ft_buffer_finish_write(buf, ts);
+	}
+
+	local_irq_restore(flags);
 }
 
 /******************************************************************************/
@@ -499,13 +502,23 @@ static ssize_t write_timestamp_from_user(struct ft_buffer* buf, size_t len,
 		from += sizeof(ts);
 		consumed += sizeof(ts);
 
+		/* Note: this always adds to the buffer of the CPU-local
+		 * device, not necessarily to the device that the system call
+		 * was invoked on. This is admittedly a bit ugly, but requiring
+		 * tasks to only write to the appropriate device would make
+		 * tracing from userspace under global and clustered scheduling
+		 * exceedingly difficult. Writing to remote buffers would
+		 * require to not use ft_buffer_start_single_write(), which we
+		 * want to do to reduce the number of atomic ops in the common
+		 * case (which is the recording of CPU-local scheduling
+		 * overheads).
+		 */
 		__add_timestamp_user(&ts);
 	}
 
 out:
 	return consumed;
 }
-
 
 static int __init init_global_ft_overhead_trace(void)
 {
@@ -518,8 +531,6 @@ static int __init init_global_ft_overhead_trace(void)
 
 	overhead_dev.alloc = alloc_timestamp_buffer;
 	overhead_dev.free  = free_timestamp_buffer;
-	overhead_dev.write = write_timestamp_from_user;
-	overhead_dev.calibrate = calibrate_tsc_offsets;
 
 	err = register_ftdev(&overhead_dev);
 	if (err)
@@ -546,6 +557,7 @@ static int __init init_cpu_ft_overhead_trace(void)
 
 	cpu_overhead_dev.alloc = alloc_timestamp_buffer;
 	cpu_overhead_dev.free  = free_timestamp_buffer;
+	cpu_overhead_dev.write = write_timestamp_from_user;
 
 	err = register_ftdev(&cpu_overhead_dev);
 	if (err)
@@ -576,6 +588,7 @@ static int __init init_msg_ft_overhead_trace(void)
 
 	msg_overhead_dev.alloc = alloc_timestamp_buffer;
 	msg_overhead_dev.free  = free_timestamp_buffer;
+	msg_overhead_dev.calibrate = calibrate_tsc_offsets;
 
 	err = register_ftdev(&msg_overhead_dev);
 	if (err)
