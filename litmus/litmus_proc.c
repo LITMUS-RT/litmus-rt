@@ -3,6 +3,7 @@
  */
 
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
 
@@ -21,7 +22,10 @@ static struct proc_dir_entry *litmus_dir = NULL,
 #ifdef CONFIG_RELEASE_MASTER
 	*release_master_file = NULL,
 #endif
-	*plugs_file = NULL;
+	*plugs_file = NULL,
+	*domains_dir = NULL,
+	*cpus_dir = NULL;
+
 
 /* in litmus/sync.c */
 int count_tasks_waiting_for_release(void);
@@ -218,11 +222,32 @@ int __init init_litmus_proc(void)
 	plugs_file = proc_create("loaded", 0444, plugs_dir,
 				 &litmus_loaded_proc_fops);
 
+	domains_dir = proc_mkdir("domains", litmus_dir);
+	if (!domains_dir) {
+		printk(KERN_ERR "Could not allocate domains directory "
+				"procfs entry.\n");
+		return -ENOMEM;
+	}
+
+	cpus_dir = proc_mkdir("cpus", litmus_dir);
+	if (!cpus_dir) {
+		printk(KERN_ERR "Could not allocate cpus directory "
+				"procfs entry.\n");
+		return -ENOMEM;
+	}
+
 	return 0;
 }
 
 void exit_litmus_proc(void)
 {
+	if (cpus_dir || domains_dir) {
+		deactivate_domain_proc();
+		if (cpus_dir)
+			remove_proc_entry("cpus", litmus_dir);
+		if (domains_dir)
+			remove_proc_entry("domains", litmus_dir);
+	}
 	if (plugs_file)
 		remove_proc_entry("loaded", plugs_dir);
 	if (plugs_dir)
@@ -404,4 +429,148 @@ struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
 		       "Could not cluster procfs entry.\n");
 	}
 	return cluster_file;
+}
+
+static struct domain_proc_info* active_mapping = NULL;
+
+static int litmus_mapping_proc_show(struct seq_file *m, void *v)
+{
+	struct cd_mapping *mapping = (struct cd_mapping*) m->private;
+	char buf[256];
+
+	if(!mapping)
+		return 0;
+
+	cpumask_scnprintf(buf, sizeof(buf), mapping->mask);
+	buf[255] = '\0'; /* just in case... */
+	seq_printf(m, "%s\n", buf);
+	return 0;
+}
+
+static int litmus_mapping_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, litmus_mapping_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations litmus_domain_proc_fops = {
+	.open		= litmus_mapping_proc_open,
+	.read		= seq_read,
+	.llseek 	= seq_lseek,
+	.release 	= single_release,
+};
+
+long activate_domain_proc(struct domain_proc_info* map)
+{
+	int i;
+	char name[8];
+
+	if (!map)
+		return -EINVAL;
+	if (cpus_dir == NULL || domains_dir == NULL)
+		return -EINVAL;
+
+	if (active_mapping)
+		deactivate_domain_proc();
+
+	active_mapping = map;
+
+	for (i = 0; i < map->num_cpus; ++i) {
+		struct cd_mapping* m = &map->cpu_to_domains[i];
+		snprintf(name, sizeof(name), "%d", m->id);
+		m->proc_file = proc_create_data(name, 0444, cpus_dir,
+			&litmus_domain_proc_fops, (void*)m);
+	}
+
+	for (i = 0; i < map->num_domains; ++i) {
+		struct cd_mapping* m = &map->domain_to_cpus[i];
+		snprintf(name, sizeof(name), "%d", m->id);
+		m->proc_file = proc_create_data(name, 0444, domains_dir,
+			&litmus_domain_proc_fops, (void*)m);
+	}
+
+	return 0;
+}
+
+long deactivate_domain_proc()
+{
+	int i;
+	char name[65];
+
+	struct domain_proc_info* map = active_mapping;
+
+	if (!map)
+		return -EINVAL;
+
+	for (i = 0; i < map->num_cpus; ++i) {
+		struct cd_mapping* m = &map->cpu_to_domains[i];
+		snprintf(name, sizeof(name), "%d", m->id);
+		remove_proc_entry(name, cpus_dir);
+		m->proc_file = NULL;
+	}
+	for (i = 0; i < map->num_domains; ++i) {
+		struct cd_mapping* m = &map->domain_to_cpus[i];
+		snprintf(name, sizeof(name), "%d", m->id);
+		remove_proc_entry(name, domains_dir);
+		m->proc_file = NULL;
+	}
+
+	active_mapping = NULL;
+
+	return 0;
+}
+
+long init_domain_proc_info(struct domain_proc_info* m,
+				int num_cpus, int num_domains)
+{
+	int i;
+	int num_alloced_cpu_masks = 0;
+	int num_alloced_domain_masks = 0;
+
+	m->cpu_to_domains =
+		kmalloc(sizeof(*(m->cpu_to_domains))*num_cpus,
+			GFP_ATOMIC);
+	if(!m->cpu_to_domains)
+		goto failure;
+
+	m->domain_to_cpus =
+		kmalloc(sizeof(*(m->domain_to_cpus))*num_domains,
+			GFP_ATOMIC);
+	if(!m->domain_to_cpus)
+		goto failure;
+
+	for(i = 0; i < num_cpus; ++i) {
+		if(!zalloc_cpumask_var(&m->cpu_to_domains[i].mask, GFP_ATOMIC))
+			goto failure;
+		++num_alloced_cpu_masks;
+	}
+	for(i = 0; i < num_domains; ++i) {
+		if(!zalloc_cpumask_var(&m->domain_to_cpus[i].mask, GFP_ATOMIC))
+			goto failure;
+		++num_alloced_domain_masks;
+	}
+
+	return 0;
+
+failure:
+	for(i = 0; i < num_alloced_cpu_masks; ++i)
+		free_cpumask_var(m->cpu_to_domains[i].mask);
+	for(i = 0; i < num_alloced_domain_masks; ++i)
+		free_cpumask_var(m->domain_to_cpus[i].mask);
+	if(m->cpu_to_domains)
+		kfree(m->cpu_to_domains);
+	if(m->domain_to_cpus)
+		kfree(m->domain_to_cpus);
+	return -ENOMEM;
+}
+
+void destroy_domain_proc_info(struct domain_proc_info* m)
+{
+	int i;
+	for(i = 0; i < m->num_cpus; ++i)
+		free_cpumask_var(m->cpu_to_domains[i].mask);
+	for(i = 0; i < m->num_domains; ++i)
+		free_cpumask_var(m->domain_to_cpus[i].mask);
+	kfree(m->cpu_to_domains);
+	kfree(m->domain_to_cpus);
+	memset(m, sizeof(*m), 0);
 }
