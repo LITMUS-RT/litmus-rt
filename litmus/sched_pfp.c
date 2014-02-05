@@ -21,6 +21,8 @@
 #include <litmus/trace.h>
 #include <litmus/budget.h>
 
+/* to set up domain/cpu mappings */
+#include <litmus/litmus_proc.h>
 #include <linux/uaccess.h>
 
 
@@ -1681,6 +1683,43 @@ static long pfp_admit_task(struct task_struct* tsk)
 		return -EINVAL;
 }
 
+static struct domain_proc_info pfp_domain_proc_info;
+static long pfp_get_domain_proc_info(struct domain_proc_info **ret)
+{
+	*ret = &pfp_domain_proc_info;
+	return 0;
+}
+
+static void pfp_setup_domain_proc(void)
+{
+	int i, cpu;
+	int release_master =
+#ifdef CONFIG_RELEASE_MASTER
+		atomic_read(&release_master_cpu);
+#else
+		NO_CPU;
+#endif
+	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
+	struct cd_mapping *cpu_map, *domain_map;
+
+	memset(&pfp_domain_proc_info, sizeof(pfp_domain_proc_info), 0);
+	init_domain_proc_info(&pfp_domain_proc_info, num_rt_cpus, num_rt_cpus);
+	pfp_domain_proc_info.num_cpus = num_rt_cpus;
+	pfp_domain_proc_info.num_domains = num_rt_cpus;
+	for (cpu = 0, i = 0; cpu < num_online_cpus(); ++cpu) {
+		if (cpu == release_master)
+			continue;
+		cpu_map = &pfp_domain_proc_info.cpu_to_domains[i];
+		domain_map = &pfp_domain_proc_info.domain_to_cpus[i];
+
+		cpu_map->id = cpu;
+		domain_map->id = i; /* enumerate w/o counting the release master */
+		cpumask_set_cpu(i, cpu_map->mask);
+		cpumask_set_cpu(cpu, domain_map->mask);
+		++i;
+	}
+}
+
 static long pfp_activate_plugin(void)
 {
 #if defined(CONFIG_RELEASE_MASTER) || defined(CONFIG_LITMUS_LOCKING)
@@ -1706,9 +1745,16 @@ static long pfp_activate_plugin(void)
 
 #endif
 
+	pfp_setup_domain_proc();
+
 	return 0;
 }
 
+static long pfp_deactivate_plugin(void)
+{
+	destroy_domain_proc_info(&pfp_domain_proc_info);
+	return 0;
+}
 
 /*	Plugin object	*/
 static struct sched_plugin pfp_plugin __cacheline_aligned_in_smp = {
@@ -1722,6 +1768,8 @@ static struct sched_plugin pfp_plugin __cacheline_aligned_in_smp = {
 	.task_block		= pfp_task_block,
 	.admit_task		= pfp_admit_task,
 	.activate_plugin	= pfp_activate_plugin,
+	.deactivate_plugin	= pfp_deactivate_plugin,
+	.get_domain_proc_info	= pfp_get_domain_proc_info,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock		= pfp_allocate_lock,
 	.finish_switch		= pfp_finish_switch,
