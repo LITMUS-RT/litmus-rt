@@ -917,6 +917,66 @@ static void cleanup_clusters(void)
 	}
 }
 
+static struct domain_proc_info pfair_domain_proc_info;
+static long pfair_get_domain_proc_info(struct domain_proc_info **ret)
+{
+	*ret = &pfair_domain_proc_info;
+	return 0;
+}
+
+static void pfair_setup_domain_proc(void)
+{
+	int i, cpu, domain;
+#ifdef CONFIG_RELEASE_MASTER
+	int release_master = atomic_read(&release_master_cpu);
+	/* skip over the domain with the release master if cluster size is 1 */
+	int cluster_size = num_online_cpus() / num_pfair_clusters;
+	int skip_domain = (1 == cluster_size && release_master != NO_CPU) ?
+			release_master : NO_CPU;
+#else
+	int release_master = NO_CPU;
+	int skip_domain = NO_CPU;
+#endif
+	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
+	int num_rt_domains = num_pfair_clusters - (skip_domain != NO_CPU);
+	struct cd_mapping *map;
+
+	memset(&pfair_domain_proc_info, sizeof(pfair_domain_proc_info), 0);
+	init_domain_proc_info(&pfair_domain_proc_info, num_rt_cpus, num_pfair_clusters);
+	pfair_domain_proc_info.num_cpus = num_rt_cpus;
+	pfair_domain_proc_info.num_domains = num_rt_domains;
+
+	for (cpu = 0, i = 0; cpu < num_online_cpus(); ++cpu) {
+		if (cpu == release_master)
+			continue;
+		map = &pfair_domain_proc_info.cpu_to_domains[i];
+		/* pointer math to figure out the domain index */
+		domain = cpu_cluster(&per_cpu(pfair_state, cpu)) - pfair_clusters;
+		map->id = cpu;
+		cpumask_set_cpu(domain, map->mask);
+		++i;
+	}
+
+	for (domain = 0, i = 0; domain < num_pfair_clusters; ++domain) {
+		struct pfair_cluster *cluster;
+		struct list_head *pos;
+
+		if (domain == skip_domain)
+			continue;
+
+		cluster = &pfair_clusters[domain];
+		map = &pfair_domain_proc_info.domain_to_cpus[i];
+		map->id = i;
+
+		list_for_each(pos, &cluster->topology.cpus) {
+			cpu = cpu_id(from_cluster_list(pos));
+			if (cpu != release_master)
+				cpumask_set_cpu(cpu, map->mask);
+		}
+		++i;
+	}
+}
+
 static long pfair_activate_plugin(void)
 {
 	int err, i;
@@ -971,6 +1031,8 @@ static long pfair_activate_plugin(void)
 
 	if (err < 0)
 		cleanup_clusters();
+	else
+		pfair_setup_domain_proc();
 
 	return err;
 }
@@ -978,6 +1040,7 @@ static long pfair_activate_plugin(void)
 static long pfair_deactivate_plugin(void)
 {
 	cleanup_clusters();
+	destroy_domain_proc_info(&pfair_domain_proc_info);
 	return 0;
 }
 
@@ -994,6 +1057,7 @@ static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.complete_job		= complete_job,
 	.activate_plugin	= pfair_activate_plugin,
 	.deactivate_plugin	= pfair_deactivate_plugin,
+	.get_domain_proc_info	= pfair_get_domain_proc_info,
 };
 
 
