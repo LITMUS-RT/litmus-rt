@@ -705,6 +705,55 @@ static void cleanup_cedf(void)
 	}
 }
 
+static struct domain_proc_info cedf_domain_proc_info;
+static long cedf_get_domain_proc_info(struct domain_proc_info **ret)
+{
+	*ret = &cedf_domain_proc_info;
+	return 0;
+}
+
+static void cedf_setup_domain_proc(void)
+{
+	int i, cpu, domain;
+#ifdef CONFIG_RELEASE_MASTER
+	int release_master = atomic_read(&release_master_cpu);
+	/* skip over the domain with the release master if cluster size is 1 */
+	int skip_domain = (1 == cluster_size && release_master != NO_CPU) ?
+			release_master : NO_CPU;
+#else
+	int release_master = NO_CPU;
+	int skip_domain = NO_CPU;
+#endif
+	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
+	int num_rt_domains = num_clusters - (skip_domain != NO_CPU);
+	struct cd_mapping *map;
+
+	memset(&cedf_domain_proc_info, sizeof(cedf_domain_proc_info), 0);
+	init_domain_proc_info(&cedf_domain_proc_info, num_rt_cpus, num_rt_domains);
+	cedf_domain_proc_info.num_cpus = num_rt_cpus;
+	cedf_domain_proc_info.num_domains = num_rt_domains;
+
+	for (cpu = 0, i = 0; cpu < num_online_cpus(); ++cpu) {
+		if (cpu == release_master)
+			continue;
+		map = &cedf_domain_proc_info.cpu_to_domains[i];
+		/* pointer math to figure out the domain index */
+		domain = remote_cluster(cpu) - cedf;
+		map->id = cpu;
+		cpumask_set_cpu(domain, map->mask);
+		++i;
+	}
+
+	for (domain = 0, i = 0; domain < num_clusters; ++domain) {
+		if (domain == skip_domain)
+			continue;
+		map = &cedf_domain_proc_info.domain_to_cpus[i];
+		map->id = i;
+		cpumask_copy(map->mask, cedf[domain].cpu_map);
+		++i;
+	}
+}
+
 static long cedf_activate_plugin(void)
 {
 	int i, j, cpu, ccpu, cpu_count;
@@ -723,7 +772,7 @@ static long cedf_activate_plugin(void)
 	if(!zalloc_cpumask_var(&mask, GFP_ATOMIC))
 		return -ENOMEM;
 
-	if (unlikely(cluster_config == GLOBAL_CLUSTER)) {
+	if (cluster_config == GLOBAL_CLUSTER) {
 		cluster_size = num_online_cpus();
 	} else {
 		chk = get_shared_cpu_map(mask, 0, cluster_config);
@@ -821,8 +870,17 @@ static long cedf_activate_plugin(void)
 		}
 	}
 
-	free_cpumask_var(mask);
 	clusters_allocated = 1;
+	free_cpumask_var(mask);
+
+	cedf_setup_domain_proc();
+
+	return 0;
+}
+
+static long cedf_deactivate_plugin(void)
+{
+	destroy_domain_proc_info(&cedf_domain_proc_info);
 	return 0;
 }
 
@@ -839,6 +897,8 @@ static struct sched_plugin cedf_plugin __cacheline_aligned_in_smp = {
 	.task_block		= cedf_task_block,
 	.admit_task		= cedf_admit_task,
 	.activate_plugin	= cedf_activate_plugin,
+	.deactivate_plugin	= cedf_deactivate_plugin,
+	.get_domain_proc_info	= cedf_get_domain_proc_info,
 };
 
 static struct proc_dir_entry *cluster_file = NULL, *cedf_dir = NULL;
