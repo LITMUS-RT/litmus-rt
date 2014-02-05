@@ -409,20 +409,30 @@ static int do_plugin_switch(void *_plugin)
 {
 	int ret;
 	struct sched_plugin* plugin = _plugin;
+	struct domain_proc_info* domain_info;
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
+		deactivate_domain_proc();
 		ret = litmus->deactivate_plugin();
-		if (0 != ret)
+		if (0 != ret) {
+			/* reactivate the old proc info */
+			if(!litmus->get_domain_proc_info(&domain_info))
+				activate_domain_proc(domain_info);
 			goto out;
+		}
 		ret = plugin->activate_plugin();
 		if (0 != ret) {
 			printk(KERN_INFO "Can't activate %s (%d).\n",
 			       plugin->plugin_name, ret);
 			plugin = &linux_sched_plugin;
 		}
+
 		printk(KERN_INFO "Switching to LITMUS^RT plugin %s.\n", plugin->plugin_name);
 		litmus = plugin;
+
+		if(!litmus->get_domain_proc_info(&domain_info))
+			activate_domain_proc(domain_info);
 	} else
 		ret = -EBUSY;
 out:
