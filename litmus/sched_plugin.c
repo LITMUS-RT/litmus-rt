@@ -115,6 +115,12 @@ static long litmus_dummy_deactivate_plugin(void)
 	return 0;
 }
 
+static long litmus_dummy_get_domain_proc_info(struct domain_proc_info **d)
+{
+	*d = NULL;
+	return 0;
+}
+
 #ifdef CONFIG_LITMUS_LOCKING
 
 static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
@@ -141,6 +147,7 @@ struct sched_plugin linux_sched_plugin = {
 	.finish_switch = litmus_dummy_finish_switch,
 	.activate_plugin = litmus_dummy_activate_plugin,
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
+	.get_domain_proc_info = litmus_dummy_get_domain_proc_info,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
@@ -180,6 +187,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(complete_job);
 	CHECK(activate_plugin);
 	CHECK(deactivate_plugin);
+	CHECK(get_domain_proc_info);
 #ifdef CONFIG_LITMUS_LOCKING
 	CHECK(allocate_lock);
 #endif

@@ -16,6 +16,8 @@
 typedef long (*activate_plugin_t) (void);
 typedef long (*deactivate_plugin_t) (void);
 
+struct domain_proc_info;
+typedef long (*get_domain_proc_info_t) (struct domain_proc_info **info);
 
 
 /********************* scheduler invocation ******************/
@@ -75,6 +77,9 @@ typedef long (*admit_task_t)(struct task_struct* tsk);
 
 typedef long (*wait_for_release_at_t)(lt_t release_time);
 
+/************************ misc routines ***********************/
+
+
 struct sched_plugin {
 	struct list_head	list;
 	/* 	basic info 		*/
@@ -83,6 +88,7 @@ struct sched_plugin {
 	/*	setup			*/
 	activate_plugin_t	activate_plugin;
 	deactivate_plugin_t	deactivate_plugin;
+	get_domain_proc_info_t	get_domain_proc_info;
 
 	/* 	scheduler invocation 	*/
 	scheduler_tick_t        tick;
