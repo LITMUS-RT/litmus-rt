@@ -29,6 +29,9 @@
 #include <litmus/affinity.h>
 #endif
 
+/* to set up domain/cpu mappings */
+#include <litmus/litmus_proc.h>
+
 #include <linux/module.h>
 
 /* Overview of GSN-EDF operations.
@@ -973,6 +976,44 @@ static long gsnedf_allocate_lock(struct litmus_lock **lock, int type,
 
 #endif
 
+static struct domain_proc_info gsnedf_domain_proc_info;
+static long gsnedf_get_domain_proc_info(struct domain_proc_info **ret)
+{
+	*ret = &gsnedf_domain_proc_info;
+	return 0;
+}
+
+static void gsnedf_setup_domain_proc(void)
+{
+	int i, cpu;
+	int release_master =
+#ifdef CONFIG_RELEASE_MASTER
+			atomic_read(&release_master_cpu);
+#else
+		NO_CPU;
+#endif
+	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
+	struct cd_mapping *map;
+
+	memset(&gsnedf_domain_proc_info, sizeof(gsnedf_domain_proc_info), 0);
+	init_domain_proc_info(&gsnedf_domain_proc_info, num_rt_cpus, 1);
+	gsnedf_domain_proc_info.num_cpus = num_rt_cpus;
+	gsnedf_domain_proc_info.num_domains = 1;
+
+	gsnedf_domain_proc_info.domain_to_cpus[0].id = 0;
+	for (cpu = 0, i = 0; cpu < num_online_cpus(); ++cpu) {
+		if (cpu == release_master)
+			continue;
+		map = &gsnedf_domain_proc_info.cpu_to_domains[i];
+		map->id = cpu;
+		cpumask_set_cpu(0, map->mask);
+		++i;
+
+		/* add cpu to the domain */
+		cpumask_set_cpu(cpu,
+			gsnedf_domain_proc_info.domain_to_cpus[0].mask);
+	}
+}
 
 static long gsnedf_activate_plugin(void)
 {
@@ -1000,6 +1041,15 @@ static long gsnedf_activate_plugin(void)
 		}
 #endif
 	}
+
+	gsnedf_setup_domain_proc();
+
+	return 0;
+}
+
+static long gsnedf_deactivate_plugin(void)
+{
+	destroy_domain_proc_info(&gsnedf_domain_proc_info);
 	return 0;
 }
 
@@ -1016,6 +1066,8 @@ static struct sched_plugin gsn_edf_plugin __cacheline_aligned_in_smp = {
 	.task_block		= gsnedf_task_block,
 	.admit_task		= gsnedf_admit_task,
 	.activate_plugin	= gsnedf_activate_plugin,
+	.deactivate_plugin	= gsnedf_deactivate_plugin,
+	.get_domain_proc_info	= gsnedf_get_domain_proc_info,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock		= gsnedf_allocate_lock,
 #endif
