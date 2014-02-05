@@ -23,6 +23,9 @@
 #include <litmus/sched_trace.h>
 #include <litmus/trace.h>
 
+/* to set up domain/cpu mappings */
+#include <litmus/litmus_proc.h>
+
 typedef struct {
 	rt_domain_t 		domain;
 	int          		cpu;
@@ -599,6 +602,43 @@ static long psnedf_allocate_lock(struct litmus_lock **lock, int type,
 
 #endif
 
+static struct domain_proc_info psnedf_domain_proc_info;
+static long psnedf_get_domain_proc_info(struct domain_proc_info **ret)
+{
+	*ret = &psnedf_domain_proc_info;
+	return 0;
+}
+
+static void psnedf_setup_domain_proc(void)
+{
+	int i, cpu;
+	int release_master =
+#ifdef CONFIG_RELEASE_MASTER
+		atomic_read(&release_master_cpu);
+#else
+		NO_CPU;
+#endif
+	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
+	struct cd_mapping *cpu_map, *domain_map;
+
+	memset(&psnedf_domain_proc_info, sizeof(psnedf_domain_proc_info), 0);
+	init_domain_proc_info(&psnedf_domain_proc_info, num_rt_cpus, num_rt_cpus);
+	psnedf_domain_proc_info.num_cpus = num_rt_cpus;
+	psnedf_domain_proc_info.num_domains = num_rt_cpus;
+
+	for (cpu = 0, i = 0; cpu < num_online_cpus(); ++cpu) {
+		if (cpu == release_master)
+			continue;
+		cpu_map = &psnedf_domain_proc_info.cpu_to_domains[i];
+		domain_map = &psnedf_domain_proc_info.domain_to_cpus[i];
+
+		cpu_map->id = cpu;
+		domain_map->id = i; /* enumerate w/o counting the release master */
+		cpumask_set_cpu(i, cpu_map->mask);
+		cpumask_set_cpu(cpu, domain_map->mask);
+		++i;
+	}
+}
 
 static long psnedf_activate_plugin(void)
 {
@@ -614,6 +654,14 @@ static long psnedf_activate_plugin(void)
 	get_srp_prio = psnedf_get_srp_prio;
 #endif
 
+	psnedf_setup_domain_proc();
+
+	return 0;
+}
+
+static long psnedf_deactivate_plugin(void)
+{
+	destroy_domain_proc_info(&psnedf_domain_proc_info);
 	return 0;
 }
 
@@ -642,6 +690,8 @@ static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.task_block		= psnedf_task_block,
 	.admit_task		= psnedf_admit_task,
 	.activate_plugin	= psnedf_activate_plugin,
+	.deactivate_plugin	= psnedf_deactivate_plugin,
+	.get_domain_proc_info	= psnedf_get_domain_proc_info,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock		= psnedf_allocate_lock,
 #endif
