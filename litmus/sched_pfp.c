@@ -1086,7 +1086,6 @@ static void pcp_priority_inheritance(void)
 	fp_set_prio_inh(pfp, blocked, NULL);
 	fp_set_prio_inh(pfp, blocker, NULL);
 
-
 	/* Let blocking job inherit priority of blocked job, if required. */
 	if (blocker && blocked &&
 	    fp_higher_prio(blocked, blocker)) {
@@ -1114,7 +1113,7 @@ static void pcp_raise_ceiling(struct pcp_semaphore* sem,
 	prio_wait_queue_t wait;
 	unsigned int waiting_higher_prio;
 
-	do {
+	while(1) {
 		ceiling = pcp_get_ceiling();
 		if (pcp_exceeds_ceiling(ceiling, t, effective_prio))
 			break;
@@ -1148,7 +1147,7 @@ static void pcp_raise_ceiling(struct pcp_semaphore* sem,
 		/* pcp_resume_unblocked() removed us from wait queue */
 
 		TS_LOCK_RESUME;
-	} while(1);
+	}
 
 	TRACE_CUR("PCP got the ceiling and sem %p\n", sem);
 
@@ -1209,10 +1208,10 @@ static void pcp_lower_ceiling(struct pcp_semaphore* sem)
 
 	TRACE_CUR("PCP released sem %p\n", sem);
 
-	pcp_priority_inheritance();
-
 	/* Wake up all ceiling-blocked jobs that now pass the ceiling. */
 	pcp_resume_unblocked();
+
+	pcp_priority_inheritance();
 }
 
 static void pcp_update_prio_ceiling(struct pcp_semaphore* sem,
