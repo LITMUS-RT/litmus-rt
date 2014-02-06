@@ -1033,12 +1033,8 @@ static DEFINE_PER_CPU(struct pcp_state, pcp_state);
 /* assumes preemptions are off */
 static struct pcp_semaphore* pcp_get_ceiling(void)
 {
-	struct list_head* top = __get_cpu_var(pcp_state).system_ceiling.next;
-
-	if (top)
-		return list_entry(top, struct pcp_semaphore, ceiling);
-	else
-		return NULL;
+	struct list_head* top = &__get_cpu_var(pcp_state).system_ceiling;
+	return list_first_entry_or_null(top, struct pcp_semaphore, ceiling);
 }
 
 /* assumes preempt off */
