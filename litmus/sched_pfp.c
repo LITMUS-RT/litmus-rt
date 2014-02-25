@@ -465,11 +465,6 @@ static lt_t prio_point(int eprio)
 	return eprio + LITMUS_MAX_PRIORITY;
 }
 
-static int prio_from_point(lt_t prio_point)
-{
-	return ((int) prio_point) - LITMUS_MAX_PRIORITY;
-}
-
 static void boost_priority(struct task_struct* t, lt_t priority_point)
 {
 	unsigned long		flags;
@@ -1131,7 +1126,7 @@ static void pcp_raise_ceiling(struct pcp_semaphore* sem,
 		/* we need to wait until the ceiling is lowered */
 
 		/* enqueue in priority order */
-		init_prio_waitqueue_entry(&wait, t, prio_point(effective_prio));
+		init_prio_waitqueue_entry(&wait, t, effective_prio);
 		set_task_state(t, TASK_UNINTERRUPTIBLE);
 		waiting_higher_prio = add_wait_queue_prio_exclusive(
 			&__get_cpu_var(pcp_state).ceiling_blocked, &wait);
@@ -1184,8 +1179,7 @@ static void pcp_resume_unblocked(void)
 		t = (struct task_struct*) q->wq.private;
 
 		/* can it proceed now? => let it go */
-		if (pcp_exceeds_ceiling(ceiling, t,
-					prio_from_point(q->priority))) {
+		if (pcp_exceeds_ceiling(ceiling, t, q->priority)) {
 		    __remove_wait_queue(blocked, &q->wq);
 		    wake_up_process(t);
 		} else {
@@ -1255,7 +1249,9 @@ int pfp_pcp_lock(struct litmus_lock* l)
 	struct task_struct* t = current;
 	struct pcp_semaphore *sem = pcp_from_lock(l);
 
-	int eprio = effective_agent_priority(get_priority(t));
+	/* The regular PCP uses the regular task priorities, not agent
+	 * priorities. */
+	int eprio = get_priority(t);
 	int from  = get_partition(t);
 	int to    = sem->on_cpu;
 
@@ -1322,7 +1318,9 @@ int pfp_pcp_open(struct litmus_lock* l, void* __user config)
 	if (cpu != sem->on_cpu)
 		return -EINVAL;
 
-	eprio = effective_agent_priority(get_priority(t));
+	/* The regular PCP uses regular task priorites, not agent
+	 * priorities. */
+	eprio = get_priority(t);
 
 	pcp_update_prio_ceiling(sem, eprio);
 
