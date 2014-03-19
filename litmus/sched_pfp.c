@@ -1283,10 +1283,18 @@ int pfp_pcp_unlock(struct litmus_lock* l)
 
 	preempt_disable();
 
-	if (sem->on_cpu != smp_processor_id() || sem->owner != t) {
+	if (sem->owner != t) {
 		err = -EINVAL;
 		goto out;
 	}
+
+	/* The current owner should be executing on the correct CPU.
+	 *
+	 * FIXME: if the owner transitioned out of RT mode or is exiting, then
+	 * we it might have already been migrated away by the best-effort
+	 * scheduler and we just have to deal with it. This is currently not
+	 * supported. */
+	BUG_ON(sem->on_cpu != smp_processor_id());
 
 	tsk_rt(t)->num_local_locks_held--;
 
@@ -1483,10 +1491,18 @@ int pfp_dpcp_unlock(struct litmus_lock* l)
 
 	preempt_disable();
 
-	if (sem->pcp.on_cpu != smp_processor_id() || sem->pcp.owner != t) {
+	if (sem->pcp.owner != t) {
 		err = -EINVAL;
 		goto out;
 	}
+
+	/* The current owner should be executing on the correct CPU.
+	 *
+	 * FIXME: if the owner transitioned out of RT mode or is exiting, then
+	 * we it might have already been migrated away by the best-effort
+	 * scheduler and we just have to deal with it. This is currently not
+	 * supported. */
+	BUG_ON(sem->pcp.on_cpu != smp_processor_id());
 
 	tsk_rt(t)->num_locks_held--;
 
