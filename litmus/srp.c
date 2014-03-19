@@ -137,6 +137,14 @@ static int unlock_srp_semaphore(struct litmus_lock* l)
 	if (sem->owner != t) {
 		err = -EINVAL;
 	} else {
+		/* The current owner should be executing on the correct CPU.
+		 *
+		 * FIXME: if the owner transitioned out of RT mode or is
+		 * exiting, then we it might have already been migrated away by
+		 * the best-effort scheduler and we just have to deal with
+		 * it. This is currently not supported. */
+		BUG_ON(sem->cpu != smp_processor_id());
+
 		/* Determine new system priority ceiling for this CPU. */
 		BUG_ON(!in_list(&sem->ceiling.list));
 
