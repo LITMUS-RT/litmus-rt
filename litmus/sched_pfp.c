@@ -1627,6 +1627,11 @@ int pfp_dflp_lock(struct litmus_lock* l)
 	if (!is_realtime(t))
 		return -EPERM;
 
+	/* prevent nested lock accquisition */
+	if (tsk_rt(t)->num_locks_held ||
+	    tsk_rt(t)->num_local_locks_held)
+		return -EBUSY;
+
 	preempt_disable();
 
 	/* tie-break by this point in time */
@@ -1685,6 +1690,8 @@ int pfp_dflp_lock(struct litmus_lock* l)
 
 	preempt_enable();
 
+	tsk_rt(t)->num_locks_held++;
+
 	return 0;
 }
 
@@ -1717,6 +1724,8 @@ int pfp_dflp_unlock(struct litmus_lock* l)
 	} else
 		/* resource becomes available */
 		sem->owner = NULL;
+
+	tsk_rt(t)->num_locks_held--;
 
 	home = sem->owner_cpu;
 
