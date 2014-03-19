@@ -116,13 +116,12 @@ static void unboost_priority(struct task_struct* t)
 	raw_spin_lock_irqsave(&pedf->slock, flags);
 	now = litmus_clock();
 
-	/* assumption: this only happens when the job is scheduled */
-	BUG_ON(pedf->scheduled != t);
+	/* Assumption: this only happens when the job is scheduled.
+	 * Exception: If t transitioned to non-real-time mode, we no longer
+	 * care about it. */
+	BUG_ON(pedf->scheduled != t && is_realtime(t));
 
 	TRACE_TASK(t, "priority restored at %llu\n", now);
-
-	/* priority boosted jobs must be scheduled */
-	BUG_ON(pedf->scheduled != t);
 
 	tsk_rt(t)->priority_boosted = 0;
 	tsk_rt(t)->boost_start_time = 0;
