@@ -496,13 +496,12 @@ static void unboost_priority(struct task_struct* t)
 	raw_spin_lock_irqsave(&pfp->slock, flags);
 	now = litmus_clock();
 
-	/* assumption: this only happens when the job is scheduled */
-	BUG_ON(pfp->scheduled != t);
+	/* Assumption: this only happens when the job is scheduled.
+	 * Exception: If t transitioned to non-real-time mode, we no longer
+	 * care abou tit. */
+	BUG_ON(pfp->scheduled != t && is_realtime(t));
 
 	TRACE_TASK(t, "priority restored at %llu\n", now);
-
-	/* priority boosted jobs must be scheduled */
-	BUG_ON(pfp->scheduled != t);
 
 	tsk_rt(t)->priority_boosted = 0;
 	tsk_rt(t)->boost_start_time = 0;
@@ -1080,8 +1079,10 @@ static void pcp_priority_inheritance(void)
 	raw_spin_lock_irqsave(&pfp->slock, flags);
 
 	/* Current is no longer inheriting anything by default.  This should be
-	 * the currently scheduled job, and hence not currently queued. */
-	BUG_ON(current != pfp->scheduled);
+	 * the currently scheduled job, and hence not currently queued.
+	 * Special case: if current stopped being a real-time task, it will no longer
+	 * be registered as pfp->scheduled. */
+	BUG_ON(current != pfp->scheduled && is_realtime(current));
 
 	fp_set_prio_inh(pfp, current, NULL);
 	fp_set_prio_inh(pfp, blocked, NULL);
