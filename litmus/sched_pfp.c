@@ -1412,13 +1412,12 @@ static void pfp_migrate_to(int target_cpu)
 
 	local_irq_disable();
 
-	/* scheduled task should not be in any ready or release queue */
-	BUG_ON(is_queued(t));
-
-	/* lock both pfp domains in order of address */
 	from = task_pfp(t);
-
 	raw_spin_lock(&from->slock);
+
+	/* Scheduled task should not be in any ready or release queue.  Check
+	 * this while holding the lock to avoid RT mode transitions.*/
+	BUG_ON(is_realtime(t) && is_queued(t));
 
 	/* switch partitions */
 	tsk_rt(t)->task_params.cpu = target_cpu;
@@ -1442,7 +1441,7 @@ static void pfp_migrate_to(int target_cpu)
 	/* start recording costs again */
 	TS_LOCK_RESUME;
 
-	BUG_ON(smp_processor_id() != target_cpu);
+	BUG_ON(smp_processor_id() != target_cpu && is_realtime(t));
 }
 
 int pfp_dpcp_lock(struct litmus_lock* l)
