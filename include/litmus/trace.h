@@ -28,14 +28,23 @@ struct timestamp {
 };
 
 /* tracing callbacks */
-feather_callback void msg_sent(unsigned long event, unsigned long to);
-feather_callback void msg_received(unsigned long event);
+feather_callback void msg_sent_to(unsigned long event, unsigned long to);
+feather_callback void msg_received_local(unsigned long event);
+
+feather_callback void msg_sent_local(unsigned long event);
+feather_callback void msg_received_from(unsigned long event, unsigned long from);
 
 #define MSG_TIMESTAMP_SENT(id, to) \
-	ft_event1(id, msg_sent, (unsigned long) to);
+	ft_event1(id, msg_sent_to, (unsigned long) (to));
 
 #define MSG_TIMESTAMP_RECEIVED(id) \
-	ft_event0(id, msg_received);
+	ft_event0(id, msg_received_local);
+
+#define MSG_TIMESTAMP_SENT_LOCAL(id) \
+	ft_event0(id, msg_sent_local);
+
+#define MSG_TIMESTAMP_RECEIVED_FROM(id, from) \
+	ft_event1(id, msg_received_from, (unsigned long) (from))
 
 feather_callback void save_cpu_timestamp(unsigned long event);
 feather_callback void save_cpu_timestamp_time(unsigned long event, unsigned long time_ptr);

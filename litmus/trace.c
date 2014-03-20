@@ -270,16 +270,29 @@ feather_callback void save_cpu_task_latency(unsigned long event,
 			    now - *when, DO_NOT_RECORD_TIMESTAMP);
 }
 
-feather_callback void msg_sent(unsigned long event, unsigned long to)
+/* Record to remote trace buffer */
+feather_callback void msg_sent_to(unsigned long event, unsigned long to)
 {
 	save_remote_msg_timestamp(event, to);
 }
 
+/* Record to local trace buffer */
+feather_callback void msg_sent_local(unsigned long event)
+{
+	save_msg_timestamp(event, 0);
+}
+
 /* Suppresses one IRQ from the irq count. Used by TS_SEND_RESCHED_END, which is
  * called from within an interrupt that is expected. */
-feather_callback void msg_received(unsigned long event)
+feather_callback void msg_received_local(unsigned long event)
 {
 	save_msg_timestamp(event, 1);
+}
+
+/* Record to remote trace buffer */
+feather_callback void msg_received_from(unsigned long event, unsigned long from)
+{
+	save_remote_msg_timestamp(event, from);
 }
 
 static void __add_timestamp_user(struct timestamp *pre_recorded)
