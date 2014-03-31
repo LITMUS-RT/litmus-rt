@@ -36,6 +36,11 @@ void litmus_exec(void);
 void litmus_clear_state(struct task_struct *dead_tsk);
 void exit_litmus(struct task_struct *dead_tsk);
 
+/* Prevent the plugin from being switched-out from underneath a code
+ * path. Might sleep, so may be called only from non-atomic context. */
+void litmus_plugin_switch_disable(void);
+void litmus_plugin_switch_enable(void);
+
 long litmus_admit_task(struct task_struct *tsk);
 void litmus_exit_task(struct task_struct *tsk);
 void litmus_dealloc(struct task_struct *tsk);

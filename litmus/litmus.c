@@ -12,6 +12,7 @@
 #include <linux/reboot.h>
 #include <linux/stop_machine.h>
 #include <linux/sched/rt.h>
+#include <linux/rwsem.h>
 
 #include <litmus/litmus.h>
 #include <litmus/bheap.h>
@@ -405,6 +406,18 @@ void litmus_exit_task(struct task_struct* tsk)
 	}
 }
 
+static DECLARE_RWSEM(plugin_switch_mutex);
+
+void litmus_plugin_switch_disable(void)
+{
+	down_read(&plugin_switch_mutex);
+}
+
+void litmus_plugin_switch_enable(void)
+{
+	up_read(&plugin_switch_mutex);
+}
+
 static int do_plugin_switch(void *_plugin)
 {
 	int ret;
@@ -446,11 +459,16 @@ out:
  */
 int switch_sched_plugin(struct sched_plugin* plugin)
 {
+	int err;
+
 	BUG_ON(!plugin);
 
-	if (atomic_read(&rt_task_count) == 0)
-		return stop_machine(do_plugin_switch, plugin, NULL);
-	else
+	if (atomic_read(&rt_task_count) == 0) {
+		down_write(&plugin_switch_mutex);
+		err =  stop_machine(do_plugin_switch, plugin, NULL);
+		up_write(&plugin_switch_mutex);
+		return err;
+	} else
 		return -EBUSY;
 }
 
