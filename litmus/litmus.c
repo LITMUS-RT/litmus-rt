@@ -113,8 +113,6 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		goto out_unlock;
 	if (tp.period <= 0)
 		goto out_unlock;
-	if (!cpu_online(tp.cpu))
-		goto out_unlock;
 	if (min(tp.relative_deadline, tp.period) < tp.exec_cost) /*density check*/
 	{
 		printk(KERN_INFO "litmus: real-time task %d rejected "
@@ -338,13 +336,6 @@ long litmus_admit_task(struct task_struct* tsk)
 			"(e = %lu, p = %lu, d = %lu)\n",
 			get_exec_cost(tsk), get_rt_period(tsk),
 			get_rt_relative_deadline(tsk));
-		retval = -EINVAL;
-		goto out;
-	}
-
-	if (!cpu_online(get_partition(tsk))) {
-		TRACE_TASK(tsk, "litmus admit: cpu %d is not online\n",
-			   get_partition(tsk));
 		retval = -EINVAL;
 		goto out;
 	}
