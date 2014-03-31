@@ -422,18 +422,12 @@ static int do_plugin_switch(void *_plugin)
 {
 	int ret;
 	struct sched_plugin* plugin = _plugin;
-	struct domain_proc_info* domain_info;
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
-		deactivate_domain_proc();
 		ret = litmus->deactivate_plugin();
-		if (0 != ret) {
-			/* reactivate the old proc info */
-			if(!litmus->get_domain_proc_info(&domain_info))
-				activate_domain_proc(domain_info);
+		if (0 != ret)
 			goto out;
-		}
 		ret = plugin->activate_plugin();
 		if (0 != ret) {
 			printk(KERN_INFO "Can't activate %s (%d).\n",
@@ -443,9 +437,6 @@ static int do_plugin_switch(void *_plugin)
 
 		printk(KERN_INFO "Switching to LITMUS^RT plugin %s.\n", plugin->plugin_name);
 		litmus = plugin;
-
-		if(!litmus->get_domain_proc_info(&domain_info))
-			activate_domain_proc(domain_info);
 	} else
 		ret = -EBUSY;
 out:
@@ -460,12 +451,20 @@ out:
 int switch_sched_plugin(struct sched_plugin* plugin)
 {
 	int err;
+	struct domain_proc_info* domain_info;
 
 	BUG_ON(!plugin);
 
 	if (atomic_read(&rt_task_count) == 0) {
 		down_write(&plugin_switch_mutex);
+
+		deactivate_domain_proc();
+
 		err =  stop_machine(do_plugin_switch, plugin, NULL);
+
+		if(!litmus->get_domain_proc_info(&domain_info))
+			activate_domain_proc(domain_info);
+
 		up_write(&plugin_switch_mutex);
 		return err;
 	} else
