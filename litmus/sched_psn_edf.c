@@ -396,8 +396,7 @@ static void psnedf_task_exit(struct task_struct * t)
 
 static unsigned int psnedf_get_srp_prio(struct task_struct* t)
 {
-	/* assumes implicit deadlines */
-	return get_rt_period(t);
+	return get_rt_relative_deadline(t);
 }
 
 /* ******************** FMLP support ********************** */
