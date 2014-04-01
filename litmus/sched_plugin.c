@@ -121,6 +121,11 @@ static long litmus_dummy_get_domain_proc_info(struct domain_proc_info **d)
 	return 0;
 }
 
+static void litmus_dummy_synchronous_release_at(lt_t time_zero)
+{
+	/* ignore */
+}
+
 #ifdef CONFIG_LITMUS_LOCKING
 
 static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
@@ -148,6 +153,7 @@ struct sched_plugin linux_sched_plugin = {
 	.activate_plugin = litmus_dummy_activate_plugin,
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
 	.get_domain_proc_info = litmus_dummy_get_domain_proc_info,
+	.synchronous_release_at = litmus_dummy_synchronous_release_at,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
@@ -192,6 +198,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(allocate_lock);
 #endif
 	CHECK(admit_task);
+	CHECK(synchronous_release_at);
 
 	if (!plugin->wait_for_release_at)
 		plugin->wait_for_release_at = default_wait_for_release_at;

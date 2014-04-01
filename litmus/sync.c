@@ -96,6 +96,7 @@ static long do_release_ts(lt_t start)
 
 	TRACE("<<<<<< synchronous task system release >>>>>>\n");
 	sched_trace_sys_release(&start);
+	litmus->synchronous_release_at(start);
 
 	task_count = 0;
 	list_for_each_safe(pos, safe, &task_release_list) {

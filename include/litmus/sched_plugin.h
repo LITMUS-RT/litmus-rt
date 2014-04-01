@@ -77,6 +77,9 @@ typedef long (*admit_task_t)(struct task_struct* tsk);
 
 typedef long (*wait_for_release_at_t)(lt_t release_time);
 
+/* Informs the plugin when a synchronous release takes place. */
+typedef void (*synchronous_release_at_t)(lt_t time_zero);
+
 /************************ misc routines ***********************/
 
 
@@ -98,6 +101,7 @@ struct sched_plugin {
 	/*	syscall backend 	*/
 	complete_job_t 		complete_job;
 	wait_for_release_at_t	wait_for_release_at;
+	synchronous_release_at_t synchronous_release_at;
 
 	/*	task state changes 	*/
 	admit_task_t		admit_task;
