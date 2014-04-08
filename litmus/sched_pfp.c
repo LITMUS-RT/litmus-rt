@@ -491,17 +491,15 @@ static void unboost_priority(struct task_struct* t)
 {
 	unsigned long		flags;
 	pfp_domain_t* 	pfp = task_pfp(t);
-	lt_t			now;
 
 	raw_spin_lock_irqsave(&pfp->slock, flags);
-	now = litmus_clock();
 
 	/* Assumption: this only happens when the job is scheduled.
 	 * Exception: If t transitioned to non-real-time mode, we no longer
 	 * care abou tit. */
 	BUG_ON(pfp->scheduled != t && is_realtime(t));
 
-	TRACE_TASK(t, "priority restored at %llu\n", now);
+	TRACE_TASK(t, "priority restored at %llu\n", litmus_clock());
 
 	tsk_rt(t)->priority_boosted = 0;
 	tsk_rt(t)->boost_start_time = 0;
