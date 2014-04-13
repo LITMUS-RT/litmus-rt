@@ -601,10 +601,12 @@ int pfp_fmlp_lock(struct litmus_lock* l)
 
 int pfp_fmlp_unlock(struct litmus_lock* l)
 {
-	struct task_struct *t = current, *next;
+	struct task_struct *t = current, *next = NULL;
 	struct fmlp_semaphore *sem = fmlp_from_lock(l);
 	unsigned long flags;
 	int err = 0;
+
+	preempt_disable();
 
 	spin_lock_irqsave(&sem->wait.lock, flags);
 
@@ -621,18 +623,18 @@ int pfp_fmlp_unlock(struct litmus_lock* l)
 
 	/* check if there are jobs waiting for this resource */
 	next = __waitqueue_remove_first(&sem->wait);
-	if (next) {
-		/* next becomes the resouce holder */
-		sem->owner = next;
-
-		/* Wake up next. The waiting job is already priority-boosted. */
-		wake_up_process(next);
-	} else
-		/* resource becomes available */
-		sem->owner = NULL;
+	sem->owner = next;
 
 out:
 	spin_unlock_irqrestore(&sem->wait.lock, flags);
+
+	/* Wake up next. The waiting job is already priority-boosted. */
+	if(next) {
+		wake_up_process(next);
+	}
+
+	preempt_enable();
+
 	return err;
 }
 
@@ -851,10 +853,12 @@ int pfp_mpcp_lock(struct litmus_lock* l)
 
 int pfp_mpcp_unlock(struct litmus_lock* l)
 {
-	struct task_struct *t = current, *next;
+	struct task_struct *t = current, *next = NULL;
 	struct mpcp_semaphore *sem = mpcp_from_lock(l);
 	unsigned long flags;
 	int err = 0;
+
+	preempt_disable();
 
 	spin_lock_irqsave(&sem->wait.lock, flags);
 
@@ -863,33 +867,28 @@ int pfp_mpcp_unlock(struct litmus_lock* l)
 		goto out;
 	}
 
-
 	tsk_rt(t)->num_locks_held--;
 
 	/* we lose the benefit of priority boosting */
-
 	unboost_priority(t);
 
 	/* check if there are jobs waiting for this resource */
 	next = __waitqueue_remove_first(&sem->wait);
-	if (next) {
-		/* next becomes the resouce holder */
-		sem->owner = next;
-
-		/* Wake up next. The waiting job is already priority-boosted. */
-		wake_up_process(next);
-	} else
-		/* resource becomes available */
-		sem->owner = NULL;
+	sem->owner = next;
 
 out:
 	spin_unlock_irqrestore(&sem->wait.lock, flags);
 
-	if (sem->vspin && err == 0) {
-		preempt_disable();
-		mpcp_vspin_exit();
-		preempt_enable();
+	/* Wake up next. The waiting job is already priority-boosted. */
+	if(next) {
+		wake_up_process(next);
 	}
+
+	if (sem->vspin && err == 0) {
+		mpcp_vspin_exit();
+	}
+
+	preempt_enable();
 
 	return err;
 }
@@ -897,8 +896,8 @@ out:
 int pfp_mpcp_open(struct litmus_lock* l, void* config)
 {
 	struct task_struct *t = current;
-	struct mpcp_semaphore *sem = mpcp_from_lock(l);
 	int cpu, local_cpu;
+	struct mpcp_semaphore *sem = mpcp_from_lock(l);
 	unsigned long flags;
 
 	if (!is_realtime(t))
@@ -908,16 +907,14 @@ int pfp_mpcp_open(struct litmus_lock* l, void* config)
 	local_cpu = get_partition(t);
 
 	spin_lock_irqsave(&sem->wait.lock, flags);
-
-	for (cpu = 0; cpu < NR_CPUS; cpu++)
-		if (cpu != local_cpu)
-		{
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		if (cpu != local_cpu) {
 			sem->prio_ceiling[cpu] = min(sem->prio_ceiling[cpu],
 						     get_priority(t));
 			TRACE_CUR("priority ceiling for sem %p is now %d on cpu %d\n",
 				  sem, sem->prio_ceiling[cpu], cpu);
 		}
-
+	}
 	spin_unlock_irqrestore(&sem->wait.lock, flags);
 
 	return 0;
