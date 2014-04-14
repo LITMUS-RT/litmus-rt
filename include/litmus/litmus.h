@@ -306,12 +306,13 @@ static inline int has_control_page(struct task_struct* t)
 
 #define TS_SYSCALL_IN_END						\
 	if (has_control_page(current)) {				\
+		unsigned long flags;					\
 		uint64_t irqs;						\
-		local_irq_disable();					\
+		local_irq_save(flags);					\
 		irqs = get_control_page(current)->irq_count -		\
 			get_control_page(current)->irq_syscall_start;	\
 		__TS_SYSCALL_IN_END(&irqs);				\
-		local_irq_enable();					\
+		local_irq_restore(flags);				\
 	}
 
 #else
