@@ -13,6 +13,7 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/preempt.h>
 #include <litmus/jobs.h>
+#include <litmus/budget.h>
 
 /*
  * Generic function to trigger preemption on either local or remote cpu
@@ -196,6 +197,9 @@ int register_sched_plugin(struct sched_plugin* plugin)
 
 	if (!plugin->wait_for_release_at)
 		plugin->wait_for_release_at = default_wait_for_release_at;
+
+	if (!plugin->current_budget)
+		plugin->current_budget = litmus_current_budget;
 
 	raw_spin_lock(&sched_plugins_lock);
 	list_add(&plugin->list, &sched_plugins);

@@ -77,6 +77,13 @@ typedef long (*wait_for_release_at_t)(lt_t release_time);
 /* Informs the plugin when a synchronous release takes place. */
 typedef void (*synchronous_release_at_t)(lt_t time_zero);
 
+/* How much budget has the current task consumed so far, and how much
+ * has it left? The default implementation ties into the per-task
+ * budget enforcement code. Plugins can override this to report
+ * reservation-specific values. */
+typedef void (*current_budget_t)(lt_t *used_so_far, lt_t *remaining);
+
+
 /************************ misc routines ***********************/
 
 
@@ -108,6 +115,8 @@ struct sched_plugin {
 
 	task_exit_t 		task_exit;
 	task_cleanup_t		task_cleanup;
+
+	current_budget_t	current_budget;
 
 #ifdef CONFIG_LITMUS_LOCKING
 	/*	locking protocols	*/

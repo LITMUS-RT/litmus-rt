@@ -33,4 +33,6 @@ static inline int requeue_preempted_job(struct task_struct* t)
 		(!budget_exhausted(t) || !budget_enforced(t));
 }
 
+void litmus_current_budget(lt_t *used_so_far, lt_t *remaining);
+
 #endif

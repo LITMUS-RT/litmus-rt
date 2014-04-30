@@ -1,9 +1,11 @@
 #include <linux/sched.h>
 #include <linux/percpu.h>
 #include <linux/hrtimer.h>
+#include <linux/uaccess.h>
 
 #include <litmus/litmus.h>
 #include <litmus/preempt.h>
+#include <litmus/sched_plugin.h>
 
 #include <litmus/budget.h>
 
@@ -110,6 +112,56 @@ static int __init init_budget_enforcement(void)
 		hrtimer_init(&et->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 		et->timer.function = on_enforcement_timeout;
 	}
+	return 0;
+}
+
+void litmus_current_budget(lt_t *used_so_far, lt_t *remaining)
+{
+	struct task_struct *t = current;
+	unsigned long flags;
+	s64 delta;
+
+	local_irq_save(flags);
+
+	delta = sched_clock_cpu(smp_processor_id()) - t->se.exec_start;
+	if (delta < 0)
+		delta = 0;
+
+	TRACE_CUR("current_budget: sc:%llu start:%llu lt_t:%llu delta:%lld exec-time:%llu rem:%llu\n",
+		sched_clock_cpu(smp_processor_id()), t->se.exec_start,
+		litmus_clock(), delta,
+		tsk_rt(t)->job_params.exec_time,
+		budget_remaining(t));
+
+	if (used_so_far)
+		*used_so_far = tsk_rt(t)->job_params.exec_time + delta;
+
+	if (remaining) {
+		*remaining = budget_remaining(t);
+		if (*remaining > delta)
+			*remaining -= delta;
+		else
+			*remaining = 0;
+	}
+
+	local_irq_restore(flags);
+}
+
+asmlinkage long sys_get_current_budget(
+	lt_t __user * _expended,
+	lt_t __user *_remaining)
+{
+	lt_t expended = 0, remaining = 0;
+
+	if (is_realtime(current))
+		litmus->current_budget(&expended, &remaining);
+
+	if (_expended && put_user(expended, _expended))
+		return -EFAULT;
+
+	if (_remaining && put_user(remaining, _remaining))
+		return -EFAULT;
+
 	return 0;
 }
 
