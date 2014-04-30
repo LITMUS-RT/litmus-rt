@@ -17,5 +17,4 @@
 #define __NR_wait_for_ts_release __LSC(9)
 #define __NR_release_ts		__LSC(10)
 #define __NR_null_call		__LSC(11)
-
-#define NR_litmus_syscalls 12
+#define __NR_get_current_budget __LSC(12)

@@ -342,6 +342,8 @@
 360	common	wait_for_ts_release	sys_wait_for_ts_release
 361	common	release_ts		sys_release_ts
 362	common	null_call		sys_null_call
+363	common	get_current_budget	sys_get_current_budget
+
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact

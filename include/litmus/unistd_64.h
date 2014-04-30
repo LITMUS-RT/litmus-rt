@@ -29,5 +29,7 @@ __SYSCALL(__NR_wait_for_ts_release, sys_wait_for_ts_release)
 __SYSCALL(__NR_release_ts, sys_release_ts)
 #define __NR_null_call				__LSC(11)
 __SYSCALL(__NR_null_call, sys_null_call)
+#define __NR_get_current_budget			__LSC(12)
+__SYSCALL(____NR_get_current_budget, sys_get_current_budget)
 
-#define NR_litmus_syscalls 12
+#define NR_litmus_syscalls 13
