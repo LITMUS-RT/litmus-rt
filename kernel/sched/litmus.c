@@ -167,6 +167,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 #else
 		next->rt_param.stack_in_use = 0;
 #endif
+		update_rq_clock(rq);
 		next->se.exec_start = rq->clock;
 	}
 
@@ -240,6 +241,9 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
 #ifdef CONFIG_SMP
 static void pre_schedule_litmus(struct rq *rq, struct task_struct *prev)
 {
+	update_rq_clock(rq);
+	/* tell update_rq_clock() that we just did that */
+	rq->skip_clock_update = 1;
 	update_time_litmus(rq, prev);
 	if (!is_running(prev))
 		tsk_rt(prev)->present = 0;
