@@ -49,6 +49,11 @@ pfp_domain_t* pfp_doms[NR_CPUS];
 #define task_dom(task)		remote_dom(get_partition(task))
 #define task_pfp(task)		remote_pfp(get_partition(task))
 
+
+#ifdef CONFIG_LITMUS_LOCKING
+DEFINE_PER_CPU(uint64_t,fmlp_timestamp);
+#endif
+
 /* we assume the lock is being held */
 static void preempt(pfp_domain_t *pfp)
 {
@@ -69,7 +74,6 @@ static unsigned int priority_index(struct task_struct* t)
 #endif
 		return get_priority(t);
 }
-
 
 static void pfp_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 {
@@ -534,6 +538,13 @@ static inline struct fmlp_semaphore* fmlp_from_lock(struct litmus_lock* lock)
 {
 	return container_of(lock, struct fmlp_semaphore, litmus_lock);
 }
+
+static inline lt_t
+fmlp_clock(void)
+{
+	return (lt_t) __get_cpu_var(fmlp_timestamp)++;
+}
+
 int pfp_fmlp_lock(struct litmus_lock* l)
 {
 	struct task_struct* t = current;
@@ -553,7 +564,7 @@ int pfp_fmlp_lock(struct litmus_lock* l)
 	spin_lock_irqsave(&sem->wait.lock, flags);
 
 	/* tie-break by this point in time */
-	time_of_request = litmus_clock();
+	time_of_request = fmlp_clock();
 
 	/* Priority-boost ourself *before* we suspend so that
 	 * our priority is boosted when we resume. */
@@ -1974,6 +1985,7 @@ static long pfp_activate_plugin(void)
 
 		pcp_init_state(&per_cpu(pcp_state, cpu));
 		pfp_doms[cpu] = remote_pfp(cpu);
+		per_cpu(fmlp_timestamp,cpu) = 0;
 	}
 
 #endif
