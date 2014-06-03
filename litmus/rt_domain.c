@@ -234,6 +234,11 @@ static void arm_release_timer(rt_domain_t *_rt)
 		 */
 		if (rh == tsk_rt(t)->rel_heap) {
 			VTRACE_TASK(t, "arming timer 0x%p\n", &rh->timer);
+
+			if (!hrtimer_is_hres_active(&rh->timer)) {
+				TRACE_TASK(t, "WARNING: no hires timer!!!\n");
+			}
+
 			/* we cannot arm the timer using hrtimer_start()
 			 * as it may deadlock on rq->lock
 			 *

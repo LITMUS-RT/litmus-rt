@@ -62,6 +62,9 @@ static void arm_enforcement_timer(struct enforcement_timer* et,
 	lt_t when_to_fire;
 	TRACE_TASK(t, "arming enforcement timer.\n");
 
+	WARN_ONCE(!hrtimer_is_hres_active(&et->timer),
+		KERN_ERR "WARNING: no high resolution timers available!?\n");
+
 	/* Calling this when there is no budget left for the task
 	 * makes no sense, unless the task is non-preemptive. */
 	BUG_ON(budget_exhausted(t) && (!is_np(t)));
