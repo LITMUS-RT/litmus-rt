@@ -14,7 +14,6 @@ config PLUGIN_CEDF
 
 config PLUGIN_PFAIR
 	bool "PFAIR"
-	depends on HIGH_RES_TIMERS && HZ_PERIODIC && HZ = "1000"
 	default y
 	help
 	  Include the PFAIR plugin (i.e., the PD^2 scheduler) in the kernel.
