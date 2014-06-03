@@ -54,6 +54,25 @@ void bheap_node_free(struct bheap_node* hn)
 struct release_heap* release_heap_alloc(int gfp_flags);
 void release_heap_free(struct release_heap* rh);
 
+/**
+ * Get the quantum alignment as a cmdline option.
+ * Default is staggered quanta, as this results in lower overheads.
+ */
+static bool aligned_quanta = 0;
+module_param(aligned_quanta, bool, 0644);
+
+u64 cpu_stagger_offset(int cpu)
+{
+	u64 offset = 0;
+
+	if (!aligned_quanta) {
+		offset = LITMUS_QUANTUM_LENGTH_NS;
+		do_div(offset, num_possible_cpus());
+		offset *= cpu;
+	}
+	return offset;
+}
+
 /*
  * sys_set_task_rt_param
  * @pid: Pid of the task which scheduling parameters must be changed
