@@ -260,6 +260,11 @@ static inline int is_completed(struct task_struct* t)
 }
 
 
+/* Used to convert ns-specified execution costs and periods into
+ * integral quanta equivalents.
+ */
+#define LITMUS_QUANTUM_LENGTH_NS (CONFIG_LITMUS_QUANTUM_LENGTH_US * 1000ULL)
+
 /* make the unit explicit */
 typedef unsigned long quanta_t;
 
@@ -268,19 +273,18 @@ enum round {
 	CEIL
 };
 
-
-/* Tick period is used to convert ns-specified execution
- * costs and periods into tick-based equivalents.
- */
-extern ktime_t tick_period;
-
 static inline quanta_t time2quanta(lt_t time, enum round round)
 {
-	s64  quantum_length = ktime_to_ns(tick_period);
+	s64  quantum_length = LITMUS_QUANTUM_LENGTH_NS;
 
 	if (do_div(time, quantum_length) && round == CEIL)
 		time++;
 	return (quanta_t) time;
+}
+
+static inline lt_t quanta2time(quanta_t quanta)
+{
+	return quanta * LITMUS_QUANTUM_LENGTH_NS;
 }
 
 /* By how much is cpu staggered behind CPU 0? */
