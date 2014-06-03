@@ -383,33 +383,6 @@ static noinline void job_completion(struct task_struct *t, int forced)
 		cedf_job_arrival(t);
 }
 
-/* cedf_tick - this function is called for every local timer
- *                         interrupt.
- *
- *                   checks whether the current task has expired and checks
- *                   whether we need to preempt it if it has not expired
- */
-static void cedf_tick(struct task_struct* t)
-{
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			/* np tasks will be preempted when they become
-			 * preemptable again
-			 */
-			litmus_reschedule_local();
-			set_will_schedule();
-			TRACE("cedf_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("cedf_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
-	}
-}
-
 /* Getting schedule() right is a bit tricky. schedule() may not make any
  * assumptions on the state of the current task since it may be called for a
  * number of reasons. The reasons include a scheduler_tick() determined that it
@@ -888,7 +861,6 @@ static long cedf_deactivate_plugin(void)
 static struct sched_plugin cedf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "C-EDF",
 	.finish_switch		= cedf_finish_switch,
-	.tick			= cedf_tick,
 	.task_new		= cedf_task_new,
 	.complete_job		= complete_job,
 	.task_exit		= cedf_task_exit,
