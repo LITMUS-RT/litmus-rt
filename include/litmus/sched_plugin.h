@@ -21,10 +21,7 @@ typedef long (*get_domain_proc_info_t) (struct domain_proc_info **info);
 
 
 /********************* scheduler invocation ******************/
-
-/*  Plugin-specific realtime tick handler */
-typedef void (*scheduler_tick_t) (struct task_struct *cur);
-/* Novell make sched decision function */
+/* The main scheduling function, called to select the next task to dispatch. */
 typedef struct task_struct* (*schedule_t)(struct task_struct * prev);
 /* Clean up after the task switch has occured.
  * This function is called after every (even non-rt) task switch.
@@ -94,7 +91,6 @@ struct sched_plugin {
 	get_domain_proc_info_t	get_domain_proc_info;
 
 	/* 	scheduler invocation 	*/
-	scheduler_tick_t        tick;
 	schedule_t 		schedule;
 	finish_switch_t 	finish_switch;
 

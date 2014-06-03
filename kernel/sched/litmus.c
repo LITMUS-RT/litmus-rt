@@ -33,17 +33,8 @@ static void double_rq_unlock(struct rq *rq1, struct rq *rq2);
  */
 void litmus_tick(struct rq *rq, struct task_struct *p)
 {
-	TS_PLUGIN_TICK_START;
-
 	if (is_realtime(p))
 		update_time_litmus(rq, p);
-
-	/* plugin tick */
-	litmus->tick(p);
-
-	TS_PLUGIN_TICK_END;
-
-	return;
 }
 
 static struct task_struct *

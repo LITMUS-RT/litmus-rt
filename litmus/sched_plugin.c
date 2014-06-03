@@ -69,10 +69,6 @@ static struct task_struct* litmus_dummy_schedule(struct task_struct * prev)
 	return NULL;
 }
 
-static void litmus_dummy_tick(struct task_struct* tsk)
-{
-}
-
 static long litmus_dummy_admit_task(struct task_struct* tsk)
 {
 	printk(KERN_CRIT "LITMUS^RT: Linux plugin rejects %s/%d.\n",
@@ -142,7 +138,6 @@ static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
  */
 struct sched_plugin linux_sched_plugin = {
 	.plugin_name = "Linux",
-	.tick = litmus_dummy_tick,
 	.task_new   = litmus_dummy_task_new,
 	.task_exit = litmus_dummy_task_exit,
 	.task_wake_up = litmus_dummy_task_wake_up,
@@ -184,7 +179,6 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	/* make sure we don't trip over null pointers later */
 	CHECK(finish_switch);
 	CHECK(schedule);
-	CHECK(tick);
 	CHECK(task_wake_up);
 	CHECK(task_exit);
 	CHECK(task_cleanup);
