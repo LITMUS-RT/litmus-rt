@@ -59,6 +59,8 @@ struct pfair_param   {
 struct pfair_state {
 	struct cluster_cpu topology;
 
+	struct hrtimer quantum_timer;
+
 	volatile quanta_t cur_tick;    /* updated by the CPU that is advancing
 				        * the time */
 	volatile quanta_t local_tick;  /* What tick is the local CPU currently
@@ -590,6 +592,14 @@ static void pfair_tick(struct task_struct* t)
 		litmus_reschedule_local();
 }
 
+/* Custom scheduling tick: called on each quantum boundary. */
+static enum hrtimer_restart on_quantum_boundary(struct hrtimer *timer)
+{
+	pfair_tick(current);
+	hrtimer_add_expires_ns(timer, LITMUS_QUANTUM_LENGTH_NS);
+	return  HRTIMER_RESTART;
+}
+
 static int safe_to_schedule(struct task_struct* t, int cpu)
 {
 	int where = tsk_rt(t)->scheduled_on;
@@ -657,6 +667,14 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 			   tsk_pfair(next)->release, cpu_cluster(state)->pfair_time, litmus_clock());
 	else if (is_realtime(prev))
 		TRACE("Becomes idle at %lu (%llu)\n", cpu_cluster(state)->pfair_time, litmus_clock());
+
+	if (unlikely(!hrtimer_active(&state->quantum_timer))) {
+		TRACE("activating quantum timer start=%llu\n",
+			hrtimer_get_expires(&state->quantum_timer));
+		hrtimer_start(&state->quantum_timer,
+			hrtimer_get_expires(&state->quantum_timer),
+			HRTIMER_MODE_ABS_PINNED);
+	}
 
 	return next;
 }
@@ -823,7 +841,7 @@ static long pfair_admit_task(struct task_struct* t)
 {
 	lt_t quanta;
 	lt_t period;
-	s64  quantum_length = ktime_to_ns(tick_period);
+	s64  quantum_length = LITMUS_QUANTUM_LENGTH_NS;
 	struct pfair_param* param;
 	unsigned long i;
 
@@ -981,11 +999,12 @@ static long pfair_activate_plugin(void)
 {
 	int err, i;
 	struct pfair_state* state;
-	struct pfair_cluster* cluster ;
-	quanta_t now;
+	struct pfair_cluster* cluster;
+	quanta_t now, start;
 	int cluster_size;
 	struct cluster_cpu* cpus[NR_CPUS];
 	struct scheduling_cluster* clust[NR_CPUS];
+	lt_t quantum_timer_start;
 
 	cluster_size = get_cluster_size(pfair_cluster_level);
 
@@ -1002,28 +1021,41 @@ static long pfair_activate_plugin(void)
 	}
 
 	state = &__get_cpu_var(pfair_state);
-	now = current_quantum(state);
-	TRACE("Activating PFAIR at q=%lu\n", now);
+	now   = current_quantum(state);
+	start = now + 50;
+	quantum_timer_start = quanta2time(start);
+	TRACE("Activating PFAIR at %llu (q=%lu), first tick at %llu (q=%lu)\n",
+		litmus_clock(),
+		now,
+		quantum_timer_start,
+		time2quanta(quantum_timer_start, CEIL));
 
 	for (i = 0; i < num_pfair_clusters; i++) {
 		cluster = &pfair_clusters[i];
 		pfair_init_cluster(cluster);
-		cluster->pfair_time = now;
+		cluster->pfair_time = start;
 		clust[i] = &cluster->topology;
 #ifdef CONFIG_RELEASE_MASTER
 		cluster->pfair.release_master = atomic_read(&release_master_cpu);
 #endif
 	}
 
-	for (i = 0; i < num_online_cpus(); i++)  {
+	for_each_online_cpu(i) {
 		state = &per_cpu(pfair_state, i);
-		state->cur_tick   = now;
-		state->local_tick = now;
+		state->cur_tick   = start;
+		state->local_tick = start;
 		state->missed_quanta = 0;
 		state->missed_updates = 0;
 		state->offset     = cpu_stagger_offset(i);
-		printk(KERN_ERR "cpus[%d] set; %d\n", i, num_online_cpus());
+		hrtimer_set_expires(&state->quantum_timer,
+			ns_to_ktime(quantum_timer_start + state->offset));
+		printk(KERN_ERR "cpus[%d] set; offset=%llu; %d\n", i, state->offset, num_online_cpus());
 		cpus[i] = &state->topology;
+		/* force rescheduling to start quantum timer */
+		litmus_reschedule(i);
+
+		WARN_ONCE(!hrtimer_is_hres_active(&state->quantum_timer),
+			KERN_ERR "WARNING: no high resolution timers available!?\n");
 	}
 
 	err = assign_cpus_to_clusters(pfair_cluster_level, clust, num_pfair_clusters,
@@ -1039,6 +1071,14 @@ static long pfair_activate_plugin(void)
 
 static long pfair_deactivate_plugin(void)
 {
+	int cpu;
+	struct pfair_state* state;
+
+	for_each_online_cpu(cpu) {
+		state = &per_cpu(pfair_state, cpu);
+		TRACE("stopping quantum timer on CPU%d\n", cpu);
+		hrtimer_cancel(&state->quantum_timer);
+	}
 	cleanup_clusters();
 	destroy_domain_proc_info(&pfair_domain_proc_info);
 	return 0;
@@ -1047,7 +1087,6 @@ static long pfair_deactivate_plugin(void)
 /*	Plugin object	*/
 static struct sched_plugin pfair_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PFAIR",
-	.tick			= pfair_tick,
 	.task_new		= pfair_task_new,
 	.task_exit		= pfair_task_exit,
 	.schedule		= pfair_schedule,
@@ -1079,6 +1118,8 @@ static int __init init_pfair(void)
 	/* initialize CPU state */
 	for (cpu = 0; cpu < num_online_cpus(); cpu++)  {
 		state = &per_cpu(pfair_state, cpu);
+		hrtimer_init(&state->quantum_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
+		state->quantum_timer.function = on_quantum_boundary;
 		state->topology.id = cpu;
 		state->cur_tick   = 0;
 		state->local_tick = 0;
