@@ -166,31 +166,6 @@ static void job_completion(struct task_struct* t, int forced)
 	prepare_for_next_period(t);
 }
 
-static void psnedf_tick(struct task_struct *t)
-{
-	psnedf_domain_t *pedf = local_pedf;
-
-	/* Check for inconsistency. We don't need the lock for this since
-	 * ->scheduled is only changed in schedule, which obviously is not
-	 *  executing in parallel on this CPU
-	 */
-	BUG_ON(is_realtime(t) && t != pedf->scheduled);
-
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			litmus_reschedule_local();
-			TRACE("psnedf_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("psnedf_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
-	}
-}
-
 static struct task_struct* psnedf_schedule(struct task_struct * prev)
 {
 	psnedf_domain_t* 	pedf = local_pedf;
@@ -679,7 +654,6 @@ static long psnedf_admit_task(struct task_struct* tsk)
 /*	Plugin object	*/
 static struct sched_plugin psn_edf_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "PSN-EDF",
-	.tick			= psnedf_tick,
 	.task_new		= psnedf_task_new,
 	.complete_job		= complete_job,
 	.task_exit		= psnedf_task_exit,
