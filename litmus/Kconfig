@@ -54,6 +54,16 @@ config PREFER_LOCAL_LINKING
 
 	  If unsure, say yes.
 
+config LITMUS_QUANTUM_LENGTH_US
+    int "quantum length (in us)"
+    default 1000
+    range 500 10000
+    help 
+      Determine the desired quantum length, in microseconds, which 
+      is used to determine the granularity of scheduling in
+      quantum-driven plugins (primarily PFAIR). This parameter does not
+      affect event-driven plugins (such as the EDF-based plugins and P-FP).
+      Default: 1000us = 1ms.
 
 config BUG_ON_MIGRATION_DEADLOCK
        bool "Panic on suspected migration deadlock"
