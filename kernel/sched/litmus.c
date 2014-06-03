@@ -27,16 +27,6 @@ static void update_time_litmus(struct rq *rq, struct task_struct *p)
 static void double_rq_lock(struct rq *rq1, struct rq *rq2);
 static void double_rq_unlock(struct rq *rq1, struct rq *rq2);
 
-/*
- * litmus_tick gets called by scheduler_tick() with HZ freq
- * Interrupts are disabled
- */
-void litmus_tick(struct rq *rq, struct task_struct *p)
-{
-	if (is_realtime(p))
-		update_time_litmus(rq, p);
-}
-
 static struct task_struct *
 litmus_schedule(struct rq *rq, struct task_struct *prev)
 {
@@ -268,8 +258,13 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq)
 
 static void task_tick_litmus(struct rq *rq, struct task_struct *p, int queued)
 {
-	/* nothing to do; tick related tasks are done by litmus_tick() */
-	return;
+	if (is_realtime(p) && !queued) {
+		update_time_litmus(rq, p);
+		/* budget check for QUANTUM_ENFORCEMENT tasks */
+		if (budget_enforced(p) && budget_exhausted(p)) {
+			litmus_reschedule_local();
+		}
+	}
 }
 
 static void switched_to_litmus(struct rq *rq, struct task_struct *p)
