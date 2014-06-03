@@ -138,31 +138,6 @@ static void job_completion(struct task_struct* t, int forced)
 		sched_trace_task_release(t);
 }
 
-static void pfp_tick(struct task_struct *t)
-{
-	pfp_domain_t *pfp = local_pfp;
-
-	/* Check for inconsistency. We don't need the lock for this since
-	 * ->scheduled is only changed in schedule, which obviously is not
-	 *  executing in parallel on this CPU
-	 */
-	BUG_ON(is_realtime(t) && t != pfp->scheduled);
-
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			litmus_reschedule_local();
-			TRACE("pfp_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("pfp_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
-	}
-}
-
 static struct task_struct* pfp_schedule(struct task_struct * prev)
 {
 	pfp_domain_t* 	pfp = local_pfp;
@@ -2004,7 +1979,6 @@ static long pfp_deactivate_plugin(void)
 /*	Plugin object	*/
 static struct sched_plugin pfp_plugin __cacheline_aligned_in_smp = {
 	.plugin_name		= "P-FP",
-	.tick			= pfp_tick,
 	.task_new		= pfp_task_new,
 	.complete_job		= complete_job,
 	.task_exit		= pfp_task_exit,
