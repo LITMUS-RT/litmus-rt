@@ -21,6 +21,7 @@
 #include <litmus/rt_domain.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/sched_trace.h>
+#include <litmus/trace.h>
 
 #include <litmus/bheap.h>
 
@@ -595,8 +596,12 @@ static void pfair_tick(struct task_struct* t)
 /* Custom scheduling tick: called on each quantum boundary. */
 static enum hrtimer_restart on_quantum_boundary(struct hrtimer *timer)
 {
+	TS_QUANTUM_BOUNDARY_START;
+
 	pfair_tick(current);
 	hrtimer_add_expires_ns(timer, LITMUS_QUANTUM_LENGTH_NS);
+
+	TS_QUANTUM_BOUNDARY_END;
 	return  HRTIMER_RESTART;
 }
 
