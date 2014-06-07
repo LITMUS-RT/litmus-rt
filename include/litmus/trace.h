@@ -118,6 +118,9 @@ feather_callback void save_cpu_task_latency(unsigned long event, unsigned long w
 #define TS_TICK_START(t)		CPU_TTIMESTAMP(110, t)
 #define TS_TICK_END(t) 			CPU_TTIMESTAMP(111, t)
 
+#define TS_QUANTUM_BOUNDARY_START	CPU_TIMESTAMP_CUR(112)
+#define TS_QUANTUM_BOUNDARY_END		CPU_TIMESTAMP_CUR(113)
+
 
 #define TS_PLUGIN_SCHED_START		/* TIMESTAMP(120) */  /* currently unused */
 #define TS_PLUGIN_SCHED_END		/* TIMESTAMP(121) */
