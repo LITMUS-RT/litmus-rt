@@ -696,6 +696,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 
 	prepare_release(t, cluster->pfair_time + 1);
+	release_at(t, quanta2time(cur_release(t)));
 
 	t->rt_param.scheduled_on = NO_CPU;
 	t->rt_param.linked_on    = NO_CPU;
