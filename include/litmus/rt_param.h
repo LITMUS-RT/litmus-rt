@@ -198,7 +198,10 @@ struct rt_param {
 	volatile int		linked_on;
 
 	/* PFAIR/PD^2 state. Allocated on demand. */
-	struct pfair_param*	pfair;
+	union {
+		void *plugin_state;
+		struct pfair_param *pfair;
+	};
 
 	/* Fields saved before BE->RT transition.
 	 */
