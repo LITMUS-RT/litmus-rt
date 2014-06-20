@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 
 #include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
 #include <litmus/jobs.h>
 
 static inline void setup_release(struct task_struct *t, lt_t release)
@@ -58,7 +59,7 @@ long default_wait_for_release_at(lt_t release_time)
 	tsk_rt(t)->sporadic_release = 1;
 	local_irq_restore(flags);
 
-	return complete_job();
+	return litmus->complete_job();
 }
 
 
