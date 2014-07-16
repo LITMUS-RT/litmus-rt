@@ -103,6 +103,10 @@ typedef void (*synchronous_release_at_t)(lt_t time_zero);
  * reservation-specific values. */
 typedef void (*current_budget_t)(lt_t *used_so_far, lt_t *remaining);
 
+/* Reservation creation/removal backends. Meaning of reservation_type and
+ * reservation_id are entirely plugin-specific. */
+typedef long (*reservation_create_t)(int reservation_type, void* __user config);
+typedef long (*reservation_destroy_t)(unsigned int reservation_id, int cpu);
 
 /************************ misc routines ***********************/
 
@@ -143,6 +147,10 @@ struct sched_plugin {
 	task_cleanup_t		task_cleanup;
 
 	current_budget_t	current_budget;
+
+	/* Reservation support */
+	reservation_create_t	reservation_create;
+	reservation_destroy_t	reservation_destroy;
 
 #ifdef CONFIG_LITMUS_LOCKING
 	/*	locking protocols	*/

@@ -317,6 +317,16 @@ asmlinkage long sys_null_call(cycles_t __user *ts)
 	return ret;
 }
 
+asmlinkage long sys_reservation_create(int type, void __user *config)
+{
+	return litmus->reservation_create(type, config);
+}
+
+asmlinkage long sys_reservation_destroy(unsigned int reservation_id, int cpu)
+{
+	return litmus->reservation_destroy(reservation_id, cpu);
+}
+
 /* p is a real-time task. Re-init its state as a best-effort task. */
 static void reinit_litmus_state(struct task_struct* p, int restore)
 {
