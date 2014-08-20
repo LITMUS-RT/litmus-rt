@@ -409,6 +409,8 @@
         CALL(sys_wait_for_ts_release)
 		CALL(sys_release_ts)
 		CALL(sys_null_call)
+/* 300 */	CALL(sys_get_current_budget)
+
 
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls
