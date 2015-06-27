@@ -233,18 +233,6 @@ feather_callback void save_cpu_timestamp_task(unsigned long event,
 			    0, RECORD_LOCAL_TIMESTAMP);
 }
 
-feather_callback void save_cpu_task_latency(unsigned long event,
-					    unsigned long when_ptr)
-{
-	lt_t now = litmus_clock();
-	lt_t *when = (lt_t*) when_ptr;
-
-	write_cpu_timestamp(event, TSK_RT,
-			    0,
-			    0, LOCAL_IRQ_COUNT, 0,
-			    now - *when, DO_NOT_RECORD_TIMESTAMP);
-}
-
 /* fake timestamp to user-reported time */
 feather_callback void save_cpu_timestamp_time(unsigned long event,
 			 unsigned long ptr)
