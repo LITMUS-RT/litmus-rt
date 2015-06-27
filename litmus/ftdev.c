@@ -271,7 +271,7 @@ static long ftdev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case FTDEV_CALIBRATE:
 		if (ftdm->ftdev->calibrate) {
-			err = ftdm->ftdev->calibrate(ftdm->ftdev, iminor(filp->f_dentry->d_inode), arg);
+			err = ftdm->ftdev->calibrate(ftdm->ftdev, iminor(file_inode(filp)), arg);
 		}
 		break;
 
