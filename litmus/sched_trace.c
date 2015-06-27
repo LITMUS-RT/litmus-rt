@@ -60,7 +60,7 @@ void sched_trace_log_message(const char* fmt, ...)
 	local_irq_save(flags);
 
 	/* format message */
-	buf = __get_cpu_var(fmt_buffer);
+	buf = this_cpu_ptr(fmt_buffer);
 	len = vscnprintf(buf, MSG_SIZE, fmt, args);
 
 	raw_spin_lock(&log_buffer_lock);
