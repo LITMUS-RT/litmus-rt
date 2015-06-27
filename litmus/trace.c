@@ -29,13 +29,13 @@ static int64_t cycle_offset[NR_CPUS][NR_CPUS];
 void ft_irq_fired(void)
 {
 	/* Only called with preemptions disabled.  */
-	atomic_inc(&__get_cpu_var(irq_fired_count));
-	atomic_inc(&__get_cpu_var(cpu_irq_fired_count));
+	atomic_inc(this_cpu_ptr(&irq_fired_count));
+	atomic_inc(this_cpu_ptr(&cpu_irq_fired_count));
 }
 
 static inline void clear_irq_fired(void)
 {
-	atomic_set(&__raw_get_cpu_var(irq_fired_count), 0);
+	atomic_set(raw_cpu_ptr(&irq_fired_count), 0);
 }
 
 static inline unsigned int get_and_clear_irq_fired(void)
@@ -46,7 +46,7 @@ static inline unsigned int get_and_clear_irq_fired(void)
 	 * If it proves to be a problem, then one could add a callback
 	 * from the migration code to invalidate irq_fired_count.
 	 */
-	return atomic_xchg(&__raw_get_cpu_var(irq_fired_count), 0);
+	return atomic_xchg(raw_cpu_ptr(&irq_fired_count), 0);
 }
 
 static inline unsigned int get_and_clear_irq_fired_for_cpu(int cpu)
@@ -56,12 +56,12 @@ static inline unsigned int get_and_clear_irq_fired_for_cpu(int cpu)
 
 static inline void cpu_clear_irq_fired(void)
 {
-	atomic_set(&__raw_get_cpu_var(cpu_irq_fired_count), 0);
+	atomic_set(raw_cpu_ptr(&cpu_irq_fired_count), 0);
 }
 
 static inline unsigned int cpu_get_and_clear_irq_fired(void)
 {
-	return atomic_xchg(&__raw_get_cpu_var(cpu_irq_fired_count), 0);
+	return atomic_xchg(raw_cpu_ptr(&cpu_irq_fired_count), 0);
 }
 
 static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
@@ -114,7 +114,7 @@ static inline void __write_record(
 
 	/* resolved during function inlining */
 	if (is_cpu_timestamp) {
-		seq_no = __get_cpu_var(cpu_ts_seq_no)++;
+		seq_no = __this_cpu_inc_return(cpu_ts_seq_no);
 		buf = cpu_trace_ts_buf(cpu);
 	} else {
 		seq_no = fetch_and_inc((int *) &per_cpu(msg_ts_seq_no, cpu));
@@ -295,7 +295,7 @@ static void __add_timestamp_user(struct timestamp *pre_recorded)
 	cpu = smp_processor_id();
 	buf = cpu_trace_ts_buf(cpu);
 
-	seq_no = __get_cpu_var(cpu_ts_seq_no)++;
+	seq_no = __this_cpu_inc_return(cpu_ts_seq_no);
 	if (buf && ft_buffer_start_single_write(buf, (void**)  &ts)) {
 		*ts = *pre_recorded;
 		ts->seq_no = seq_no;
