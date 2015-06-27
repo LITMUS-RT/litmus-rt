@@ -111,7 +111,7 @@ static int lock_srp_semaphore(struct litmus_lock* l)
 	preempt_disable();
 
 	/* Update ceiling. */
-	srp_add_prio(&__get_cpu_var(srp), &sem->ceiling);
+	srp_add_prio(this_cpu_ptr(&srp), &sem->ceiling);
 
 	/* SRP invariant: all resources available */
 	BUG_ON(sem->owner != NULL);
@@ -153,7 +153,7 @@ static int unlock_srp_semaphore(struct litmus_lock* l)
 
 		/* Wake tasks on this CPU, if they exceed current ceiling. */
 		TRACE_CUR("released srp 0x%p\n", sem);
-		wake_up_all(&__get_cpu_var(srp).ceiling_blocked);
+		wake_up_all(&this_cpu_ptr(&srp)->ceiling_blocked);
 
 		tsk_rt(t)->num_local_locks_held--;
 	}
@@ -257,7 +257,7 @@ static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 	if (cpu != get_partition(tsk))
 		TRACE_TASK(tsk, "srp_wake_up on wrong cpu, partition is %d\b",
 			   get_partition(tsk));
-	else if (srp_exceeds_ceiling(tsk, &__get_cpu_var(srp)))
+	else if (srp_exceeds_ceiling(tsk, this_cpu_ptr(&srp)))
 		return default_wake_function(wait, mode, sync, key);
 	return 0;
 }
@@ -271,13 +271,13 @@ static void do_ceiling_block(struct task_struct *tsk)
 	};
 
 	tsk->state = TASK_UNINTERRUPTIBLE;
-	add_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
+	add_wait_queue(&this_cpu_ptr(&srp)->ceiling_blocked, &wait);
 	tsk->rt_param.srp_non_recurse = 1;
 	preempt_enable_no_resched();
 	schedule();
 	preempt_disable();
 	tsk->rt_param.srp_non_recurse = 0;
-	remove_wait_queue(&__get_cpu_var(srp).ceiling_blocked, &wait);
+	remove_wait_queue(&this_cpu_ptr(&srp)->ceiling_blocked, &wait);
 }
 
 /* Wait for current task priority to exceed system-wide priority ceiling.
@@ -300,9 +300,9 @@ void srp_ceiling_block(void)
 		return;
 
 	preempt_disable();
-	if (!srp_exceeds_ceiling(tsk, &__get_cpu_var(srp))) {
+	if (!srp_exceeds_ceiling(tsk, this_cpu_ptr(&srp))) {
 		TRACE_CUR("is priority ceiling blocked.\n");
-		while (!srp_exceeds_ceiling(tsk, &__get_cpu_var(srp)))
+		while (!srp_exceeds_ceiling(tsk, this_cpu_ptr(&srp)))
 			do_ceiling_block(tsk);
 		TRACE_CUR("finally exceeds system ceiling.\n");
 	} else

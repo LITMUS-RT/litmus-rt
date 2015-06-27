@@ -436,14 +436,11 @@ static struct domain_proc_info* active_mapping = NULL;
 static int litmus_mapping_proc_show(struct seq_file *m, void *v)
 {
 	struct cd_mapping *mapping = (struct cd_mapping*) m->private;
-	char buf[256];
 
 	if(!mapping)
 		return 0;
 
-	cpumask_scnprintf(buf, sizeof(buf), mapping->mask);
-	buf[255] = '\0'; /* just in case... */
-	seq_printf(m, "%s\n", buf);
+	seq_printf(m, "%*pb\n", cpumask_pr_args(mapping->mask));
 	return 0;
 }
 

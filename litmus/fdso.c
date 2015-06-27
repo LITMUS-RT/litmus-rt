@@ -202,7 +202,7 @@ static int do_sys_od_open(struct file* file, obj_type_t type, int id,
 	struct inode_obj_id* obj = NULL;
 	struct od_table_entry* entry;
 
-	inode = file->f_dentry->d_inode;
+	inode = file_inode(file);
 
 	entry = get_od_entry(current);
 	if (!entry)

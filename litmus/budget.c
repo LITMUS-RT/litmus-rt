@@ -87,7 +87,7 @@ static void arm_enforcement_timer(struct enforcement_timer* et,
 /* expects to be called with IRQs off */
 void update_enforcement_timer(struct task_struct* t)
 {
-	struct enforcement_timer* et = &__get_cpu_var(budget_timer);
+	struct enforcement_timer* et = this_cpu_ptr(&budget_timer);
 
 	if (t && budget_precisely_enforced(t)) {
 		/* Make sure we call into the scheduler when this budget
