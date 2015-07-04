@@ -2760,10 +2760,6 @@ static void __sched __schedule(void)
 	rcu_note_context_switch();
 	prev = rq->curr;
 
-	/* LITMUS^RT: quickly re-evaluate the scheduling decision
-	 * if the previous one is no longer valid after context switch.
-	 */
-litmus_need_resched_nonpreemptible:
 	TS_SCHED_START;
 	sched_trace_task_switch_away(prev);
 
@@ -2835,11 +2831,6 @@ litmus_need_resched_nonpreemptible:
 
 	post_schedule(rq);
 
-	if (sched_state_validate_switch()) {
-		TS_SCHED2_END(prev);
-		goto litmus_need_resched_nonpreemptible;
-	}
-
 	sched_preempt_enable_no_resched();
 
 	TS_SCHED2_END(prev);
@@ -2864,7 +2855,7 @@ asmlinkage __visible void __sched schedule(void)
 	sched_submit_work(tsk);
 	do {
 		__schedule();
-	} while (need_resched());
+	} while (need_resched() || sched_state_validate_switch());
 
 	srp_ceiling_block();
 }
