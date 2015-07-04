@@ -27,6 +27,8 @@
 #include <linux/debug_locks.h>
 #include <linux/osq_lock.h>
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * In the DEBUG case we are using the "NULL fastpath" for mutexes,
  * which forces all calls into the slowpath:
@@ -368,7 +370,7 @@ static bool mutex_optimistic_spin(struct mutex *lock,
 		 * we're an RT task that will live-lock because we won't let
 		 * the owner complete.
 		 */
-		if (!owner && (need_resched() || rt_task(task)))
+		if (!owner && (need_resched() || rt_task(task) || is_realtime(task)))
 			break;
 
 		/*

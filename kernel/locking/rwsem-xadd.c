@@ -18,6 +18,8 @@
 
 #include "rwsem.h"
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * Guide to the rw_semaphore's count field for common values.
  * (32-bit case illustrated, similar for 64-bit)
@@ -392,7 +394,7 @@ static bool rwsem_optimistic_spin(struct rw_semaphore *sem)
 		 * we're an RT task that will live-lock because we won't let
 		 * the owner complete.
 		 */
-		if (!owner && (need_resched() || rt_task(current)))
+		if (!owner && (need_resched() || rt_task(current) || is_realtime(current)))
 			break;
 
 		/*
