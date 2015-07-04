@@ -507,7 +507,6 @@ struct dl_rq {
 
 struct litmus_rq {
 	unsigned long nr_running;
-	struct task_struct *prev;
 };
 
 #ifdef CONFIG_SMP

@@ -220,35 +220,15 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
 {
 }
 
-#ifdef CONFIG_SMP
-static void pre_schedule_litmus(struct rq *rq, struct task_struct *prev)
-{
-	update_rq_clock(rq);
-	/* tell update_rq_clock() that we just did that */
-	rq->skip_clock_update = 1;
-	update_time_litmus(rq, prev);
-	if (!is_running(prev))
-		tsk_rt(prev)->present = 0;
-}
-#endif
-
 /* pick_next_task_litmus() - litmus_schedule() function
  *
  * return the next task to be scheduled
  */
-static struct task_struct *pick_next_task_litmus(struct rq *rq)
+static struct task_struct *pick_next_task_litmus(struct rq *rq, struct task_struct *prev)
 {
-	/* get the to-be-switched-out task (prev) */
-	struct task_struct *prev = rq->litmus.prev;
 	struct task_struct *next;
 
-	/* if not called from schedule() but from somewhere
-	 * else (e.g., migration), return now!
-	 */
-	if(!rq->litmus.prev)
-		return NULL;
-
-	rq->litmus.prev = NULL;
+	update_time_litmus(rq, prev);
 
 	TS_PLUGIN_SCHED_START;
 	next = litmus_schedule(rq, prev);
@@ -300,7 +280,7 @@ static void set_curr_task_litmus(struct rq *rq)
  * exec, fork, wakeup.
  */
 static int
-select_task_rq_litmus(struct task_struct *p, int sd_flag, int flags)
+select_task_rq_litmus(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
 	/* preemption is already disabled.
 	 * We don't want to change cpu here
@@ -315,7 +295,7 @@ const struct sched_class litmus_sched_class = {
 	 * cpu-hotplug or cpu throttling. Allows Litmus to use up to 1.0
 	 * CPU capacity.
 	 */
-	.next			= &rt_sched_class,
+	.next			= &dl_sched_class,
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
 	.yield_task		= yield_task_litmus,
@@ -327,8 +307,6 @@ const struct sched_class litmus_sched_class = {
 
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_litmus,
-
-	.pre_schedule		= pre_schedule_litmus,
 #endif
 
 	.set_curr_task          = set_curr_task_litmus,
