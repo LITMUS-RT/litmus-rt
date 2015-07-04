@@ -108,12 +108,10 @@ static inline lt_t litmus_clock(void)
 /* Honor the flag in the preempt_count variable that is set
  * when scheduling is in progress.
  */
-#define is_running(t) 			\
-	((t)->state == TASK_RUNNING || 	\
-	 task_thread_info(t)->preempt_count & PREEMPT_ACTIVE)
+#define is_current_running() 			\
+	((current)->state == TASK_RUNNING || 	\
+	 preempt_count() & PREEMPT_ACTIVE)
 
-#define is_blocked(t)       \
-	(!is_running(t))
 #define is_released(t, now)	\
 	(lt_before_eq(get_release(t), now))
 #define is_tardy(t, now)    \

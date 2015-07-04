@@ -53,7 +53,8 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		/* while we drop the lock, the prev task could change its
 		 * state
 		 */
-		was_running = is_running(prev);
+		BUG_ON(prev != current);
+		was_running = is_current_running();
 		mb();
 		raw_spin_unlock(&rq->lock);
 
@@ -104,12 +105,12 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 #endif
 		double_rq_lock(rq, other_rq);
 		mb();
-		if (is_realtime(prev) && is_running(prev) != was_running) {
+		if (is_realtime(current) && is_current_running() != was_running) {
 			TRACE_TASK(prev,
 				   "state changed while we dropped"
 				   " the lock: is_running=%d, was_running=%d\n",
-				   is_running(prev), was_running);
-			if (is_running(prev) && !was_running) {
+				   is_current_running(), was_running);
+			if (is_current_running() && !was_running) {
 				/* prev task became unblocked
 				 * we need to simulate normal sequence of events
 				 * to scheduler plugins.
@@ -128,12 +129,12 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * If either is violated, then the active plugin is
 		 * doing something wrong.
 		 */
-		if (!is_realtime(next) || !is_running(next)) {
+		if (!is_realtime(next) || next->state != TASK_RUNNING) {
 			/* BAD BAD BAD */
 			TRACE_TASK(next,"BAD: migration invariant FAILED: "
 				   "rt=%d running=%d\n",
 				   is_realtime(next),
-				   is_running(next));
+				   next->state == TASK_RUNNING);
 			/* drop the task */
 			next = NULL;
 		}
