@@ -40,8 +40,8 @@ typedef struct {
 
 DEFINE_PER_CPU(psnedf_domain_t, psnedf_domains);
 
-#define local_edf		(&__get_cpu_var(psnedf_domains).domain)
-#define local_pedf		(&__get_cpu_var(psnedf_domains))
+#define local_edf		(&(this_cpu_ptr(&psnedf_domains)->domain))
+#define local_pedf		(this_cpu_ptr(&psnedf_domains))
 #define remote_edf(cpu)		(&per_cpu(psnedf_domains, cpu).domain)
 #define remote_pedf(cpu)	(&per_cpu(psnedf_domains, cpu))
 #define task_edf(task)		remote_edf(get_partition(task))
@@ -186,7 +186,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 
 	/* (0) Determine state */
 	exists      = pedf->scheduled != NULL;
-	blocks      = exists && !is_running(pedf->scheduled);
+	blocks      = exists && !is_current_running();
 	out_of_time = exists &&
 				  budget_enforced(pedf->scheduled) &&
 				  budget_exhausted(pedf->scheduled);
@@ -283,7 +283,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 		 * it still needs to be requeued. If it is suspended, there is
 		 * nothing that we need to do as it will be handled by the
 		 * wake_up() handler. */
-		if (is_running(t)) {
+		if (on_rq) {
 			requeue(t, edf);
 			/* maybe we have to reschedule */
 			psnedf_preempt_check(pedf);
