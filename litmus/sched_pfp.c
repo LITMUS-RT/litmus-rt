@@ -43,7 +43,7 @@ DEFINE_PER_CPU(pfp_domain_t, pfp_domains);
 
 pfp_domain_t* pfp_doms[NR_CPUS];
 
-#define local_pfp		(&__get_cpu_var(pfp_domains))
+#define local_pfp		(this_cpu_ptr(&pfp_domains))
 #define remote_dom(cpu)		(&per_cpu(pfp_domains, cpu).domain)
 #define remote_pfp(cpu)	(&per_cpu(pfp_domains, cpu))
 #define task_dom(task)		remote_dom(get_partition(task))
@@ -118,8 +118,6 @@ static void pfp_domain_init(pfp_domain_t* pfp,
 
 static void requeue(struct task_struct* t, pfp_domain_t *pfp)
 {
-	BUG_ON(!is_running(t));
-
 	tsk_rt(t)->completed = 0;
 	if (is_released(t, litmus_clock()))
 		fp_prio_add(&pfp->ready_queue, t, priority_index(t));
@@ -156,7 +154,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 
 	/* (0) Determine state */
 	exists      = pfp->scheduled != NULL;
-	blocks      = exists && !is_running(pfp->scheduled);
+	blocks      = exists && !is_current_running();
 	out_of_time = exists &&
 				  budget_enforced(pfp->scheduled) &&
 				  budget_exhausted(pfp->scheduled);
@@ -253,7 +251,7 @@ static void pfp_finish_switch(struct task_struct *prev)
 	pfp_domain_t *to;
 
 	if (is_realtime(prev) &&
-	    is_running(prev) &&
+	    prev->state == TASK_RUNNING &&
 	    get_partition(prev) != smp_processor_id()) {
 		TRACE_TASK(prev, "needs to migrate from P%d to P%d\n",
 			   smp_processor_id(), get_partition(prev));
@@ -292,7 +290,7 @@ static void pfp_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 		/* there shouldn't be anything else running at the time */
 		BUG_ON(pfp->scheduled);
 		pfp->scheduled = t;
-	} else if (is_running(t)) {
+	} else if (on_rq) {
 		requeue(t, pfp);
 		/* maybe we have to reschedule */
 		pfp_preempt_check(pfp);
@@ -517,7 +515,7 @@ static inline struct fmlp_semaphore* fmlp_from_lock(struct litmus_lock* lock)
 static inline lt_t
 fmlp_clock(void)
 {
-	return (lt_t) __get_cpu_var(fmlp_timestamp)++;
+	return (lt_t) this_cpu_inc_return(fmlp_timestamp);
 }
 
 int pfp_fmlp_lock(struct litmus_lock* l)
@@ -703,14 +701,14 @@ static void mpcp_vspin_enter(void)
 	struct task_struct* t = current;
 
 	while (1) {
-		if (__get_cpu_var(mpcpvs_vspin) == NULL) {
+		if (this_cpu_read(mpcpvs_vspin) == NULL) {
 			/* good, we get to issue our request */
-			__get_cpu_var(mpcpvs_vspin) = t;
+			this_cpu_write(mpcpvs_vspin, t);
 			break;
 		} else {
 			/* some job is spinning => enqueue in request queue */
 			prio_wait_queue_t wait;
-			wait_queue_head_t* vspin = &__get_cpu_var(mpcpvs_vspin_wait);
+			wait_queue_head_t* vspin = this_cpu_ptr(&mpcpvs_vspin_wait);
 			unsigned long flags;
 
 			/* ordered by regular priority */
@@ -745,12 +743,12 @@ static void mpcp_vspin_exit(void)
 {
 	struct task_struct* t = current, *next;
 	unsigned long flags;
-	wait_queue_head_t* vspin = &__get_cpu_var(mpcpvs_vspin_wait);
+	wait_queue_head_t* vspin = this_cpu_ptr(&mpcpvs_vspin_wait);
 
-	BUG_ON(__get_cpu_var(mpcpvs_vspin) != t);
+	BUG_ON(this_cpu_read(mpcpvs_vspin) != t);
 
 	/* no spinning job */
-	__get_cpu_var(mpcpvs_vspin) = NULL;
+	this_cpu_write(mpcpvs_vspin, NULL);
 
 	/* see if anyone is waiting for us to stop "spinning" */
 	spin_lock_irqsave(&vspin->lock, flags);
@@ -1008,7 +1006,7 @@ static DEFINE_PER_CPU(struct pcp_state, pcp_state);
 /* assumes preemptions are off */
 static struct pcp_semaphore* pcp_get_ceiling(void)
 {
-	struct list_head* top = &__get_cpu_var(pcp_state).system_ceiling;
+	struct list_head* top = &(this_cpu_ptr(&pcp_state)->system_ceiling);
 	return list_first_entry_or_null(top, struct pcp_semaphore, ceiling);
 }
 
@@ -1016,7 +1014,7 @@ static struct pcp_semaphore* pcp_get_ceiling(void)
 static void pcp_add_ceiling(struct pcp_semaphore* sem)
 {
 	struct list_head *pos;
-	struct list_head *in_use = &__get_cpu_var(pcp_state).system_ceiling;
+	struct list_head *in_use = &(this_cpu_ptr(&pcp_state)->system_ceiling);
 	struct pcp_semaphore* held;
 
 	BUG_ON(sem->on_cpu != smp_processor_id());
@@ -1055,7 +1053,7 @@ static void pcp_priority_inheritance(void)
 	struct task_struct *blocker, *blocked;
 
 	blocker = ceiling ?  ceiling->owner : NULL;
-	blocked = __get_cpu_var(pcp_state).hp_waiter;
+	blocked = this_cpu_ptr(&pcp_state)->hp_waiter;
 
 	raw_spin_lock_irqsave(&pfp->slock, flags);
 
@@ -1110,14 +1108,14 @@ static void pcp_raise_ceiling(struct pcp_semaphore* sem,
 		init_prio_waitqueue_entry(&wait, t, effective_prio);
 		set_task_state(t, TASK_UNINTERRUPTIBLE);
 		waiting_higher_prio = add_wait_queue_prio_exclusive(
-			&__get_cpu_var(pcp_state).ceiling_blocked, &wait);
+			&(this_cpu_ptr(&pcp_state)->ceiling_blocked), &wait);
 
 		if (waiting_higher_prio == 0) {
 			TRACE_CUR("PCP new highest-prio waiter => prio inheritance\n");
 
 			/* we are the new highest-priority waiting job
 			 * => update inheritance */
-			__get_cpu_var(pcp_state).hp_waiter = t;
+			this_cpu_ptr(&pcp_state)->hp_waiter = t;
 			pcp_priority_inheritance();
 		}
 
@@ -1144,7 +1142,7 @@ static void pcp_raise_ceiling(struct pcp_semaphore* sem,
 
 static void pcp_resume_unblocked(void)
 {
-	wait_queue_head_t *blocked =  &__get_cpu_var(pcp_state).ceiling_blocked;
+	wait_queue_head_t *blocked =  &(this_cpu_ptr(&pcp_state)->ceiling_blocked);
 	unsigned long flags;
 	prio_wait_queue_t* q;
 	struct task_struct* t = NULL;
@@ -1165,13 +1163,13 @@ static void pcp_resume_unblocked(void)
 		    wake_up_process(t);
 		} else {
 			/* We are done. Update highest-priority waiter. */
-			__get_cpu_var(pcp_state).hp_waiter = t;
+			this_cpu_ptr(&pcp_state)->hp_waiter = t;
 			goto out;
 		}
 	}
 	/* If we get here, then there are no more waiting
 	 * jobs. */
-	__get_cpu_var(pcp_state).hp_waiter = NULL;
+	this_cpu_ptr(&pcp_state)->hp_waiter = NULL;
 out:
 	spin_unlock_irqrestore(&blocked->lock, flags);
 }
