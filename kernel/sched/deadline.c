@@ -16,6 +16,8 @@
  */
 #include "sched.h"
 
+#include <litmus/litmus.h>
+
 #include <linux/slab.h>
 
 struct dl_bandwidth def_dl_bandwidth;
@@ -615,14 +617,14 @@ static enum hrtimer_restart dl_task_timer(struct hrtimer *timer)
 	enqueue_task_dl(rq, p, ENQUEUE_REPLENISH);
 	if (dl_task(rq->curr))
 		check_preempt_curr_dl(rq, p, 0);
-	else
+	else if (!is_realtime(rq->curr))
 		resched_curr(rq);
 #ifdef CONFIG_SMP
 	/*
 	 * Queueing this task back might have overloaded rq,
 	 * check if we need to kick someone away.
 	 */
-	if (has_pushable_dl_tasks(rq))
+	if (has_pushable_dl_tasks(rq) && is_realtime(rq->curr))
 		push_dl_task(rq);
 #endif
 unlock:
@@ -1710,7 +1712,7 @@ static void switched_from_dl(struct rq *rq, struct task_struct *p)
 	if (!task_on_rq_queued(p) || rq->dl.dl_nr_running)
 		return;
 
-	if (pull_dl_task(rq))
+	if (pull_dl_task(rq) && !is_realtime(rq->curr))
 		resched_curr(rq);
 }
 
@@ -1722,7 +1724,7 @@ static void switched_to_dl(struct rq *rq, struct task_struct *p)
 {
 	int check_resched = 1;
 
-	if (task_on_rq_queued(p) && rq->curr != p) {
+	if (task_on_rq_queued(p) && rq->curr != p && !is_realtime(rq->curr)) {
 #ifdef CONFIG_SMP
 		if (p->nr_cpus_allowed > 1 && rq->dl.overloaded &&
 			push_dl_task(rq) && rq != task_rq(p))
