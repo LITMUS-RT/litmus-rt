@@ -542,7 +542,7 @@ static void catchup_quanta(quanta_t from, quanta_t target,
  */
 static void pfair_tick(struct task_struct* t)
 {
-	struct pfair_state* state = &__get_cpu_var(pfair_state);
+	struct pfair_state* state = this_cpu_ptr(&pfair_state);
 	quanta_t time, cur;
 	int retry = 10;
 
@@ -618,7 +618,7 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 
 static struct task_struct* pfair_schedule(struct task_struct * prev)
 {
-	struct pfair_state* state = &__get_cpu_var(pfair_state);
+	struct pfair_state* state = this_cpu_ptr(&pfair_state);
 	struct pfair_cluster* cluster = cpu_cluster(state);
 	int blocks, completion, out_of_time;
 	struct task_struct* next = NULL;
@@ -635,7 +635,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 
 	raw_spin_lock(cpu_lock(state));
 
-	blocks      = is_realtime(prev) && !is_running(prev);
+	blocks      = is_realtime(prev) && !is_current_running();
 	completion  = is_realtime(prev) && is_completed(prev);
 	out_of_time = is_realtime(prev) && time_after(cur_release(prev),
 						      state->local_tick);
@@ -708,7 +708,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 			t->rt_param.scheduled_on = task_cpu(t);
 	}
 
-	if (is_running(t)) {
+	if (on_rq || is_scheduled) {
 		tsk_rt(t)->present = 1;
 		__add_ready(&cluster->pfair, t);
 	} else {
@@ -1026,7 +1026,7 @@ static long pfair_activate_plugin(void)
 		return -ENOMEM;
 	}
 
-	state = &__get_cpu_var(pfair_state);
+	state = this_cpu_ptr(&pfair_state);
 	now   = current_quantum(state);
 	start = now + 50;
 	quantum_timer_start = quanta2time(start);
