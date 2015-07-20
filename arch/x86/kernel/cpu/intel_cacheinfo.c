@@ -814,7 +814,17 @@ int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, int index)
 		ret = index;
 	}
 
+	if (!this_cpu_ci->info_list) {
+		printk("%s: could not determine shared CPU map for CPU%d, index:%d\n",
+			__FUNCTION__, cpu, index);
+		return  INT_MAX;
+	}
+
 	this_leaf = this_cpu_ci->info_list + index;
+
+	printk(KERN_ERR "cpu%d index:%d this_leaf:%p this_cpu_ci:%p\n",
+		cpu, index, this_leaf, this_cpu_ci);
+
 	cpumask_copy(mask, &this_leaf->shared_cpu_map);
 
 	return ret;
