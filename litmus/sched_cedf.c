@@ -643,12 +643,8 @@ static unsigned int cluster_size;
 #ifdef VERBOSE_INIT
 static void print_cluster_topology(cpumask_var_t mask, int cpu)
 {
-	int chk;
-	char buf[255];
-
-	chk = cpulist_scnprintf(buf, 254, mask);
-	buf[chk] = '\0';
-	printk(KERN_INFO "CPU = %d, shared cpu(s) = %s\n", cpu, buf);
+	printk(KERN_INFO "CPU = %d, shared cpu(s) = %*pbl\n", cpu,
+	       cpumask_pr_args(mask));
 
 }
 #endif
