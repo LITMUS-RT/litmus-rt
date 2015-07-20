@@ -290,7 +290,7 @@ static void check_for_preemptions(void)
 
 	/* Before linking to other CPUs, check first whether the local CPU is
 	 * idle. */
-	local = &__get_cpu_var(gsnedf_cpu_entries);
+	local = this_cpu_ptr(&gsnedf_cpu_entries);
 	task  = __peek_ready(&gsnedf);
 
 	if (task && !local->linked
@@ -400,7 +400,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
  */
 static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 {
-	cpu_entry_t* entry = &__get_cpu_var(gsnedf_cpu_entries);
+	cpu_entry_t* entry = this_cpu_ptr(&gsnedf_cpu_entries);
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
@@ -518,7 +518,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
  */
 static void gsnedf_finish_switch(struct task_struct *prev)
 {
-	cpu_entry_t* 	entry = &__get_cpu_var(gsnedf_cpu_entries);
+	cpu_entry_t* 	entry = this_cpu_ptr(&gsnedf_cpu_entries);
 
 	entry->scheduled = is_realtime(current) ? current : NULL;
 #ifdef WANT_ALL_SCHED_EVENTS
