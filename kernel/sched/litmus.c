@@ -289,6 +289,16 @@ select_task_rq_litmus(struct task_struct *p, int cpu, int sd_flag, int flags)
 }
 #endif
 
+static void update_curr_litmus(struct rq *rq)
+{
+	struct task_struct *p = rq->curr;
+
+	if (!is_realtime(p))
+		return;
+
+	update_time_litmus(rq, p);
+}
+
 const struct sched_class litmus_sched_class = {
 	/* From 34f971f6 the stop/migrate worker threads have a class on
 	 * their own, which is the highest prio class. We don't support
@@ -316,4 +326,6 @@ const struct sched_class litmus_sched_class = {
 
 	.prio_changed		= prio_changed_litmus,
 	.switched_to		= switched_to_litmus,
+
+	.update_curr		= update_curr_litmus,
 };
