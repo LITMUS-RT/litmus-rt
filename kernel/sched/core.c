@@ -2867,6 +2867,9 @@ static void __sched __schedule(void)
 
 	post_schedule(rq);
 
+	if (unlikely(sched_state_validate_switch()))
+		litmus_reschedule_local();
+
 	sched_preempt_enable_no_resched();
 
 	TS_SCHED2_END(prev);
@@ -2891,7 +2894,7 @@ asmlinkage __visible void __sched schedule(void)
 	sched_submit_work(tsk);
 	do {
 		__schedule();
-	} while (need_resched() || sched_state_validate_switch());
+	} while (need_resched());
 
 	srp_ceiling_block();
 }
