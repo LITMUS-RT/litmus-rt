@@ -288,7 +288,7 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 
 	/* Before linking to other CPUs, check first whether the local CPU is
 	 * idle. */
-	local = &__get_cpu_var(cedf_cpu_entries);
+	local = this_cpu_ptr(&cedf_cpu_entries);
 	task  = __peek_ready(&cluster->domain);
 
 	if (task && !local->linked
@@ -354,9 +354,9 @@ static void cedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 }
 
 /* caller holds cedf_lock */
-static noinline void job_completion(struct task_struct *t, int forced)
+static noinline void current_job_completion(int forced)
 {
-	BUG_ON(!t);
+	struct task_struct *t = current;
 
 	sched_trace_task_completion(t, forced);
 
@@ -372,7 +372,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	unlink(t);
 	/* requeue
 	 * But don't requeue a blocking task. */
-	if (is_running(t))
+	if (is_current_running())
 		cedf_job_arrival(t);
 }
 
@@ -399,7 +399,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
  */
 static struct task_struct* cedf_schedule(struct task_struct * prev)
 {
-	cpu_entry_t* entry = &__get_cpu_var(cedf_cpu_entries);
+	cpu_entry_t* entry = this_cpu_ptr(&cedf_cpu_entries);
 	cedf_domain_t *cluster = entry->cluster;
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
@@ -423,10 +423,9 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
-	blocks      = exists && !is_running(entry->scheduled);
-	out_of_time = exists &&
-				  budget_enforced(entry->scheduled) &&
-				  budget_exhausted(entry->scheduled);
+	blocks      = exists && !is_current_running();
+	out_of_time = exists && budget_enforced(entry->scheduled)
+	                     && budget_exhausted(entry->scheduled);
 	np 	    = exists && is_np(entry->scheduled);
 	sleep	    = exists && is_completed(entry->scheduled);
 	preempt     = entry->scheduled != entry->linked;
@@ -467,7 +466,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	 * for blocked jobs).
 	 */
 	if (!np && (out_of_time || sleep) && !blocks)
-		job_completion(entry->scheduled, !sleep);
+		current_job_completion(!sleep);
 
 	/* Link pending task if we became unlinked.
 	 */
@@ -517,7 +516,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
  */
 static void cedf_finish_switch(struct task_struct *prev)
 {
-	cpu_entry_t* 	entry = &__get_cpu_var(cedf_cpu_entries);
+	cpu_entry_t* 	entry = this_cpu_ptr(&cedf_cpu_entries);
 
 	entry->scheduled = is_realtime(current) ? current : NULL;
 #ifdef WANT_ALL_SCHED_EVENTS
@@ -565,7 +564,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	}
 	t->rt_param.linked_on          = NO_CPU;
 
-	if (is_running(t))
+	if (on_rq || is_scheduled)
 		cedf_job_arrival(t);
 	raw_spin_unlock_irqrestore(&(cluster->cluster_lock), flags);
 }
