@@ -77,13 +77,6 @@ typedef struct  {
 /* one cpu_entry_t per CPU */
 DEFINE_PER_CPU(cpu_entry_t, cedf_cpu_entries);
 
-#define set_will_schedule() \
-	(atomic_set(&__get_cpu_var(cedf_cpu_entries).will_schedule, 1))
-#define clear_will_schedule() \
-	(atomic_set(&__get_cpu_var(cedf_cpu_entries).will_schedule, 0))
-#define test_will_schedule(cpu) \
-	(atomic_read(&per_cpu(cedf_cpu_entries, cpu).will_schedule))
-
 /*
  * In C-EDF there is a cedf domain _per_ cluster
  * The number of clusters is dynamically determined accordingly to the
@@ -422,7 +415,6 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 #endif
 
 	raw_spin_lock(&cluster->cluster_lock);
-	clear_will_schedule();
 
 	/* sanity checking */
 	BUG_ON(entry->scheduled && entry->scheduled != prev);
