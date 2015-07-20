@@ -269,7 +269,7 @@ static cpu_entry_t* cedf_get_nearest_available_cpu(
 		);
 
 	/* make sure CPU is in our cluster */
-	if (affinity && cpu_isset(affinity->cpu, *cluster->cpu_map))
+	if (affinity && cpumask_test_cpu(affinity->cpu, cluster->cpu_map))
 		return(affinity);
 	else
 		return(NULL);
