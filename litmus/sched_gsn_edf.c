@@ -87,9 +87,9 @@
  *                                (releast time in the future). T will be put
  *                                on the release queue in that case.
  *
- * job_completion(T)		- Take care of everything that needs to be done
- *                                to prepare T for its next release and place
- *                                it in the right queue with
+ * curr_job_completion()	- Take care of everything that needs to be done
+ *                                to prepare the current task for its next
+ *                                release and place it in the right queue with
  *                                gsnedf_job_arrival().
  *
  *
@@ -355,8 +355,9 @@ static void gsnedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 }
 
 /* caller holds gsnedf_lock */
-static noinline void job_completion(struct task_struct *t, int forced)
+static noinline void curr_job_completion(int forced)
 {
+	struct task_struct *t = current;
 	BUG_ON(!t);
 
 	sched_trace_task_completion(t, forced);
@@ -373,7 +374,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	unlink(t);
 	/* requeue
 	 * But don't requeue a blocking task. */
-	if (is_running(t))
+	if (is_current_running())
 		gsnedf_job_arrival(t);
 }
 
@@ -423,7 +424,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
-	blocks      = exists && !is_running(entry->scheduled);
+	blocks      = exists && !is_current_running();
 	out_of_time = exists && budget_enforced(entry->scheduled)
 		&& budget_exhausted(entry->scheduled);
 	np 	    = exists && is_np(entry->scheduled);
@@ -466,7 +467,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	 * for blocked jobs).
 	 */
 	if (!np && (out_of_time || sleep) && !blocks)
-		job_completion(entry->scheduled, !sleep);
+		curr_job_completion(!sleep);
 
 	/* Link pending task if we became unlinked.
 	 */
@@ -562,7 +563,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	}
 	t->rt_param.linked_on          = NO_CPU;
 
-	if (is_running(t))
+	if (on_rq || is_scheduled)
 		gsnedf_job_arrival(t);
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
