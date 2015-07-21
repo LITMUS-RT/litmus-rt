@@ -13,6 +13,7 @@
 #include <linux/stop_machine.h>
 #include <linux/sched/rt.h>
 #include <linux/rwsem.h>
+#include <linux/interrupt.h>
 
 #include <litmus/litmus.h>
 #include <litmus/bheap.h>
@@ -431,16 +432,19 @@ void litmus_plugin_switch_enable(void)
 	up_read(&plugin_switch_mutex);
 }
 
-static int do_plugin_switch(void *_plugin)
+static int __do_plugin_switch(struct sched_plugin* plugin)
 {
 	int ret;
-	struct sched_plugin* plugin = _plugin;
+
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
+		TRACE("deactivating plugin %s\n", litmus->plugin_name);
 		ret = litmus->deactivate_plugin();
 		if (0 != ret)
 			goto out;
+
+		TRACE("activating plugin %s\n", plugin->plugin_name);
 		ret = plugin->activate_plugin();
 		if (0 != ret) {
 			printk(KERN_INFO "Can't activate %s (%d).\n",
@@ -453,6 +457,32 @@ static int do_plugin_switch(void *_plugin)
 	} else
 		ret = -EBUSY;
 out:
+	TRACE("do_plugin_switch() => %d\n", ret);
+	return ret;
+}
+
+static atomic_t ready_to_switch;
+
+static int do_plugin_switch(void *_plugin)
+{
+	unsigned long flags;
+	int ret = 0;
+
+	local_save_flags(flags);
+	local_irq_disable();
+	hard_irq_disable();
+
+	if (atomic_dec_and_test(&ready_to_switch))
+	{
+		ret = __do_plugin_switch((struct sched_plugin*) _plugin);
+		atomic_set(&ready_to_switch, INT_MAX);
+	}
+
+	do {
+		cpu_relax();
+	} while (atomic_read(&ready_to_switch) != INT_MAX);
+
+	local_irq_restore(flags);
 	return ret;
 }
 
@@ -473,9 +503,12 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 
 		deactivate_domain_proc();
 
-		err =  stop_machine(do_plugin_switch, plugin, NULL);
+		get_online_cpus();
+		atomic_set(&ready_to_switch, num_online_cpus());
+		err = stop_cpus(cpu_online_mask, do_plugin_switch, plugin);
+		put_online_cpus();
 
-		if(!litmus->get_domain_proc_info(&domain_info))
+		if (!litmus->get_domain_proc_info(&domain_info))
 			activate_domain_proc(domain_info);
 
 		up_write(&plugin_switch_mutex);
