@@ -159,8 +159,8 @@ static int psnedf_check_resched(rt_domain_t *edf)
 
 static void job_completion(struct task_struct* t, int forced)
 {
-	sched_trace_task_completion(t,forced);
-	TRACE_TASK(t, "job_completion().\n");
+	sched_trace_task_completion(t, forced);
+	TRACE_TASK(t, "job_completion(forced=%d).\n", forced);
 
 	tsk_rt(t)->completed = 0;
 	prepare_for_next_period(t);
@@ -187,9 +187,8 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	/* (0) Determine state */
 	exists      = pedf->scheduled != NULL;
 	blocks      = exists && !is_current_running();
-	out_of_time = exists &&
-				  budget_enforced(pedf->scheduled) &&
-				  budget_exhausted(pedf->scheduled);
+	out_of_time = exists && budget_enforced(pedf->scheduled)
+			     && budget_exhausted(pedf->scheduled);
 	np 	    = exists && is_np(pedf->scheduled);
 	sleep	    = exists && is_completed(pedf->scheduled);
 	preempt     = edf_preemption_needed(edf, prev);
@@ -215,7 +214,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this.
 	 */
-	if (!np && (out_of_time || sleep) && !blocks) {
+	if (!np && (out_of_time || sleep)) {
 		job_completion(pedf->scheduled, !sleep);
 		resched = 1;
 	}
