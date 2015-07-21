@@ -362,7 +362,7 @@ static noinline void curr_job_completion(int forced)
 
 	sched_trace_task_completion(t, forced);
 
-	TRACE_TASK(t, "job_completion().\n");
+	TRACE_TASK(t, "job_completion(forced=%d).\n", forced);
 
 	/* set flags */
 	tsk_rt(t)->completed = 0;
@@ -466,7 +466,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	 * this. Don't do a job completion if we block (can't have timers running
 	 * for blocked jobs).
 	 */
-	if (!np && (out_of_time || sleep) && !blocks)
+	if (!np && (out_of_time || sleep))
 		curr_job_completion(!sleep);
 
 	/* Link pending task if we became unlinked.
