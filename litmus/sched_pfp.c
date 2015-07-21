@@ -127,8 +127,8 @@ static void requeue(struct task_struct* t, pfp_domain_t *pfp)
 
 static void job_completion(struct task_struct* t, int forced)
 {
-	sched_trace_task_completion(t,forced);
-	TRACE_TASK(t, "job_completion().\n");
+	sched_trace_task_completion(t, forced);
+	TRACE_TASK(t, "job_completion(forced=%d).\n", forced);
 
 	tsk_rt(t)->completed = 0;
 	prepare_for_next_period(t);
@@ -155,9 +155,8 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	/* (0) Determine state */
 	exists      = pfp->scheduled != NULL;
 	blocks      = exists && !is_current_running();
-	out_of_time = exists &&
-				  budget_enforced(pfp->scheduled) &&
-				  budget_exhausted(pfp->scheduled);
+	out_of_time = exists && budget_enforced(pfp->scheduled)
+	                     && budget_exhausted(pfp->scheduled);
 	np 	    = exists && is_np(pfp->scheduled);
 	sleep	    = exists && is_completed(pfp->scheduled);
 	migrate     = exists && get_partition(pfp->scheduled) != pfp->cpu;
@@ -184,7 +183,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this.
 	 */
-	if (!np && (out_of_time || sleep) && !blocks && !migrate) {
+	if (!np && (out_of_time || sleep)) {
 		job_completion(pfp->scheduled, !sleep);
 		resched = 1;
 	}
