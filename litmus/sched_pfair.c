@@ -913,6 +913,11 @@ static long pfair_admit_task(struct task_struct* t)
 	/* spew out some debug info */
 	dump_subtasks(t);
 
+	/* Disable generic budget enforcement (if enabled).
+	 * The plugin provides its own (non-optional) enforcement
+	 * of allocations at quantum granularity. */
+	tsk_rt(t)->task_params.budget_policy = NO_ENFORCEMENT;
+
 	return 0;
 }
 
