@@ -1385,7 +1385,7 @@ static void pfp_migrate_to(int target_cpu)
 		return;
 
 	/* make sure target_cpu makes sense */
-	BUG_ON(!cpu_online(target_cpu));
+	BUG_ON(target_cpu >= NR_CPUS || !cpu_online(target_cpu));
 
 	local_irq_disable();
 
@@ -1845,7 +1845,9 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 		if (get_user(cpu, (int*) config))
 			return -EFAULT;
 
-		if (!cpu_online(cpu))
+		TRACE("DPCP_SEM: provided cpu=%d\n", cpu);
+
+		if (cpu >= NR_CPUS || !cpu_online(cpu))
 			return -EINVAL;
 
 		*lock = pfp_new_dflp(cpu);
@@ -1872,7 +1874,7 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 		else if (get_user(cpu, (int*) config))
 			return -EFAULT;
 
-		if (!cpu_online(cpu))
+		if (cpu >= NR_CPUS || !cpu_online(cpu))
 			return -EINVAL;
 
 		*lock = pfp_new_pcp(cpu);
