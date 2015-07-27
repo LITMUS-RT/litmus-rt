@@ -45,6 +45,7 @@ long litmus_admit_task(struct task_struct *tsk);
 void litmus_exit_task(struct task_struct *tsk);
 void litmus_dealloc(struct task_struct *tsk);
 void litmus_do_exit(struct task_struct *tsk);
+int litmus_be_migrate_to(int cpu);
 
 #define is_realtime(t) 		((t)->policy == SCHED_LITMUS)
 #define rt_transition_pending(t) \

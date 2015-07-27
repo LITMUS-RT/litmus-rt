@@ -592,6 +592,16 @@ void litmus_dealloc(struct task_struct *tsk)
 	litmus_clear_state(tsk);
 }
 
+/* move current non-RT task to a specific CPU */
+int litmus_be_migrate_to(int cpu)
+{
+	struct cpumask single_cpu_aff;
+
+	cpumask_clear(&single_cpu_aff);
+	cpumask_set_cpu(cpu, &single_cpu_aff);
+	return sched_setaffinity(current->pid, &single_cpu_aff);
+}
+
 #ifdef CONFIG_MAGIC_SYSRQ
 int sys_kill(int pid, int sig);
 
