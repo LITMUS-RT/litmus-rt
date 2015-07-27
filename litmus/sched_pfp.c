@@ -231,7 +231,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 
 	if (next) {
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
-	} else {
+	} else if (exists) {
 		TRACE("becoming idle at %llu\n", litmus_clock());
 	}
 
@@ -1828,7 +1828,9 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 		if (get_user(cpu, (int*) config))
 			return -EFAULT;
 
-		if (!cpu_online(cpu))
+		TRACE("DPCP_SEM: provided cpu=%d\n", cpu);
+
+		if (cpu >= NR_CPUS || !cpu_online(cpu))
 			return -EINVAL;
 
 		*lock = pfp_new_dpcp(cpu);
