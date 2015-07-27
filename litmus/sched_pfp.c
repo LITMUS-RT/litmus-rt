@@ -1384,6 +1384,12 @@ static void pfp_migrate_to(int target_cpu)
 	if (get_partition(t) == target_cpu)
 		return;
 
+	if (!is_realtime(t))
+	{
+		TRACE_TASK(t, "not migrating, not a RT task (anymore?)\n");
+		return;
+	}
+
 	/* make sure target_cpu makes sense */
 	BUG_ON(target_cpu >= NR_CPUS || !cpu_online(target_cpu));
 
