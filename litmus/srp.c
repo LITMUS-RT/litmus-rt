@@ -139,11 +139,20 @@ static int unlock_srp_semaphore(struct litmus_lock* l)
 	} else {
 		/* The current owner should be executing on the correct CPU.
 		 *
-		 * FIXME: if the owner transitioned out of RT mode or is
-		 * exiting, then we it might have already been migrated away by
-		 * the best-effort scheduler and we just have to deal with
-		 * it. This is currently not supported. */
+		 * If the owner transitioned out of RT mode or is exiting, then
+		 * we it might have already been migrated away by the best-effort
+		 * scheduler and we just have to deal with it. */
+		if (unlikely(!is_realtime(t) && sem->cpu != smp_processor_id())) {
+			TRACE_TASK(t, "SRP unlock cpu=%d, sem->cpu=%d\n",
+				smp_processor_id(), sem->cpu);
+			preempt_enable();
+			err = litmus_be_migrate_to(sem->cpu);
+			preempt_disable();
+			TRACE_TASK(t, "post-migrate: cpu=%d, sem->cpu=%d err=%d\n",
+				smp_processor_id(), sem->cpu, err);
+		}
 		BUG_ON(sem->cpu != smp_processor_id());
+		err = 0;
 
 		/* Determine new system priority ceiling for this CPU. */
 		BUG_ON(!in_list(&sem->ceiling.list));
