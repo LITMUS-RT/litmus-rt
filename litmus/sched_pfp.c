@@ -1267,11 +1267,20 @@ int pfp_pcp_unlock(struct litmus_lock* l)
 
 	/* The current owner should be executing on the correct CPU.
 	 *
-	 * FIXME: if the owner transitioned out of RT mode or is exiting, then
+	 * If the owner transitioned out of RT mode or is exiting, then
 	 * we it might have already been migrated away by the best-effort
-	 * scheduler and we just have to deal with it. This is currently not
-	 * supported. */
+	 * scheduler and we just have to deal with it. */
+	if (unlikely(!is_realtime(t) && sem->on_cpu != smp_processor_id())) {
+		TRACE_TASK(t, "PCP unlock cpu=%d, sem->on_cpu=%d\n",
+			smp_processor_id(), sem->on_cpu);
+		preempt_enable();
+		err = litmus_be_migrate_to(sem->on_cpu);
+		preempt_disable();
+		TRACE_TASK(t, "post-migrate: cpu=%d, sem->on_cpu=%d err=%d\n",
+			smp_processor_id(), sem->on_cpu, err);
+	}
 	BUG_ON(sem->on_cpu != smp_processor_id());
+	err = 0;
 
 	tsk_rt(t)->num_local_locks_held--;
 
@@ -1480,11 +1489,18 @@ int pfp_dpcp_unlock(struct litmus_lock* l)
 
 	/* The current owner should be executing on the correct CPU.
 	 *
-	 * FIXME: if the owner transitioned out of RT mode or is exiting, then
+	 * If the owner transitioned out of RT mode or is exiting, then
 	 * we it might have already been migrated away by the best-effort
-	 * scheduler and we just have to deal with it. This is currently not
-	 * supported. */
+	 * scheduler and we just have to deal with it. */
+	if (unlikely(!is_realtime(t) && sem->pcp.on_cpu != smp_processor_id())) {
+		TRACE_TASK(t, "DPCP unlock cpu=%d, sem->pcp.on_cpu=%d\n", smp_processor_id(), sem->pcp.on_cpu);
+		preempt_enable();
+		err = litmus_be_migrate_to(sem->pcp.on_cpu);
+		preempt_disable();
+		TRACE_TASK(t, "post-migrate: cpu=%d, sem->pcp.on_cpu=%d err=%d\n", smp_processor_id(), sem->pcp.on_cpu, err);
+	}
 	BUG_ON(sem->pcp.on_cpu != smp_processor_id());
+	err = 0;
 
 	tsk_rt(t)->num_locks_held--;
 
