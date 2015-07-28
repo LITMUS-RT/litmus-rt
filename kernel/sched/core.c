@@ -88,6 +88,7 @@
 #include "../smpboot.h"
 
 #include <litmus/litmus.h>
+#include <litmus/ceiling.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
 #include <litmus/sched_plugin.h>
@@ -2928,6 +2929,7 @@ void __sched schedule_preempt_disabled(void)
 {
 	sched_preempt_enable_no_resched();
 	schedule();
+	srp_ceiling_block();
 	preempt_disable();
 }
 
@@ -2944,6 +2946,7 @@ static void __sched notrace preempt_schedule_common(void)
 		 */
 		barrier();
 	} while (need_resched());
+	srp_ceiling_block();
 }
 
 #ifdef CONFIG_PREEMPT
@@ -3002,6 +3005,7 @@ asmlinkage __visible void __sched notrace preempt_schedule_context(void)
 		__preempt_count_sub(PREEMPT_ACTIVE);
 		barrier();
 	} while (need_resched());
+	srp_ceiling_block();
 }
 EXPORT_SYMBOL_GPL(preempt_schedule_context);
 #endif /* CONFIG_CONTEXT_TRACKING */
@@ -3027,6 +3031,7 @@ asmlinkage __visible void __sched preempt_schedule_irq(void)
 		__preempt_count_add(PREEMPT_ACTIVE);
 		local_irq_enable();
 		__schedule();
+		srp_ceiling_block();
 		local_irq_disable();
 		__preempt_count_sub(PREEMPT_ACTIVE);
 
