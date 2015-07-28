@@ -636,8 +636,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	 * The release master never schedules any real-time tasks.
 	 */
 	if (unlikely(cluster->pfair.release_master == cpu_id(state))) {
-		sched_state_task_picked();
-		return NULL;
+		goto out;
 	}
 #endif
 
@@ -680,6 +679,10 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 			   tsk_pfair(next)->release, cpu_cluster(state)->pfair_time, litmus_clock());
 	else if (is_realtime(prev))
 		TRACE("Becomes idle at %lu (%llu)\n", cpu_cluster(state)->pfair_time, litmus_clock());
+
+#ifdef CONFIG_RELEASE_MASTER
+out:
+#endif
 
 	if (unlikely(!hrtimer_active(&state->quantum_timer))) {
 		TRACE("activating quantum timer start=%llu\n",
