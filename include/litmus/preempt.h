@@ -128,24 +128,22 @@ static inline void sched_state_entered_schedule(void)
  * after a context switch. Returns 1 if the CPU needs to reschdule. */
 static inline int sched_state_validate_switch(void)
 {
-	int left_state_ok = 0;
+	int decision_ok = 0;
 
-	VERIFY_SCHED_STATE(PICKED_WRONG_TASK | TASK_PICKED);
+	VERIFY_SCHED_STATE(PICKED_WRONG_TASK | TASK_PICKED | WILL_SCHEDULE);
 
 	if (is_in_sched_state(TASK_PICKED)) {
 		/* Might be good; let's try to transition out of this
 		 * state. This must be done atomically since remote processors
 		 * may try to change the state, too. */
-		left_state_ok = sched_state_transition(TASK_PICKED, TASK_SCHEDULED);
+		decision_ok = sched_state_transition(TASK_PICKED, TASK_SCHEDULED);
 	}
 
-	if (!left_state_ok) {
-		/* We raced with a higher-priority task arrival => not
-		 * valid. The CPU needs to reschedule. */
-		set_sched_state(WILL_SCHEDULE);
-		return 1;
-	} else
-		return 0;
+	if (!decision_ok)
+		TRACE_STATE("validation failed (%s)\n",
+			sched_state_name(get_sched_state()));
+
+	return !decision_ok;
 }
 
 /* State transition events. See litmus/preempt.c for details. */

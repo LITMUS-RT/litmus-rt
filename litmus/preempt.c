@@ -85,9 +85,10 @@ void litmus_reschedule(int cpu)
 	/* If the CPU was in state TASK_SCHEDULED, then we need to cause the
 	 * scheduler to be invoked. */
 	if (scheduled_transition_ok) {
-		if (smp_processor_id() == cpu)
+		if (smp_processor_id() == cpu) {
 			set_tsk_need_resched(current);
-		else {
+			preempt_set_need_resched();
+		} else {
 			TS_SEND_RESCHED_START(cpu);
 			smp_send_reschedule(cpu);
 		}
@@ -103,9 +104,12 @@ void litmus_reschedule_local(void)
 {
 	if (is_in_sched_state(TASK_PICKED))
 		set_sched_state(PICKED_WRONG_TASK);
-	else if (is_in_sched_state(TASK_SCHEDULED | SHOULD_SCHEDULE)) {
+	else if (is_in_sched_state(TASK_SCHEDULED
+	                           | SHOULD_SCHEDULE
+	                           | PICKED_WRONG_TASK)) {
 		set_sched_state(WILL_SCHEDULE);
 		set_tsk_need_resched(current);
+		preempt_set_need_resched();
 	}
 }
 
