@@ -315,6 +315,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 	if (!p->cur) {
 		if (is_present(t)) {
 			/* The job overran; we start a new budget allocation. */
+			TRACE_TASK(t, "overran budget, preparing next period\n");
 			pfair_prepare_next_period(t);
 		} else {
 			/* remove task from system until it wakes */
@@ -347,7 +348,8 @@ static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 			p->last_quantum = time;
 			p->last_cpu     =  cpu_id(cpu);
 			if (advance_subtask(time, l, cpu_id(cpu))) {
-				//cpu->linked = NULL;
+				cpu->linked = NULL;
+				tsk_rt(l)->linked_on = NO_CPU;
 				PTRACE_TASK(l, "should go to release queue. "
 					    "scheduled_on=%d present=%d\n",
 					    tsk_rt(l)->scheduled_on,
@@ -869,9 +871,8 @@ static long pfair_admit_task(struct task_struct* t)
 		return -EINVAL;
 	}
 
-	/* Pfair is a tick-based method, so the time
-	 * of interest is jiffies. Calculate tick-based
-	 * times for everything.
+	/* Pfair is a tick-based scheduler, so the unit of time
+	 * is one quantum. Calculate quantum-based parameters for everything.
 	 * (Ceiling of exec cost, floor of period.)
 	 */
 
@@ -886,12 +887,7 @@ static long pfair_admit_task(struct task_struct* t)
 		       t->comm, t->pid, (unsigned long long) quantum_length);
 
 	if (quanta == period) {
-		/* special case: task has weight 1.0 */
-		printk(KERN_INFO
-		       "Admitting weight 1.0 task. (%s/%d, %llu, %llu).\n",
-		       t->comm, t->pid, quanta, period);
-		quanta = 1;
-		period = 1;
+		PTRACE_TASK(t, "Admitting weight 1.0 task. (%llu, %llu).\n", quanta, period);
 	}
 
 	param = kmalloc(sizeof(*param) +
