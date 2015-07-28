@@ -68,11 +68,14 @@ long default_wait_for_release_at(lt_t release_time)
  */
 long complete_job(void)
 {
+	preempt_disable();
+	TRACE_CUR("job completion indicated at %llu\n", litmus_clock());
 	/* Mark that we do not excute anymore */
 	tsk_rt(current)->completed = 1;
 	/* call schedule, this will return when a new job arrives
 	 * it also takes care of preparing for the next release
 	 */
-	schedule();
+	litmus_reschedule_local();
+	preempt_enable();
 	return 0;
 }
