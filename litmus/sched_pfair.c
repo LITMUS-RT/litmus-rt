@@ -553,10 +553,16 @@ static void pfair_tick(struct task_struct* t)
 		/* Attempt to advance time. First CPU to get here
 		 * will prepare the next quantum.
 		 */
-		time = cmpxchg(&cpu_cluster(state)->pfair_time,
-			       cur - 1,   /* expected */
-			       cur        /* next     */
-			);
+		time = cpu_cluster(state)->pfair_time;
+		if (time == cur - 1)
+		{
+			/* looks good, see if we can advance the time */
+			time = cmpxchg(&cpu_cluster(state)->pfair_time,
+				       cur - 1,   /* expected */
+				       cur        /* next     */
+				);
+		}
+
 		if (time == cur - 1) {
 			/* exchange succeeded */
 			wait_for_quantum(cur - 1, state);
