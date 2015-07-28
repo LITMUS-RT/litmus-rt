@@ -370,7 +370,7 @@ static inline void __smp_pull_timers_interrupt(void)
 __visible void smp_pull_timers_interrupt(struct pt_regs *regs)
 {
 	smp_entering_irq();
-	__smp_call_function_single_interrupt();
+	__smp_pull_timers_interrupt();
 	exiting_irq();
 }
 
@@ -378,7 +378,7 @@ __visible void smp_trace_pull_timers_interrupt(struct pt_regs *regs)
 {
 	smp_entering_irq();
 	trace_call_function_single_entry(PULL_TIMERS_VECTOR);
-	__smp_call_function_single_interrupt();
+	__smp_pull_timers_interrupt();
 	trace_call_function_single_exit(PULL_TIMERS_VECTOR);
 	exiting_irq();
 }
