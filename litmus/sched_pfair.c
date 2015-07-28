@@ -327,8 +327,10 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		}
 	}
 	to_relq = time_after(cur_release(t), time);
-	TRACE_TASK(t, "on %d advanced to subtask %lu -> to_relq=%d (cur_release:%lu time:%lu)\n",
-		   cpu, p->cur, to_relq, cur_release(t), time);
+	TRACE_TASK(t, "on %d advanced to subtask %lu -> to_relq=%d "
+		"(cur_release:%lu time:%lu present:%d on_cpu=%d)\n",
+		cpu, p->cur, to_relq, cur_release(t), time,
+		tsk_rt(t)->present, tsk_rt(t)->scheduled_on);
 	return to_relq;
 }
 
@@ -354,6 +356,18 @@ static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 					    "scheduled_on=%d present=%d\n",
 					    tsk_rt(l)->scheduled_on,
 					    tsk_rt(l)->present);
+				/* Special case: if the task is present, but
+				 * wasn't scheduled yet (it might have resumed *just*
+				 * before the quantum boundary), then we need to add
+				 * it to the release queue here, as it will not be
+				 * added by pfair_schedule(), which never sees
+				 * the task. */
+				if (tsk_rt(l)->scheduled_on == NO_CPU
+				    && tsk_rt(l)->present) {
+					TRACE_TASK(l, "fixing wakeup race: linked, "
+					"out of time, but not scheduled\n");
+					add_release(&cluster->pfair, l);
+				}
 			}
 		}
 	}
@@ -1065,8 +1079,8 @@ static long pfair_activate_plugin(void)
 		state->offset     = cpu_stagger_offset(i);
 		hrtimer_set_expires(&state->quantum_timer,
 			ns_to_ktime(quantum_timer_start + state->offset));
-		printk(KERN_ERR "cpus[%d] set; offset=%llu; %d\n", i, state->offset, num_online_cpus());
 		cpus[i] = &state->topology;
+		TRACE("cpus[%d] set; offset=%llu; %d\n", i, state->offset, num_online_cpus());
 		/* force rescheduling to start quantum timer */
 		litmus_reschedule(i);
 
