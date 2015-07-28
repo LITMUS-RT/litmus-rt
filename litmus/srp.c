@@ -27,9 +27,9 @@ struct srp {
 
 #define UNDEF_SEM -2
 
-atomic_t srp_objects_in_use = ATOMIC_INIT(0);
-
 DEFINE_PER_CPU(struct srp, srp);
+
+DEFINE_PER_CPU(int, srp_objects_in_use);
 
 /* Initialize SRP semaphores at boot time. */
 static int __init srp_init(void)
@@ -40,6 +40,7 @@ static int __init srp_init(void)
 	for (i = 0; i < NR_CPUS; i++) {
 		init_waitqueue_head(&per_cpu(srp, i).ceiling_blocked);
 		INIT_LIST_HEAD(&per_cpu(srp, i).ceiling);
+		per_cpu(srp_objects_in_use, i) = 0;
 	}
 	printk(" done!\n");
 
@@ -227,7 +228,7 @@ static int close_srp_semaphore(struct litmus_lock* l)
 static void deallocate_srp_semaphore(struct litmus_lock* l)
 {
 	struct srp_semaphore* sem = container_of(l, struct srp_semaphore, litmus_lock);
-	atomic_dec(&srp_objects_in_use);
+	raw_cpu_dec(srp_objects_in_use);
 	kfree(sem);
 }
 
@@ -254,7 +255,7 @@ struct srp_semaphore* allocate_srp_semaphore(void)
 
 	sem->litmus_lock.ops = &srp_lock_ops;
 
-	atomic_inc(&srp_objects_in_use);
+	raw_cpu_inc(srp_objects_in_use);
 	return sem;
 }
 
@@ -290,29 +291,14 @@ static void do_ceiling_block(struct task_struct *tsk)
 }
 
 /* Wait for current task priority to exceed system-wide priority ceiling.
- * FIXME: the hotpath should be inline.
  */
-void srp_ceiling_block(void)
+void __srp_ceiling_block(struct task_struct *cur)
 {
-	struct task_struct *tsk = current;
-
-	/* Only applies to real-time tasks, but optimize for RT tasks. */
-	if (unlikely(!is_realtime(tsk)))
-		return;
-
-	/* Avoid recursive ceiling blocking. */
-	if (unlikely(tsk->rt_param.srp_non_recurse))
-		return;
-
-	/* Bail out early if there aren't any SRP resources around. */
-	if (likely(!atomic_read(&srp_objects_in_use)))
-		return;
-
 	preempt_disable();
-	if (!srp_exceeds_ceiling(tsk, this_cpu_ptr(&srp))) {
+	if (!srp_exceeds_ceiling(cur, this_cpu_ptr(&srp))) {
 		TRACE_CUR("is priority ceiling blocked.\n");
-		while (!srp_exceeds_ceiling(tsk, this_cpu_ptr(&srp)))
-			do_ceiling_block(tsk);
+		while (!srp_exceeds_ceiling(cur, this_cpu_ptr(&srp)))
+			do_ceiling_block(cur);
 		TRACE_CUR("finally exceeds system ceiling.\n");
 	} else
 		TRACE_CUR("is not priority ceiling blocked\n");
