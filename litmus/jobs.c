@@ -3,6 +3,7 @@
 
 #include <linux/sched.h>
 
+#include <litmus/preempt.h>
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/jobs.h>
