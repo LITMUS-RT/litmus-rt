@@ -907,15 +907,13 @@ static long pfair_admit_task(struct task_struct* t)
 		PTRACE_TASK(t, "Admitting weight 1.0 task. (%llu, %llu).\n", quanta, period);
 	}
 
-	param = kmalloc(sizeof(*param) +
+	param = kzalloc(sizeof(*param) +
 			quanta * sizeof(struct subtask), GFP_ATOMIC);
 
 	if (!param)
 		return -ENOMEM;
 
 	param->quanta  = quanta;
-	param->cur     = 0;
-	param->release = 0;
 	param->period  = period;
 
 	param->cluster = cpu_cluster(pstate[tsk_rt(t)->task_params.cpu]);
