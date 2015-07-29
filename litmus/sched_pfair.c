@@ -50,6 +50,8 @@ struct pfair_param   {
 	quanta_t	last_quantum; /* when scheduled last */
 	int		last_cpu;     /* where scheduled last */
 
+	unsigned int	add_to_ready:1;
+
 	struct pfair_cluster* cluster; /* where this task is scheduled */
 
 	struct subtask subtasks[0];   /* allocate together with pfair_param */
@@ -100,8 +102,6 @@ struct pfair_cluster {
 	struct bheap release_queue;
 	raw_spinlock_t release_lock;
 };
-
-#define FLAGS_NEED_REQUEUE 0x1
 
 static inline struct pfair_cluster* cpu_cluster(struct pfair_state* state)
 {
@@ -320,7 +320,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
-			tsk_rt(t)->flags |= FLAGS_NEED_REQUEUE;
+			p->add_to_ready = 1;
 			TRACE_TASK(t, "on %d advanced to subtask %lu (not present)\n",
 				   cpu, p->cur);
 			return 0;
@@ -738,7 +738,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 		__add_ready(&cluster->pfair, t);
 	} else {
 		tsk_rt(t)->present = 0;
-		tsk_rt(t)->flags |= FLAGS_NEED_REQUEUE;
+		tsk_pfair(t)->add_to_ready = 1;
 	}
 
 	check_preempt(t);
@@ -773,8 +773,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 	}
 
 	/* only add to ready queue if the task isn't still linked somewhere */
-	if (tsk_rt(t)->flags & FLAGS_NEED_REQUEUE) {
-		tsk_rt(t)->flags &= ~FLAGS_NEED_REQUEUE;
+	if (tsk_pfair(t)->add_to_ready) {
+		tsk_pfair(t)->add_to_ready = 0;
 		TRACE_TASK(t, "requeueing required\n");
 		tsk_rt(t)->completed = 0;
 		__add_ready(&cluster->pfair, t);
