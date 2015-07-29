@@ -171,9 +171,6 @@ struct pfair_param;
  *	be explicitly set up before the task set is launched.
  */
 struct rt_param {
-	/* Generic flags available for plugin-internal use. */
-	unsigned int 		flags:8;
-
 	/* do we need to check for srp blocking? */
 	unsigned int		srp_non_recurse:1;
 
