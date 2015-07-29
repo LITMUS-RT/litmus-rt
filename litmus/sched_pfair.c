@@ -51,6 +51,7 @@ struct pfair_param   {
 	int		last_cpu;     /* where scheduled last */
 
 	unsigned int	add_to_ready:1;
+	unsigned int	already_in_release_queue:1;
 
 	struct pfair_cluster* cluster; /* where this task is scheduled */
 
@@ -367,7 +368,9 @@ static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 					TRACE_TASK(l, "fixing wakeup race: linked, "
 					"out of time, but not scheduled\n");
 					add_release(&cluster->pfair, l);
-				}
+					p->already_in_release_queue = 1;
+				} else
+					p->already_in_release_queue = 0;
 			}
 		}
 	}
@@ -402,6 +405,8 @@ static int pfair_link(quanta_t time, int cpu,
 	struct task_struct* prev  = pstate[cpu]->linked;
 	struct task_struct* other;
 	struct pfair_cluster* cluster = cpu_cluster(pstate[cpu]);
+
+	tsk_pfair(t)->already_in_release_queue = 0;
 
 	if (target != cpu) {
 		BUG_ON(pstate[target]->topology.cluster != pstate[cpu]->topology.cluster);
@@ -674,7 +679,11 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	if (!blocks && (completion || out_of_time)) {
 		drop_all_references(prev);
 		sched_trace_task_release(prev);
-		add_release(&cluster->pfair, prev);
+		if (!tsk_pfair(prev)->already_in_release_queue)
+			add_release(&cluster->pfair, prev);
+		else
+			TRACE_TASK(prev, "skipping add_release(); already "
+			                 "added by boundary race fix.\n");
 	}
 
 	if (state->local && safe_to_schedule(state->local, cpu_id(state)))
