@@ -51,7 +51,6 @@ struct pfair_param   {
 	int		last_cpu;     /* where scheduled last */
 
 	unsigned int	add_to_ready:1;
-	unsigned int	already_in_release_queue:1;
 
 	struct pfair_cluster* cluster; /* where this task is scheduled */
 
@@ -82,6 +81,8 @@ struct pfair_state {
 	struct task_struct* linked;    /* the task that should be executing */
 	struct task_struct* local;     /* the local copy of linked          */
 	struct task_struct* scheduled; /* what is actually scheduled        */
+
+	struct list_head    out_of_budget; /* list of tasks that exhausted their allocation */
 
 	lt_t offset;			/* stagger offset */
 	unsigned int missed_updates;
@@ -317,6 +318,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		if (is_present(t)) {
 			/* The job overran; we start a new budget allocation. */
 			TRACE_TASK(t, "overran budget, preparing next period\n");
+			sched_trace_task_completion(t, 1);
 			pfair_prepare_next_period(t);
 		} else {
 			/* remove task from system until it wakes */
@@ -357,20 +359,7 @@ static void advance_subtasks(struct pfair_cluster *cluster, quanta_t time)
 					    "scheduled_on=%d present=%d\n",
 					    tsk_rt(l)->scheduled_on,
 					    tsk_rt(l)->present);
-				/* Special case: if the task is present, but
-				 * wasn't scheduled yet (it might have resumed *just*
-				 * before the quantum boundary), then we need to add
-				 * it to the release queue here, as it will not be
-				 * added by pfair_schedule(), which never sees
-				 * the task. */
-				if (tsk_rt(l)->scheduled_on == NO_CPU
-				    && tsk_rt(l)->present) {
-					TRACE_TASK(l, "fixing wakeup race: linked, "
-					"out of time, but not scheduled\n");
-					add_release(&cluster->pfair, l);
-					p->already_in_release_queue = 1;
-				} else
-					p->already_in_release_queue = 0;
+				list_add(&tsk_rt(l)->list, &cpu->out_of_budget);
 			}
 		}
 	}
@@ -405,8 +394,6 @@ static int pfair_link(quanta_t time, int cpu,
 	struct task_struct* prev  = pstate[cpu]->linked;
 	struct task_struct* other;
 	struct pfair_cluster* cluster = cpu_cluster(pstate[cpu]);
-
-	tsk_pfair(t)->already_in_release_queue = 0;
 
 	if (target != cpu) {
 		BUG_ON(pstate[target]->topology.cluster != pstate[cpu]->topology.cluster);
@@ -620,6 +607,30 @@ static void pfair_tick(struct task_struct* t)
 		litmus_reschedule_local();
 }
 
+static void process_out_of_budget_tasks(
+	struct pfair_state* state,
+	struct task_struct* prev,
+	unsigned int blocks)
+{
+	struct task_struct *t;
+
+	while (!list_empty(&state->out_of_budget))
+	{
+
+		t = list_first_entry(&state->out_of_budget,
+		                     struct task_struct, rt_param.list);
+		TRACE_TASK(t, "found on out_of_budget queue is_prev=%d\n", t == prev);
+		list_del(&tsk_rt(t)->list);
+		if (t != prev || !blocks)
+		{
+			sched_trace_task_release(t);
+			add_release(&cpu_cluster(state)->pfair, t);
+			TRACE_TASK(t, "adding to release queue (budget exhausted)\n");
+		} else
+			TRACE_TASK(t, "not added to release queue (blocks=%d)\n", blocks);
+	}
+}
+
 /* Custom scheduling tick: called on each quantum boundary. */
 static enum hrtimer_restart on_quantum_boundary(struct hrtimer *timer)
 {
@@ -670,21 +681,15 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	    PTRACE_TASK(prev, "blocks:%d completion:%d out_of_time:%d\n",
 			blocks, completion, out_of_time);
 
-	if (completion) {
+	if (completion && !out_of_time) {
 		sched_trace_task_completion(prev, 0);
 		pfair_prepare_next_period(prev);
 		prepare_release(prev, cur_release(prev));
+		drop_all_references(prev);
+		list_add(&tsk_rt(prev)->list, &state->out_of_budget);
 	}
 
-	if (!blocks && (completion || out_of_time)) {
-		drop_all_references(prev);
-		sched_trace_task_release(prev);
-		if (!tsk_pfair(prev)->already_in_release_queue)
-			add_release(&cluster->pfair, prev);
-		else
-			TRACE_TASK(prev, "skipping add_release(); already "
-			                 "added by boundary race fix.\n");
-	}
+	process_out_of_budget_tasks(state, prev, blocks);
 
 	if (state->local && safe_to_schedule(state->local, cpu_id(state)))
 		next = state->local;
@@ -1088,6 +1093,7 @@ static long pfair_activate_plugin(void)
 			ns_to_ktime(quantum_timer_start + state->offset));
 		cpus[i] = &state->topology;
 		TRACE("cpus[%d] set; offset=%llu; %d\n", i, state->offset, num_online_cpus());
+		INIT_LIST_HEAD(&state->out_of_budget);
 		/* force rescheduling to start quantum timer */
 		litmus_reschedule(i);
 
