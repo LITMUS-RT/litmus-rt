@@ -50,7 +50,7 @@ struct pfair_param   {
 	quanta_t	last_quantum; /* when scheduled last */
 	int		last_cpu;     /* where scheduled last */
 
-	unsigned int	add_to_ready:1;
+	unsigned int	needs_requeue:1;
 
 	struct pfair_cluster* cluster; /* where this task is scheduled */
 
@@ -323,7 +323,7 @@ static int advance_subtask(quanta_t time, struct task_struct* t, int cpu)
 		} else {
 			/* remove task from system until it wakes */
 			drop_all_references(t);
-			p->add_to_ready = 1;
+			p->needs_requeue = 1;
 			TRACE_TASK(t, "on %d advanced to subtask %lu (not present)\n",
 				   cpu, p->cur);
 			return 0;
@@ -626,8 +626,10 @@ static void process_out_of_budget_tasks(
 			sched_trace_task_release(t);
 			add_release(&cpu_cluster(state)->pfair, t);
 			TRACE_TASK(t, "adding to release queue (budget exhausted)\n");
-		} else
+		} else {
 			TRACE_TASK(t, "not added to release queue (blocks=%d)\n", blocks);
+			tsk_pfair(t)->needs_requeue = 1;
+		}
 	}
 }
 
@@ -752,7 +754,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 		__add_ready(&cluster->pfair, t);
 	} else {
 		tsk_rt(t)->present = 0;
-		tsk_pfair(t)->add_to_ready = 1;
+		tsk_pfair(t)->needs_requeue = 1;
 	}
 
 	check_preempt(t);
@@ -765,6 +767,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 	unsigned long flags;
 	lt_t now;
 	struct pfair_cluster* cluster;
+	struct pfair_state* state;
+	int sporadic_release = 0;
 
 	cluster = tsk_pfair(t)->cluster;
 
@@ -772,6 +776,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 		   litmus_clock(), cur_release(t), cluster->pfair_time);
 
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
+
+	state = this_cpu_ptr(&pfair_state);
 
 	/* If a task blocks and wakes before its next job release,
 	 * then it may resume if it is currently linked somewhere
@@ -781,17 +787,23 @@ static void pfair_task_wake_up(struct task_struct *t)
 	now = litmus_clock();
 	if (is_tardy(t, now)) {
 		TRACE_TASK(t, "sporadic release!\n");
+		sporadic_release = 1;
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
 	}
 
 	/* only add to ready queue if the task isn't still linked somewhere */
-	if (tsk_pfair(t)->add_to_ready) {
-		tsk_pfair(t)->add_to_ready = 0;
-		TRACE_TASK(t, "requeueing required\n");
+	if (tsk_pfair(t)->needs_requeue) {
+		tsk_pfair(t)->needs_requeue = 0;
+		TRACE_TASK(t, "requeueing required (released:%d)\n",
+			!time_after(cur_release(t), state->local_tick));
 		tsk_rt(t)->completed = 0;
-		__add_ready(&cluster->pfair, t);
+		if (time_after(cur_release(t), state->local_tick)
+		    && !sporadic_release)
+			add_release(&cluster->pfair, t);
+		else
+			__add_ready(&cluster->pfair, t);
 	}
 
 	check_preempt(t);
