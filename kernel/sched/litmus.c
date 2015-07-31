@@ -19,6 +19,10 @@ static void update_time_litmus(struct rq *rq, struct task_struct *p)
 	p->rt_param.job_params.exec_time += delta;
 	/* task counter */
 	p->se.sum_exec_runtime += delta;
+	if (delta) {
+		TRACE_TASK(p, "charged %llu exec time (total:%llu, rem:%llu)\n",
+			delta, p->rt_param.job_params.exec_time, budget_remaining(p));
+	}
 	/* sched_clock() */
 	p->se.exec_start = rq->clock;
 	cpuacct_charge(p, delta);
@@ -176,8 +180,10 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		litmus->task_wake_up(p);
 
 		rq->litmus.nr_running++;
-	} else
+	} else {
 		TRACE_TASK(p, "ignoring an enqueue, not a wake up.\n");
+		p->se.exec_start = rq->clock;
+	}
 }
 
 static void dequeue_task_litmus(struct rq *rq, struct task_struct *p,
@@ -228,7 +234,8 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq, struct task_stru
 {
 	struct task_struct *next;
 
-	update_time_litmus(rq, prev);
+	if (is_realtime(prev))
+		update_time_litmus(rq, prev);
 
 	TS_PLUGIN_SCHED_START;
 	next = litmus_schedule(rq, prev);
