@@ -43,7 +43,7 @@ dissertation.)
 #define get_nearest_available_cpu(nearest, start, entries, release_master) \
 { \
 	(nearest) = NULL; \
-	if (!(start)->linked) { \
+	if (!(start)->linked && (start)->cpu != (release_master)) { \
 		(nearest) = (start); \
 	} else { \
 		int __level; \
