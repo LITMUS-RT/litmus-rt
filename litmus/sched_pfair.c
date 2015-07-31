@@ -297,6 +297,13 @@ static void drop_all_references(struct task_struct *t)
         }
 	/* make sure we don't have a stale linked_on field */
 	tsk_rt(t)->linked_on = NO_CPU;
+
+	/* make sure we're not queued for re-releasing */
+	if (in_list(&tsk_rt(t)->list))
+	{
+		TRACE_TASK(t, "removing from out_of_budget queue\n");
+		list_del(&tsk_rt(t)->list);
+	}
 }
 
 static void pfair_prepare_next_period(struct task_struct* t)
