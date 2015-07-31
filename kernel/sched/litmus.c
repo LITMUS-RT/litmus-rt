@@ -133,12 +133,12 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * If either is violated, then the active plugin is
 		 * doing something wrong.
 		 */
-		if (!is_realtime(next) || next->state != TASK_RUNNING) {
+		if (!is_realtime(next) || !tsk_rt(next)->present) {
 			/* BAD BAD BAD */
 			TRACE_TASK(next,"BAD: migration invariant FAILED: "
-				   "rt=%d running=%d\n",
+				   "rt=%d present=%d\n",
 				   is_realtime(next),
-				   next->state == TASK_RUNNING);
+				   tsk_rt(next)->present);
 			/* drop the task */
 			next = NULL;
 		}
