@@ -637,6 +637,10 @@ static void process_out_of_budget_tasks(
 			TRACE_TASK(t, "not added to release queue (blocks=%d)\n", blocks);
 			tsk_pfair(t)->needs_requeue = 1;
 		}
+		if (unlikely(state->local == t)) {
+			TRACE_TASK(t, "still linked as ->local, cleaning up\n");
+			state->local = NULL;
+		}
 	}
 }
 
