@@ -268,11 +268,11 @@ static cpu_entry_t* gsnedf_get_nearest_available_cpu(cpu_entry_t *start)
 
 	get_nearest_available_cpu(affinity, start, gsnedf_cpu_entries,
 #ifdef CONFIG_RELEASE_MASTER
-			gsnedf.release_master
+			gsnedf.release_master,
 #else
-			NO_CPU
+			NO_CPU,
 #endif
-			);
+			cpu_online_mask);
 
 	return(affinity);
 }
