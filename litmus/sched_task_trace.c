@@ -104,8 +104,10 @@ static inline struct st_event_record* get_record(u8 type, struct task_struct* t)
 static inline void put_record(struct st_event_record* rec)
 {
 	struct local_buffer* buf;
-	buf = &get_cpu_var(st_event_buffer);
+	/* don't use get_cpu_var() here, get_record() did that already for us */
+	buf = this_cpu_ptr(&st_event_buffer);
 	ft_buffer_finish_write(&buf->ftbuf, rec);
+	/* matches the get_cpu_var() in get_record() */
 	put_cpu_var(st_event_buffer);
 }
 
