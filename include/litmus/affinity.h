@@ -3,31 +3,13 @@
 
 #include <linux/cpumask.h>
 
-/*
-  L1 (instr) = depth 0
-  L1 (data)  = depth 1
-  L2 = depth 2
-  L3 = depth 3
- */
-#define NUM_CACHE_LEVELS 4
-
-struct neighborhood
-{
-	unsigned int size[NUM_CACHE_LEVELS];
-	cpumask_var_t neighbors[NUM_CACHE_LEVELS];
-};
-
-/* topology info is stored redundently in a big array for fast lookups */
-extern struct neighborhood neigh_info[NR_CPUS];
-
-void init_topology(void); /* called by Litmus module's _init_litmus() */
-
 /* Works like:
 void get_nearest_available_cpu(
 	cpu_entry_t **nearest,
 	cpu_entry_t *start,
 	cpu_entry_t *entries,
-	int release_master)
+	int release_master,
+	cpumask_var_t cpus_to_test)
 
 Set release_master = NO_CPU for no Release Master.
 
@@ -36,34 +18,24 @@ have similar structures for their cpu_entry_t structs, even though
 they do not share a common base-struct.  The macro allows us to
 avoid code duplication.
 
-TODO: Factor out the job-to-processor linking from C/G-EDF into
-a reusable "processor mapping".  (See B.B.'s RTSS'09 paper &
-dissertation.)
  */
-#define get_nearest_available_cpu(nearest, start, entries, release_master) \
+#define get_nearest_available_cpu(nearest, start, entries, release_master, cpus_to_test) \
 { \
 	(nearest) = NULL; \
-	if (!(start)->linked && (start)->cpu != (release_master)) { \
+	if (!(start)->linked && likely((start)->cpu != (release_master))) { \
 		(nearest) = (start); \
 	} else { \
-		int __level; \
 		int __cpu; \
-		int __release_master = ((release_master) == NO_CPU) ? -1 : (release_master); \
-		struct neighborhood *__neighbors = &neigh_info[(start)->cpu]; \
 		\
-		for (__level = 0; (__level < NUM_CACHE_LEVELS) && !(nearest); ++__level) { \
-			if (__neighbors->size[__level] > 1) { \
-				for_each_cpu(__cpu, __neighbors->neighbors[__level]) { \
-					if (__cpu != __release_master) { \
-						cpu_entry_t *__entry = &per_cpu((entries), __cpu); \
-						if (!__entry->linked) { \
-							(nearest) = __entry; \
-							break; \
-						} \
-					} \
+		/* FIXME: get rid of the iteration with a bitmask + AND */ \
+		for_each_cpu(__cpu, cpus_to_test) { \
+			if (likely(__cpu != release_master)) { \
+				cpu_entry_t *__entry = &per_cpu((entries), __cpu); \
+				if (cpus_share_cache((start)->cpu, __entry->cpu) \
+				    && !__entry->linked) { \
+					(nearest) = __entry; \
+					break; \
 				} \
-			} else if (__neighbors->size[__level] == 0) { \
-				break; \
 			} \
 		} \
 	} \

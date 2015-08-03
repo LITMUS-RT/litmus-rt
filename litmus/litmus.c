@@ -668,10 +668,6 @@ static int __init _init_litmus(void)
 
 	init_litmus_proc();
 
-#ifdef CONFIG_SCHED_CPU_AFFINITY
-	init_topology();
-#endif
-
 	register_reboot_notifier(&shutdown_notifier);
 
 	return 0;
