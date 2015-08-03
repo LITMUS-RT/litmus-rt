@@ -41,4 +41,6 @@ int assign_cpus_to_clusters(enum cache_level level,
 			    struct cluster_cpu* cpus[],
 			    unsigned int num_cpus);
 
+int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, unsigned int index);
+
 #endif

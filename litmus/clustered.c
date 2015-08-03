@@ -1,25 +1,33 @@
 #include <linux/gfp.h>
 #include <linux/cpumask.h>
 #include <linux/list.h>
+#include <linux/cacheinfo.h>
 
+#include <litmus/debug_trace.h>
 #include <litmus/clustered.h>
 
-#if !defined(CONFIG_X86) || !defined(CONFIG_SYSFS)
-/* fake get_shared_cpu_map() on non-x86 architectures */
-
-int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, int index)
+int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, unsigned int index)
 {
-	if (index != 1)
-		return 1;
-	else {
-		/* Fake L1: CPU is all by itself. */
-		cpumask_clear(mask);
-		cpumask_set_cpu(cpu, mask);
-		return 0;
-	}
-}
+	struct cpu_cacheinfo* info = get_cpu_cacheinfo(cpu);
+	struct cacheinfo *ci;
 
-#endif
+	if (!info || index >= info->num_leaves) {
+		TRACE("no shared-cache CPUs: info=%d index=%u\n",
+			info != NULL, index);
+		return 1;
+	}
+
+	if (!info->info_list) {
+		TRACE("no shared-cache CPUs: no info_list (cpu\n");
+	}
+	ci = info->info_list + index;
+
+	cpumask_copy(mask, &ci->shared_cpu_map);
+
+	TRACE("get_shared: P%u@L%u -> %d siblings\n ", cpu, index, cpumask_weight(mask));
+
+	return 0;
+}
 
 int get_cluster_size(enum cache_level level)
 {
