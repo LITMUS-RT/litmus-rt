@@ -262,11 +262,11 @@ static cpu_entry_t* cedf_get_nearest_available_cpu(
 
 	get_nearest_available_cpu(affinity, start, cedf_cpu_entries,
 #ifdef CONFIG_RELEASE_MASTER
-		cluster->domain.release_master
+		cluster->domain.release_master,
 #else
-		NO_CPU
+		NO_CPU,
 #endif
-		);
+		cluster->cpu_map);
 
 	/* make sure CPU is in our cluster */
 	if (affinity && cpumask_test_cpu(affinity->cpu, cluster->cpu_map))
