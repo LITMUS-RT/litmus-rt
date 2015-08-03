@@ -802,24 +802,6 @@ unsigned int init_intel_cacheinfo(struct cpuinfo_x86 *c)
 	return l2;
 }
 
-/* returns CPUs that share the index cache with cpu */
-int get_shared_cpu_map(cpumask_var_t mask, unsigned int cpu, int index)
-{
-	int ret = 0;
-	struct cpu_cacheinfo *this_cpu_ci = get_cpu_cacheinfo(cpu);
-	struct cacheinfo *this_leaf;
-
-	if (index >= num_cache_leaves) {
-		index = num_cache_leaves - 1;
-		ret = index;
-	}
-
-	this_leaf = this_cpu_ci->info_list + index;
-	cpumask_copy(mask, &this_leaf->shared_cpu_map);
-
-	return ret;
-}
-
 static int __cache_amd_cpumap_setup(unsigned int cpu, int index,
 				    struct _cpuid4_info_regs *base)
 {
