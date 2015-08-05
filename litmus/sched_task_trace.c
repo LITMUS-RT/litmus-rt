@@ -189,6 +189,7 @@ feather_callback void do_sched_trace_task_completion(unsigned long id,
 	if (rec) {
 		rec->data.completion.when   = now();
 		rec->data.completion.forced = forced;
+		rec->data.completion.exec_time = get_exec_time(t);
 		put_record(rec);
 	}
 }

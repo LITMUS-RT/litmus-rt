@@ -52,11 +52,10 @@ struct st_switch_away_data {	/* A process was switched away from on a given CPU.
 
 struct st_completion_data {	/* A job completed. */
 	u64	when;
-	u8	forced:1; 	/* Set to 1 if job overran and kernel advanced to the
+	u64	forced:1; 	/* Set to 1 if job overran and kernel advanced to the
 				 * next task automatically; set to 0 otherwise.
 				 */
-	u8	__uflags:7;
-	u8	__unused[7];
+	u64	exec_time:63; /* Actual execution time of job. */
 };
 
 struct st_block_data {		/* A task blocks. */
