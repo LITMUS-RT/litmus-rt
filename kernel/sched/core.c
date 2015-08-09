@@ -88,6 +88,8 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+#include <litmus/trace.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
@@ -3345,6 +3347,8 @@ static void __sched notrace __schedule(bool preempt)
 	struct rq *rq;
 	int cpu;
 
+	TS_SCHED_START;
+
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
@@ -3406,13 +3410,19 @@ static void __sched notrace __schedule(bool preempt)
 		++*switch_count;
 
 		trace_sched_switch(preempt, prev, next);
+		TS_SCHED_END(next);
+		TS_CXS_START(next);
 		rq = context_switch(rq, prev, next, cookie); /* unlocks the rq */
+		TS_CXS_END(current);
 	} else {
 		lockdep_unpin_lock(&rq->lock, cookie);
+		TS_SCHED_END(prev);
 		raw_spin_unlock_irq(&rq->lock);
 	}
 
+	TS_SCHED2_START(prev);
 	balance_callback(rq);
+	TS_SCHED2_END(prev);
 }
 
 void __noreturn do_task_dead(void)
