@@ -66,6 +66,9 @@
 #include <linux/memcontrol.h>
 
 #include <asm/sections.h>
+
+#include <litmus/litmus.h> /* for is_realtime() */
+
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
@@ -3365,7 +3368,8 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 		 * comment for __cpuset_node_allowed().
 		 */
 		alloc_flags &= ~ALLOC_CPUSET;
-	} else if (unlikely(rt_task(current)) && !in_interrupt())
+	} else if (unlikely(rt_task(current) || is_realtime(current))
+		   && !in_interrupt())
 		alloc_flags |= ALLOC_HARDER;
 
 #ifdef CONFIG_CMA
