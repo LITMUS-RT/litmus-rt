@@ -29,6 +29,9 @@ void ft_irq_fired(void)
 	/* Only called with preemptions disabled.  */
 	atomic_inc(this_cpu_ptr(&irq_fired_count));
 	atomic_inc(this_cpu_ptr(&cpu_irq_fired_count));
+
+	if (has_control_page(current))
+		get_control_page(current)->irq_count++;
 }
 
 static inline void clear_irq_fired(void)
