@@ -2857,6 +2857,10 @@ asmlinkage __visible void schedule_tail(struct task_struct *prev)
 	 */
 
 	rq = finish_task_switch(prev);
+
+	if (unlikely(sched_state_validate_switch()))
+		litmus_reschedule_local();
+
 	balance_callback(rq);
 	preempt_enable();
 
@@ -3349,6 +3353,8 @@ static void __sched notrace __schedule(bool preempt)
 
 	TS_SCHED_START;
 
+	sched_state_entered_schedule();
+
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
@@ -3421,6 +3427,10 @@ static void __sched notrace __schedule(bool preempt)
 	}
 
 	TS_SCHED2_START(prev);
+
+	if (unlikely(sched_state_validate_switch()))
+		litmus_reschedule_local();
+
 	balance_callback(rq);
 	TS_SCHED2_END(prev);
 }

@@ -127,6 +127,7 @@ struct sched_attr {
 };
 
 #include <litmus/rt_param.h>
+#include <litmus/preempt.h>
 
 struct futex_pi_state;
 struct robust_list_head;
@@ -3274,6 +3275,7 @@ static inline int test_tsk_thread_flag(struct task_struct *tsk, int flag)
 static inline void set_tsk_need_resched(struct task_struct *tsk)
 {
 	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED);
+	sched_state_will_schedule(tsk);
 }
 
 static inline void clear_tsk_need_resched(struct task_struct *tsk)

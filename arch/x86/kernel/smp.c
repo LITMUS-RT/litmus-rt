@@ -24,6 +24,8 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
+#include <litmus/preempt.h>
+
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
 #include <asm/mmu_context.h>
@@ -218,7 +220,7 @@ static void native_stop_other_cpus(int wait)
 		while (num_online_cpus() > 1 && (wait || timeout--))
 			udelay(1);
 	}
-	
+
 	/* if the REBOOT_VECTOR didn't work, try with the NMI */
 	if ((num_online_cpus() > 1) && (!smp_no_nmi_ipi))  {
 		if (register_nmi_handler(NMI_LOCAL, smp_stop_nmi_callback,
@@ -268,6 +270,11 @@ __visible void smp_reschedule_interrupt(struct pt_regs *regs)
 	/*
 	 * KVM uses this interrupt to force a cpu out of guest mode
 	 */
+
+	/* LITMUS^RT: this IPI might need to trigger the sched state machine.
+	 * Starting from 3.0 schedule_ipi() actually does something.  This may
+	 * increase IPI latencies compared with previous versions. */
+	sched_state_ipi();
 }
 
 __visible void smp_trace_reschedule_interrupt(struct pt_regs *regs)
