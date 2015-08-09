@@ -365,3 +365,15 @@
 356	i386	memfd_create		sys_memfd_create
 357	i386	bpf			sys_bpf
 358	i386	execveat		sys_execveat			stub32_execveat
+359	i386	set_rt_task_param	sys_set_rt_task_param
+360	i386	get_rt_task_param	sys_get_rt_task_param
+361	i386	complete_job		sys_complete_job
+362	i386	od_open			sys_od_open
+363	i386	od_close		sys_od_close
+364	i386	litmus_lock		sys_litmus_lock
+365	i386	litmus_unlock		sys_litmus_unlock
+366	i386	query_job_no		sys_query_job_no
+367	i386	wait_for_job_release	sys_wait_for_job_release
+368	i386	wait_for_ts_release	sys_wait_for_ts_release
+369	i386	release_ts		sys_release_ts
+370	i386	null_call		sys_null_call
