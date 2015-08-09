@@ -125,6 +125,8 @@ struct sched_attr {
 	u64 sched_period;
 };
 
+#include <litmus/rt_param.h>
+
 struct futex_pi_state;
 struct robust_list_head;
 struct bio_list;
@@ -1670,6 +1672,9 @@ struct task_struct {
 	int nr_dirtied;
 	int nr_dirtied_pause;
 	unsigned long dirty_paused_when; /* start of a write-and-pause period */
+
+	/* LITMUS RT parameters and state */
+	struct rt_param rt_param;
 
 #ifdef CONFIG_LATENCYTOP
 	int latency_record_count;
