@@ -24,6 +24,8 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
+#include <litmus/debug_trace.h>
+
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
 #include <asm/mmu_context.h>
@@ -164,6 +166,16 @@ static int smp_stop_nmi_callback(unsigned int val, struct pt_regs *regs)
 	return NMI_HANDLED;
 }
 
+/* trigger timers on remote cpu */
+void smp_send_pull_timers(int cpu)
+{
+	if (unlikely(cpu_is_offline(cpu))) {
+		WARN_ON(1);
+		return;
+	}
+	apic->send_IPI_mask(cpumask_of(cpu), PULL_TIMERS_VECTOR);
+}
+
 /*
  * this function calls the 'stop' function on all other CPUs in the system.
  */
@@ -216,7 +228,7 @@ static void native_stop_other_cpus(int wait)
 		while (num_online_cpus() > 1 && (wait || timeout--))
 			udelay(1);
 	}
-	
+
 	/* if the REBOOT_VECTOR didn't work, try with the NMI */
 	if ((num_online_cpus() > 1) && (!smp_no_nmi_ipi))  {
 		if (register_nmi_handler(NMI_LOCAL, smp_stop_nmi_callback,
@@ -340,6 +352,30 @@ static int __init nonmi_ipi_setup(char *str)
 }
 
 __setup("nonmi_ipi", nonmi_ipi_setup);
+
+extern void hrtimer_pull(void);
+
+static inline void __smp_pull_timers_interrupt(void)
+{
+	TRACE("pull timer interrupt\n");
+	hrtimer_pull();
+}
+
+__visible void smp_pull_timers_interrupt(struct pt_regs *regs)
+{
+	smp_entering_irq();
+	__smp_pull_timers_interrupt();
+	exiting_irq();
+}
+
+__visible void smp_trace_pull_timers_interrupt(struct pt_regs *regs)
+{
+	smp_entering_irq();
+	trace_call_function_single_entry(PULL_TIMERS_VECTOR);
+	__smp_pull_timers_interrupt();
+	trace_call_function_single_exit(PULL_TIMERS_VECTOR);
+	exiting_irq();
+}
 
 struct smp_ops smp_ops = {
 	.smp_prepare_boot_cpu	= native_smp_prepare_boot_cpu,

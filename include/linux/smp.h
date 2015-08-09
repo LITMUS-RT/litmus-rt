@@ -103,6 +103,11 @@ void kick_all_cpus_sync(void);
 void wake_up_all_idle_cpus(void);
 
 /*
+ * sends a 'pull timer' event to a remote CPU
+ */
+extern void smp_send_pull_timers(int cpu);
+
+/*
  * Generic and arch helpers
  */
 void __init call_function_init(void);
