@@ -1,5 +1,7 @@
 #include "sched.h"
 
+#include <litmus/preempt.h>
+
 /*
  * stop-task scheduling class.
  *
@@ -34,6 +36,13 @@ pick_next_task_stop(struct rq *rq, struct task_struct *prev)
 	put_prev_task(rq, prev);
 
 	stop->se.exec_start = rq_clock_task(rq);
+
+	/* Let the LITMUS^RT scheduler state machine know
+	 * that a task was picked. This is needed because the
+	 * LITMUS^RT scheduling plugin will not be called
+	 * if the stop-task class picks a task.
+	 */
+	sched_state_task_picked();
 
 	return stop;
 }
