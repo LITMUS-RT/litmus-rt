@@ -88,6 +88,7 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
 
@@ -1894,7 +1895,12 @@ static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
 	struct pin_cookie cookie;
 
 #if defined(CONFIG_SMP)
-	if (sched_feat(TTWU_QUEUE) && !cpus_share_cache(smp_processor_id(), cpu)) {
+	/*
+	 * LITMUS^RT: whether to send an IPI to the remote CPU is plugin
+	 * specific.
+	 */
+	if (!is_realtime(p) &&
+	    sched_feat(TTWU_QUEUE) && !cpus_share_cache(smp_processor_id(), cpu)) {
 		sched_clock_cpu(cpu); /* sync clocks x-cpu */
 		ttwu_queue_remote(p, cpu, wake_flags);
 		return;
@@ -2020,6 +2026,9 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	unsigned long flags;
 	int cpu, success = 0;
 
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up() state:%d\n", p->state);
+
 	/*
 	 * If we are going to wake up a thread waiting for CONDITION we
 	 * need to ensure that CONDITION=1 done by the caller can not be
@@ -2092,6 +2101,12 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 */
 	smp_cond_load_acquire(&p->on_cpu, !VAL);
 
+	/* LITMUS^RT: once the task can be safely referenced by this
+	 * CPU, don't mess with Linux load balancing stuff.
+	 */
+	if (is_realtime(p))
+		goto litmus_out_activate;
+
 	p->sched_contributes_to_load = !!task_contributes_to_load(p);
 	p->state = TASK_WAKING;
 
@@ -2100,12 +2115,16 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		wake_flags |= WF_MIGRATED;
 		set_task_cpu(p, cpu);
 	}
+
+litmus_out_activate:
 #endif /* CONFIG_SMP */
 
 	ttwu_queue(p, cpu, wake_flags);
 stat:
 	ttwu_stat(p, cpu, wake_flags);
 out:
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up() done state:%d\n", p->state);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 
 	return success;
