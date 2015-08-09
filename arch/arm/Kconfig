@@ -2119,3 +2119,6 @@ endif
 source "lib/Kconfig"
 
 source "arch/arm/kvm/Kconfig"
+
+source "litmus/Kconfig"
+
