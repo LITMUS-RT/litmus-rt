@@ -62,6 +62,7 @@ typedef enum {
 #define LITMUS_MAX_PRIORITY     512
 #define LITMUS_HIGHEST_PRIORITY   1
 #define LITMUS_LOWEST_PRIORITY    (LITMUS_MAX_PRIORITY - 1)
+#define LITMUS_NO_PRIORITY	UINT_MAX
 
 /* Provide generic comparison macros for userspace,
  * in case that we change this later. */
@@ -70,6 +71,46 @@ typedef enum {
 #define litmus_is_valid_fixed_prio(p)		\
 	((p) >= LITMUS_HIGHEST_PRIORITY &&	\
 	 (p) <= LITMUS_LOWEST_PRIORITY)
+
+/* reservation support */
+
+typedef enum {
+	PERIODIC_POLLING = 10,
+	SPORADIC_POLLING,
+	TABLE_DRIVEN,
+} reservation_type_t;
+
+struct lt_interval {
+	lt_t start;
+	lt_t end;
+};
+
+#ifndef __KERNEL__
+#define __user
+#endif
+
+struct reservation_config {
+	unsigned int id;
+	lt_t priority;
+	int  cpu;
+
+	union {
+		struct {
+			lt_t period;
+			lt_t budget;
+			lt_t relative_deadline;
+			lt_t offset;
+		} polling_params;
+
+		struct {
+			lt_t major_cycle_length;
+			unsigned int num_intervals;
+			struct lt_interval __user *intervals;
+		} table_driven_params;
+	};
+};
+
+/* regular sporadic task support */
 
 struct rt_task {
 	lt_t 		exec_cost;
@@ -82,54 +123,6 @@ struct rt_task {
 	budget_policy_t  budget_policy;  /* ignored by pfair */
 	release_policy_t release_policy;
 };
-
-union np_flag {
-	uint64_t raw;
-	struct {
-		/* Is the task currently in a non-preemptive section? */
-		uint64_t flag:31;
-		/* Should the task call into the scheduler? */
-		uint64_t preempt:1;
-	} np;
-};
-
-/* The definition of the data that is shared between the kernel and real-time
- * tasks via a shared page (see litmus/ctrldev.c).
- *
- * WARNING: User space can write to this, so don't trust
- * the correctness of the fields!
- *
- * This servees two purposes: to enable efficient signaling
- * of non-preemptive sections (user->kernel) and
- * delayed preemptions (kernel->user), and to export
- * some real-time relevant statistics such as preemption and
- * migration data to user space. We can't use a device to export
- * statistics because we want to avoid system call overhead when
- * determining preemption/migration overheads).
- */
-struct control_page {
-	/* This flag is used by userspace to communicate non-preempive
-	 * sections. */
-	volatile union np_flag sched;
-
-	volatile uint64_t irq_count; /* Incremented by the kernel each time an IRQ is
-				      * handled. */
-
-	/* Locking overhead tracing: userspace records here the time stamp
-	 * and IRQ counter prior to starting the system call. */
-	uint64_t ts_syscall_start;  /* Feather-Trace cycles */
-	uint64_t irq_syscall_start; /* Snapshot of irq_count when the syscall
-				     * started. */
-
-	/* to be extended */
-};
-
-/* Expected offsets within the control page. */
-
-#define LITMUS_CP_OFFSET_SCHED		0
-#define LITMUS_CP_OFFSET_IRQ_COUNT	8
-#define LITMUS_CP_OFFSET_TS_SC_START	16
-#define LITMUS_CP_OFFSET_IRQ_SC_START	24
 
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
@@ -177,9 +170,6 @@ struct pfair_param;
  *	be explicitly set up before the task set is launched.
  */
 struct rt_param {
-	/* Generic flags available for plugin-internal use. */
-	unsigned int 		flags:8;
-
 	/* do we need to check for srp blocking? */
 	unsigned int		srp_non_recurse:1;
 
@@ -207,12 +197,18 @@ struct rt_param {
 	/* timing parameters */
 	struct rt_job 		job_params;
 
+
+	/* Special handling for periodic tasks executing
+	 * clock_nanosleep(CLOCK_MONOTONIC, ...).
+	 */
+	lt_t			nanosleep_wakeup;
+	unsigned int	doing_abs_nanosleep:1;
+
 	/* Should the next job be released at some time other than
 	 * just period time units after the last release?
 	 */
 	unsigned int		sporadic_release:1;
 	lt_t			sporadic_release_time;
-
 
 	/* task representing the current "inherited" task
 	 * priority, assigned by inherit_priority and
@@ -255,7 +251,10 @@ struct rt_param {
 	volatile int		linked_on;
 
 	/* PFAIR/PD^2 state. Allocated on demand. */
-	struct pfair_param*	pfair;
+	union {
+		void *plugin_state;
+		struct pfair_param *pfair;
+	};
 
 	/* Fields saved before BE->RT transition.
 	 */

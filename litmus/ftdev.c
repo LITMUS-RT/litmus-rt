@@ -216,6 +216,17 @@ static ssize_t ftdev_read(struct file *filp,
 			 * here with copied data because that data would get
 			 * lost if the task is interrupted (e.g., killed).
 			 */
+
+			/* Before sleeping, check wether a non-blocking
+			 * read was requested.
+			 */
+			if (filp->f_flags & O_NONBLOCK)
+			{
+				/* bug out, userspace doesn't want us to sleep */
+				err = -EWOULDBLOCK;
+				break;
+			}
+
 			mutex_unlock(&ftdm->lock);
 			set_current_state(TASK_INTERRUPTIBLE);
 
