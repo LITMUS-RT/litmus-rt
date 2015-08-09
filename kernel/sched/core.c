@@ -1806,7 +1806,14 @@ void scheduler_ipi(void)
 	preempt_fold_need_resched();
 
 	if (llist_empty(&this_rq()->wake_list) && !got_nohz_idle_kick())
+	{
+#ifndef CONFIG_ARCH_CALLS_IRQ_ENTER_ON_RESCHED_IPI
+		/* If we don't call irq_enter(), we need to triggger the IRQ
+		 * tracing manually. */
+		ft_irq_fired();
+#endif
 		return;
+	}
 
 	/*
 	 * Not all reschedule IPI handlers call irq_enter/irq_exit, since
