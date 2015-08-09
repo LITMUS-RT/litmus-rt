@@ -1231,10 +1231,12 @@ static inline void put_prev_task(struct rq *rq, struct task_struct *prev)
 	prev->sched_class->put_prev_task(rq, prev);
 }
 
-#define sched_class_highest (&stop_sched_class)
+#define sched_class_highest (&litmus_sched_class)
+
 #define for_each_class(class) \
    for (class = sched_class_highest; class; class = class->next)
 
+extern const struct sched_class litmus_sched_class;
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;
