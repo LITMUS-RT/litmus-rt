@@ -2415,6 +2415,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	 */
 	p->prio = current->normal_prio;
 
+	litmus_fork(p);
+
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
@@ -2436,7 +2438,9 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		p->sched_reset_on_fork = 0;
 	}
 
-	if (dl_prio(p->prio)) {
+	if (is_realtime(p)) {
+		p->sched_class = &litmus_sched_class;
+	} else if (dl_prio(p->prio)) {
 		put_cpu();
 		return -EAGAIN;
 	} else if (rt_prio(p->prio)) {
@@ -2592,6 +2596,9 @@ void wake_up_new_task(struct task_struct *p)
 {
 	struct rq_flags rf;
 	struct rq *rq;
+
+	if (is_realtime(p))
+		litmus->task_new(p, 1, 0);
 
 	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
 	p->state = TASK_RUNNING;
