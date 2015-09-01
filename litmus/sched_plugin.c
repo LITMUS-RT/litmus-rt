@@ -143,6 +143,14 @@ static void litmus_dummy_synchronous_release_at(lt_t time_zero)
 	/* ignore */
 }
 
+static long litmus_dummy_task_change_params(
+	struct task_struct *task,
+	struct rt_task *new_params)
+{
+	/* by default, do not allow changes to task parameters */
+	return -EBUSY;
+}
+
 #ifdef CONFIG_LITMUS_LOCKING
 
 static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
@@ -219,6 +227,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(task_cleanup);
 	CHECK(task_block);
 	CHECK(task_new);
+	CHECK(task_change_params);
 	CHECK(complete_job);
 	CHECK(activate_plugin);
 	CHECK(deactivate_plugin);

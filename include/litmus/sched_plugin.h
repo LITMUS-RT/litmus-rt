@@ -56,6 +56,12 @@ typedef void (*task_new_t) (struct task_struct *task,
 			    int on_rq,
 			    int running);
 
+/* Called when userspace seeks to set new task parameters for a task
+ * that is already in real-time mode (i.e., is_realtime(task)).
+ */
+typedef long (*task_change_params_t) (struct task_struct *task,
+			    struct rt_task *new_params);
+
 /* Called to re-introduce a task after blocking.
  * Can potentially be called multiple times.
  */
@@ -139,9 +145,12 @@ struct sched_plugin {
 	admit_task_t		admit_task;
 	fork_task_t			fork_task;
 
-        task_new_t 		task_new;
+    task_new_t 			task_new;
 	task_wake_up_t		task_wake_up;
 	task_block_t		task_block;
+
+	/* optional: support task parameter changes at runtime */
+    task_change_params_t task_change_params;
 
 	task_exit_t 		task_exit;
 	task_cleanup_t		task_cleanup;
