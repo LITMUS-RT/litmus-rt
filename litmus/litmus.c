@@ -120,14 +120,6 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 	}
 	rcu_read_unlock();
 
-	if (is_realtime(target)) {
-		/* The task is already a real-time task.
-		 * We cannot not allow parameter changes at this point.
-		 */
-		retval = -EBUSY;
-		goto out_unlock;
-	}
-
 	/* set relative deadline to be implicit if left unspecified */
 	if (tp.relative_deadline == 0)
 		tp.relative_deadline = tp.period;
@@ -161,9 +153,16 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		goto out_unlock;
 	}
 
-	target->rt_param.task_params = tp;
-
-	retval = 0;
+	if (is_realtime(target)) {
+		/* The task is already a real-time task.
+		 * Let plugin decide whether it wants to support
+		 * parameter changes at runtime.
+		 */
+		retval = litmus->task_change_params(target, &tp);
+	} else {
+		target->rt_param.task_params = tp;
+		retval = 0;
+	}
       out_unlock:
 	read_unlock_irq(&tasklist_lock);
       out:
