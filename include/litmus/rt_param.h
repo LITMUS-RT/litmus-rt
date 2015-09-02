@@ -62,6 +62,7 @@ typedef enum {
 #define LITMUS_MAX_PRIORITY     512
 #define LITMUS_HIGHEST_PRIORITY   1
 #define LITMUS_LOWEST_PRIORITY    (LITMUS_MAX_PRIORITY - 1)
+#define LITMUS_NO_PRIORITY	UINT_MAX
 
 /* Provide generic comparison macros for userspace,
  * in case that we change this later. */
@@ -70,6 +71,46 @@ typedef enum {
 #define litmus_is_valid_fixed_prio(p)		\
 	((p) >= LITMUS_HIGHEST_PRIORITY &&	\
 	 (p) <= LITMUS_LOWEST_PRIORITY)
+
+/* reservation support */
+
+typedef enum {
+	PERIODIC_POLLING = 10,
+	SPORADIC_POLLING,
+	TABLE_DRIVEN,
+} reservation_type_t;
+
+struct lt_interval {
+	lt_t start;
+	lt_t end;
+};
+
+#ifndef __KERNEL__
+#define __user
+#endif
+
+struct reservation_config {
+	unsigned int id;
+	lt_t priority;
+	int  cpu;
+
+	union {
+		struct {
+			lt_t period;
+			lt_t budget;
+			lt_t relative_deadline;
+			lt_t offset;
+		} polling_params;
+
+		struct {
+			lt_t major_cycle_length;
+			unsigned int num_intervals;
+			struct lt_interval __user *intervals;
+		} table_driven_params;
+	};
+};
+
+/* regular sporadic task support */
 
 struct rt_task {
 	lt_t 		exec_cost;
