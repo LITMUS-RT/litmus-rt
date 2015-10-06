@@ -533,14 +533,24 @@ int switch_sched_plugin(struct sched_plugin* plugin)
  */
 void litmus_fork(struct task_struct* p)
 {
+	/* non-rt tasks might have ctrl_page set */
+	tsk_rt(p)->ctrl_page = NULL;
+
 	if (is_realtime(p)) {
-		/* clean out any litmus related state, don't preserve anything */
-		reinit_litmus_state(p, 0);
-		/* Don't let the child be a real-time task.  */
-		p->sched_reset_on_fork = 1;
-	} else
-		/* non-rt tasks might have ctrl_page set */
-		tsk_rt(p)->ctrl_page = NULL;
+		reinit_litmus_state(p, 1);
+		if (litmus->fork_task(p)) {
+			if (__litmus_admit_task(p))
+				/* something went wrong, give up */
+				p->sched_reset_on_fork = 1;
+		} else {
+			/* clean out any litmus related state */
+			reinit_litmus_state(p, 0);
+
+			TRACE_TASK(p, "fork: real-time status denied\n");
+			/* Don't let the child be a real-time task. */
+			p->sched_reset_on_fork = 1;
+		}
+	}
 
 	/* od tables are never inherited across a fork */
 	p->od_table = NULL;
