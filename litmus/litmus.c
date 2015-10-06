@@ -345,6 +345,39 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 	}
 }
 
+static long __litmus_admit_task(struct task_struct* tsk)
+{
+	long err;
+
+	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
+
+	/* allocate heap node for this task */
+	tsk_rt(tsk)->heap_node = bheap_node_alloc(GFP_ATOMIC);
+	tsk_rt(tsk)->rel_heap = release_heap_alloc(GFP_ATOMIC);
+
+	if (!tsk_rt(tsk)->heap_node || !tsk_rt(tsk)->rel_heap) {
+		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
+
+		return -ENOMEM;
+	} else {
+		bheap_node_init(&tsk_rt(tsk)->heap_node, tsk);
+	}
+
+	preempt_disable();
+
+	err = litmus->admit_task(tsk);
+
+	if (!err) {
+		sched_trace_task_name(tsk);
+		sched_trace_task_param(tsk);
+		atomic_inc(&rt_task_count);
+	}
+
+	preempt_enable();
+
+	return err;
+}
+
 long litmus_admit_task(struct task_struct* tsk)
 {
 	long retval = 0;
@@ -366,32 +399,7 @@ long litmus_admit_task(struct task_struct* tsk)
 		goto out;
 	}
 
-	INIT_LIST_HEAD(&tsk_rt(tsk)->list);
-
-	/* allocate heap node for this task */
-	tsk_rt(tsk)->heap_node = bheap_node_alloc(GFP_ATOMIC);
-	tsk_rt(tsk)->rel_heap = release_heap_alloc(GFP_ATOMIC);
-
-	if (!tsk_rt(tsk)->heap_node || !tsk_rt(tsk)->rel_heap) {
-		printk(KERN_WARNING "litmus: no more heap node memory!?\n");
-
-		retval = -ENOMEM;
-		goto out;
-	} else {
-		bheap_node_init(&tsk_rt(tsk)->heap_node, tsk);
-	}
-
-	preempt_disable();
-
-	retval = litmus->admit_task(tsk);
-
-	if (!retval) {
-		sched_trace_task_name(tsk);
-		sched_trace_task_param(tsk);
-		atomic_inc(&rt_task_count);
-	}
-
-	preempt_enable();
+	retval = __litmus_admit_task(tsk);
 
 out:
 	if (retval) {
