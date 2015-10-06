@@ -164,9 +164,9 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 				int flags)
 {
+	tsk_rt(p)->present = 1;
 	if (flags & ENQUEUE_WAKEUP) {
 		sched_trace_task_resume(p);
-		tsk_rt(p)->present = 1;
 		/* LITMUS^RT plugins need to update the state
 		 * _before_ making it available in global structures.
 		 * Linux gets away with being lazy about the task state
