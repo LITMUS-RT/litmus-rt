@@ -72,6 +72,9 @@ typedef long (*complete_job_t) (void);
 
 typedef long (*admit_task_t)(struct task_struct* tsk);
 
+/* return false to indicate that the plugin does not support forking */
+typedef bool (*fork_task_t)(struct task_struct* tsk);
+
 typedef long (*wait_for_release_at_t)(lt_t release_time);
 
 /* Informs the plugin when a synchronous release takes place. */
@@ -108,6 +111,7 @@ struct sched_plugin {
 
 	/*	task state changes 	*/
 	admit_task_t		admit_task;
+	fork_task_t			fork_task;
 
         task_new_t 		task_new;
 	task_wake_up_t		task_wake_up;

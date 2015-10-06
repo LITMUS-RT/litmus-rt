@@ -77,6 +77,12 @@ static long litmus_dummy_admit_task(struct task_struct* tsk)
 	return -EINVAL;
 }
 
+static bool litmus_dummy_fork_task(struct task_struct* tsk)
+{
+	/* Default behavior: return false to demote to non-real-time task */
+	return false;
+}
+
 static void litmus_dummy_task_new(struct task_struct *t, int on_rq, int running)
 {
 }
@@ -193,6 +199,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(allocate_lock);
 #endif
 	CHECK(admit_task);
+	CHECK(fork_task);
 	CHECK(synchronous_release_at);
 
 	if (!plugin->wait_for_release_at)
