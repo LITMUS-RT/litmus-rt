@@ -409,7 +409,7 @@
         CALL(sys_wait_for_ts_release)
 		CALL(sys_release_ts)
 		CALL(sys_null_call)
-/* 300 */	CALL(sys_get_current_budget)
+/* 400 */	CALL(sys_get_current_budget)
 
 
 #ifndef syscalls_counted

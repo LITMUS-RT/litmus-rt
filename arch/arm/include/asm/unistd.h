@@ -19,7 +19,8 @@
  * This may need to be greater than __NR_last_syscall+1 in order to
  * account for the padding in the syscall table
  */
-#define __NR_syscalls  (388 + NR_litmus_syscalls)
+#define __NR_syscalls  (388 + NR_litmus_syscalls + 3)
+
 
 /*
  * *NOTE*: This is a ghost syscall private to the kernel.  Only the
