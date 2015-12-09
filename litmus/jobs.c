@@ -17,6 +17,10 @@ static inline void setup_release(struct task_struct *t, lt_t release)
 
 	/* update job sequence number */
 	t->rt_param.job_params.job_no++;
+
+	/* add the deadline to */
+	if(has_control_page(t))
+		get_control_page(t)->deadline = t->rt_param.job_params.deadline;
 }
 
 void prepare_for_next_period(struct task_struct *t)

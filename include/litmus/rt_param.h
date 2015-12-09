@@ -122,6 +122,7 @@ struct control_page {
 				     * started. */
 
 	/* to be extended */
+	lt_t deadline; /* Deadline for the currently executing job */
 };
 
 /* Expected offsets within the control page. */
