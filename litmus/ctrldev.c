@@ -3,6 +3,8 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
+#include <linux/uaccess.h>
+
 
 #include <litmus/litmus.h>
 
@@ -116,9 +118,104 @@ static int litmus_ctrl_mmap(struct file* filp, struct vm_area_struct* vma)
 	return err;
 }
 
+/* LITMUS^RT system calls */
+
+asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param);
+asmlinkage long sys_get_rt_task_param(pid_t pid, struct rt_task __user * param);
+asmlinkage long sys_get_current_budget(lt_t __user * _expended, lt_t __user *_remaining);
+asmlinkage long sys_null_call(cycles_t __user *ts);
+asmlinkage long sys_od_open(int fd, int type, int obj_id, void* __user config);
+asmlinkage long sys_od_close(int od);
+asmlinkage long sys_complete_job(void);
+asmlinkage long sys_litmus_lock(int lock_od);
+asmlinkage long sys_litmus_unlock(int lock_od);
+asmlinkage long sys_wait_for_job_release(unsigned int job);
+asmlinkage long sys_wait_for_ts_release(void);
+asmlinkage long sys_release_ts(lt_t __user *__delay);
+
+static long litmus_ctrl_ioctl(struct file *filp,
+	unsigned int cmd, unsigned long arg)
+{
+	long err = -ENOIOCTLCMD;
+
+	/* LITMUS^RT syscall emulation: we expose LITMUS^RT-specific operations
+	 * via ioctl() to avoid merge conflicts with the syscall tables when
+	 * rebasing LITMUS^RT. Whi this is not the most elegant way to expose
+	 * syscall-like functionality, it helps with reducing the effort
+	 * required to maintain LITMUS^RT out of tree.
+	 */
+
+	union litmus_syscall_args syscall_args;
+
+	switch (cmd) {
+	case LRT_set_rt_task_param:
+	case LRT_get_rt_task_param:
+	case LRT_get_current_budget:
+	case LRT_od_open:
+		/* multiple arguments => need to get args via pointer */
+		/* get syscall parameters */
+		if (copy_from_user(&syscall_args, (void*) arg,
+		                   sizeof(syscall_args))) {
+			return -EFAULT;
+		}
+
+		switch (cmd) {
+		case LRT_set_rt_task_param:
+			return sys_set_rt_task_param(
+				syscall_args.get_set_task_param.pid,
+				syscall_args.get_set_task_param.param);
+		case LRT_get_rt_task_param:
+			return sys_get_rt_task_param(
+				syscall_args.get_set_task_param.pid,
+				syscall_args.get_set_task_param.param);
+		case LRT_get_current_budget:
+			return sys_get_current_budget(
+				syscall_args.get_current_budget.expended,
+				syscall_args.get_current_budget.remaining);
+		case LRT_od_open:
+			return sys_od_open(
+				syscall_args.od_open.fd,
+				syscall_args.od_open.obj_type,
+				syscall_args.od_open.obj_id,
+				syscall_args.od_open.config);
+		}
+
+
+	case LRT_null_call:
+		return sys_null_call((cycles_t __user *) arg);
+
+	case LRT_od_close:
+		return sys_od_close(arg);
+
+	case LRT_complete_job:
+		return sys_complete_job();
+
+	case LRT_litmus_lock:
+		return sys_litmus_lock(arg);
+
+	case LRT_litmus_unlock:
+		return sys_litmus_unlock(arg);
+
+	case LRT_wait_for_job_release:
+		return sys_wait_for_job_release(arg);
+
+	case LRT_wait_for_ts_release:
+		return sys_wait_for_ts_release();
+
+	case LRT_release_ts:
+		return sys_release_ts((lt_t __user *) arg);
+
+	default:
+		printk(KERN_DEBUG "ctrldev: strange ioctl (%u, %lu)\n", cmd, arg);
+	};
+
+	return err;
+}
+
 static struct file_operations litmus_ctrl_fops = {
 	.owner = THIS_MODULE,
 	.mmap  = litmus_ctrl_mmap,
+	.unlocked_ioctl = litmus_ctrl_ioctl,
 };
 
 static struct miscdevice litmus_ctrl_dev = {

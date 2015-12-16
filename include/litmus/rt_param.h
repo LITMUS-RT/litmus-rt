@@ -83,61 +83,6 @@ struct rt_task {
 	release_policy_t release_policy;
 };
 
-union np_flag {
-	uint32_t raw;
-	struct {
-		/* Is the task currently in a non-preemptive section? */
-		uint32_t flag:31;
-		/* Should the task call into the scheduler? */
-		uint32_t preempt:1;
-	} np;
-};
-
-/* The definition of the data that is shared between the kernel and real-time
- * tasks via a shared page (see litmus/ctrldev.c).
- *
- * WARNING: User space can write to this, so don't trust
- * the correctness of the fields!
- *
- * This servees two purposes: to enable efficient signaling
- * of non-preemptive sections (user->kernel) and
- * delayed preemptions (kernel->user), and to export
- * some real-time relevant statistics such as preemption and
- * migration data to user space. We can't use a device to export
- * statistics because we want to avoid system call overhead when
- * determining preemption/migration overheads).
- */
-struct control_page {
-	/* This flag is used by userspace to communicate non-preempive
-	 * sections. */
-	volatile __attribute__ ((aligned (8))) union np_flag sched;
-
-	/* Incremented by the kernel each time an IRQ is handled. */
-	volatile __attribute__ ((aligned (8))) uint64_t irq_count;
-
-	/* Locking overhead tracing: userspace records here the time stamp
-	 * and IRQ counter prior to starting the system call. */
-	uint64_t ts_syscall_start;  /* Feather-Trace cycles */
-	uint64_t irq_syscall_start; /* Snapshot of irq_count when the syscall
-				     * started. */
-
-	lt_t deadline; /* Deadline for the currently executing job */
-	lt_t release;  /* Release time of current job */
-	uint64_t job_index; /* Job sequence number of current job */
-
-	/* to be extended */
-};
-
-/* Expected offsets within the control page. */
-
-#define LITMUS_CP_OFFSET_SCHED		0
-#define LITMUS_CP_OFFSET_IRQ_COUNT	8
-#define LITMUS_CP_OFFSET_TS_SC_START	16
-#define LITMUS_CP_OFFSET_IRQ_SC_START	24
-#define LITMUS_CP_OFFSET_DEADLINE	32
-#define LITMUS_CP_OFFSET_RELEASE	40
-#define LITMUS_CP_OFFSET_JOB_INDEX	48
-
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
 

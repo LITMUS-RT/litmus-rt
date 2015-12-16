@@ -6,6 +6,8 @@
 #ifndef _LINUX_LITMUS_H_
 #define _LINUX_LITMUS_H_
 
+#include <litmus/ctrlpage.h>
+
 #include <litmus/debug_trace.h>
 
 #ifdef CONFIG_RELEASE_MASTER
