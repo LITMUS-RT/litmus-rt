@@ -122,6 +122,7 @@ struct control_page {
 				     * started. */
 
 	/* to be extended */
+	lt_t deadline; /* Deadline for the currently executing job */
 };
 
 /* Expected offsets within the control page. */
@@ -130,6 +131,7 @@ struct control_page {
 #define LITMUS_CP_OFFSET_IRQ_COUNT	8
 #define LITMUS_CP_OFFSET_TS_SC_START	16
 #define LITMUS_CP_OFFSET_IRQ_SC_START	24
+#define LITMUS_CP_OFFSET_DEADLINE	32
 
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
