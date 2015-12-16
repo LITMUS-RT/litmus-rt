@@ -121,8 +121,11 @@ struct control_page {
 	uint64_t irq_syscall_start; /* Snapshot of irq_count when the syscall
 				     * started. */
 
-	/* to be extended */
 	lt_t deadline; /* Deadline for the currently executing job */
+	lt_t release;  /* Release time of current job */
+	uint64_t job_index; /* Job sequence number of current job */
+
+	/* to be extended */
 };
 
 /* Expected offsets within the control page. */
@@ -132,6 +135,8 @@ struct control_page {
 #define LITMUS_CP_OFFSET_TS_SC_START	16
 #define LITMUS_CP_OFFSET_IRQ_SC_START	24
 #define LITMUS_CP_OFFSET_DEADLINE	32
+#define LITMUS_CP_OFFSET_RELEASE	40
+#define LITMUS_CP_OFFSET_JOB_INDEX	48
 
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
