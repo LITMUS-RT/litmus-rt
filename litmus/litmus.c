@@ -184,21 +184,24 @@ asmlinkage long sys_get_rt_task_param(pid_t pid, struct rt_task __user * param)
 	int retval = -EINVAL;
 	struct task_struct *source;
 	struct rt_task lp;
+
 	if (param == 0 || pid < 0)
 		goto out;
-	read_lock(&tasklist_lock);
-	if (!(source = find_task_by_vpid(pid))) {
+
+	read_lock_irq(&tasklist_lock);
+	rcu_read_lock();
+	source = find_task_by_vpid(pid);
+	rcu_read_unlock();
+	if (!source) {
 		retval = -ESRCH;
-		goto out_unlock;
+		read_unlock_irq(&tasklist_lock);
+		goto out;
 	}
 	lp = source->rt_param.task_params;
-	read_unlock(&tasklist_lock);
+	read_unlock_irq(&tasklist_lock);
 	/* Do copying outside the lock */
 	retval =
 	    copy_to_user(param, &lp, sizeof(lp)) ? -EFAULT : 0;
-	return retval;
-      out_unlock:
-	read_unlock(&tasklist_lock);
       out:
 	return retval;
 
