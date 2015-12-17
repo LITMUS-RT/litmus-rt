@@ -6,5 +6,7 @@ void release_at(struct task_struct *t, lt_t start);
 
 long default_wait_for_release_at(lt_t release_time);
 long complete_job(void);
+long complete_job_oneshot(void);
+long sleep_until_next_release(void);
 
 #endif

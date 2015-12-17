@@ -6,6 +6,7 @@
 #include <litmus/preempt.h>
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
+#include <litmus/sched_trace.h>
 #include <litmus/jobs.h>
 
 static inline void setup_release(struct task_struct *t, lt_t release)
@@ -87,4 +88,49 @@ long complete_job(void)
 	litmus_reschedule_local();
 	preempt_enable();
 	return 0;
+}
+
+
+/* alternative job completion implementation that suspends the task */
+long complete_job_oneshot(void)
+{
+	struct task_struct *t = current;
+
+	TRACE_CUR("job completes at %llu (deadline: %llu)\n", litmus_clock(),
+		get_deadline(t));
+
+	sched_trace_task_completion(t, 0);
+	prepare_for_next_period(t);
+	sched_trace_task_release(t);
+
+	return sleep_until_next_release();
+}
+
+long sleep_until_next_release(void)
+{
+	struct task_struct *t = current;
+	ktime_t next_release;
+	long err;
+
+	preempt_disable();
+	next_release = ns_to_ktime(get_release(t));
+
+	TRACE_CUR("next_release=%llu\n", get_release(t));
+
+	if (lt_after(get_release(t), litmus_clock())) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		preempt_enable_no_resched();
+		err = schedule_hrtimeout(&next_release, HRTIMER_MODE_ABS);
+		/* If we get woken by a signal, we return early.
+		 * This is intentional; we want to be able to kill tasks
+		 * that are waiting for the next job release.
+		 */
+	} else {
+		err = 0;
+		TRACE_CUR("TARDY: release=%llu now=%llu\n", get_release(t), litmus_clock());
+		preempt_enable();
+	}
+
+	TRACE_CUR("return to next job at %llu\n", litmus_clock());
+	return err;
 }
