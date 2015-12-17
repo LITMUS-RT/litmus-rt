@@ -61,7 +61,7 @@ struct control_page {
 /* System call emulation via ioctl() */
 
 typedef enum {
-	LRT_null_call,
+	LRT_null_call = 2006,
 	LRT_set_rt_task_param,
 	LRT_get_rt_task_param,
 	LRT_complete_job,
