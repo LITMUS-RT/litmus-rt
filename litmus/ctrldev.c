@@ -122,6 +122,7 @@ static int litmus_ctrl_mmap(struct file* filp, struct vm_area_struct* vma)
 
 asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param);
 asmlinkage long sys_get_rt_task_param(pid_t pid, struct rt_task __user * param);
+asmlinkage long sys_reservation_create(int type, void __user *config);
 asmlinkage long sys_get_current_budget(lt_t __user * _expended, lt_t __user *_remaining);
 asmlinkage long sys_null_call(cycles_t __user *ts);
 asmlinkage long sys_od_open(int fd, int type, int obj_id, void* __user config);
@@ -150,6 +151,7 @@ static long litmus_ctrl_ioctl(struct file *filp,
 	switch (cmd) {
 	case LRT_set_rt_task_param:
 	case LRT_get_rt_task_param:
+	case LRT_reservation_create:
 	case LRT_get_current_budget:
 	case LRT_od_open:
 		/* multiple arguments => need to get args via pointer */
@@ -168,6 +170,10 @@ static long litmus_ctrl_ioctl(struct file *filp,
 			return sys_get_rt_task_param(
 				syscall_args.get_set_task_param.pid,
 				syscall_args.get_set_task_param.param);
+		case LRT_reservation_create:
+			return sys_reservation_create(
+				syscall_args.reservation_create.type,
+				syscall_args.reservation_create.config);
 		case LRT_get_current_budget:
 			return sys_get_current_budget(
 				syscall_args.get_current_budget.expended,

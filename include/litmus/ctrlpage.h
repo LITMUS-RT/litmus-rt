@@ -64,6 +64,7 @@ typedef enum {
 	LRT_null_call = 2006,
 	LRT_set_rt_task_param,
 	LRT_get_rt_task_param,
+	LRT_reservation_create,
 	LRT_complete_job,
 	LRT_od_open,
 	LRT_od_close,
@@ -80,6 +81,11 @@ union litmus_syscall_args {
 		pid_t pid;
 		struct rt_task __user *param;
 	} get_set_task_param;
+
+	struct {
+		uint32_t type;
+		void __user *config;
+	} reservation_create;
 
 	struct {
 		uint32_t fd;
