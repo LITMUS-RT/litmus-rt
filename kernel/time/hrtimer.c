@@ -1468,7 +1468,9 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 			lt_t intended_release = ktime_to_ns(expires);
 			TS_RELEASE_LATENCY(intended_release);
 		}
+		TS_RELEASE_START;
 		wake_up_process(task);
+		TS_RELEASE_END;
 	}
 
 	return HRTIMER_NORESTART;
