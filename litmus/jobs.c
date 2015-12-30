@@ -123,12 +123,14 @@ static long sleep_until_next_release(void)
 
 	if (lt_after(get_release(t), litmus_clock())) {
 		set_current_state(TASK_INTERRUPTIBLE);
+		tsk_rt(t)->completed = 1;
 		preempt_enable_no_resched();
 		err = schedule_hrtimeout(&next_release, HRTIMER_MODE_ABS);
 		/* If we get woken by a signal, we return early.
 		 * This is intentional; we want to be able to kill tasks
 		 * that are waiting for the next job release.
 		 */
+		tsk_rt(t)->completed = 0;
 	} else {
 		err = 0;
 		TRACE_CUR("TARDY: release=%llu now=%llu\n", get_release(t), litmus_clock());
