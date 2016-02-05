@@ -425,11 +425,13 @@ static int alloc_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 
 static void free_timestamp_buffer(struct ftdev* ftdev, unsigned int idx)
 {
+	struct ft_buffer* tmp = ftdev->minor[idx].buf;
+	smp_rmb();
 	ftdev->minor[idx].buf = NULL;
 	/* Make sure all cores have actually seen buf == NULL before
 	 * yanking out the mappings from underneath them. */
 	smp_wmb();
-	free_ft_buffer(ftdev->minor[idx].buf);
+	free_ft_buffer(tmp);
 }
 
 static ssize_t write_timestamp_from_user(struct ft_buffer* buf, size_t len,
