@@ -169,9 +169,6 @@ static void reinit_release_heap(struct task_struct* t)
 
 	/* initialize */
 	bheap_init(&rh->heap);
-#ifdef CONFIG_RELEASE_MASTER
-	atomic_set(&rh->info.state, HRTIMER_START_ON_INACTIVE);
-#endif
 }
 /* arm_release_timer() - start local release timer or trigger
  *     remote timer (pull timer)
