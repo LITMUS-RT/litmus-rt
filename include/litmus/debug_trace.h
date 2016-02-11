@@ -37,4 +37,9 @@ extern atomic_t __log_seq_no;
 #define TRACE_CUR(fmt, args...) \
 	TRACE_TASK(current, fmt, ## args)
 
+#define TRACE_WARN_ON(cond) \
+	if (unlikely(cond)) \
+		TRACE("WARNING: '%s' [%s@%s:%d]\n", \
+			#cond, __FUNCTION__, __FILE__, __LINE__)
+
 #endif
