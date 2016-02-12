@@ -124,3 +124,13 @@ void fp_prio_queue_init(struct fp_prio_queue* q)
 	for (i = 0; i < LITMUS_MAX_PRIORITY; i++)
 		bheap_init(&q->queue[i]);
 }
+
+void fp_ready_list_init(struct fp_ready_list* q)
+{
+	int i;
+
+	for (i = 0; i < FP_PRIO_BIT_WORDS; i++)
+		q->bitmask[i] = 0;
+	for (i = 0; i < LITMUS_MAX_PRIORITY; i++)
+		INIT_LIST_HEAD(q->queue + i);
+}
