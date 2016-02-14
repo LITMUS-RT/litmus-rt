@@ -35,6 +35,11 @@ typedef void (*finish_switch_t)(struct task_struct *prev);
  * the scheduler is invoked again. */
 typedef bool (*should_wait_for_stack_t)(struct task_struct *next);
 
+/* After dropping the lock to facilitate a pull migration, the task
+ * state may have changed. In this case, the core notifies the plugin
+ * with this callback and then invokes the scheduler again. */
+typedef void (*next_became_invalid_t)(struct task_struct *next);
+
 /********************* task state changes ********************/
 
 /* Called to setup a new real-time task.
@@ -109,7 +114,10 @@ struct sched_plugin {
 	/* 	scheduler invocation 	*/
 	schedule_t 		schedule;
 	finish_switch_t 	finish_switch;
+
+	/* control over pull migrations */
 	should_wait_for_stack_t should_wait_for_stack;
+	next_became_invalid_t next_became_invalid;
 
 	/*	syscall backend 	*/
 	complete_job_t 		complete_job;

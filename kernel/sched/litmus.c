@@ -121,44 +121,20 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		}
 #endif
 		double_rq_lock(rq, other_rq);
-		mb();
-		if (is_realtime(current) && is_current_running() != was_running) {
-			TRACE_TASK(prev,
-				   "state changed while we dropped"
-				   " the lock: is_running=%d, was_running=%d\n",
-				   is_current_running(), was_running);
-			if (is_current_running() && !was_running) {
-				/* prev task became unblocked
-				 * we need to simulate normal sequence of events
-				 * to scheduler plugins.
-				 */
-				litmus->task_block(prev);
-				litmus->task_wake_up(prev);
-			}
-		}
-
 		set_task_cpu(next, smp_processor_id());
-
-		/* DEBUG: now that we have the lock we need to make sure a
-		 *  couple of things still hold:
-		 *  - it is still a real-time task
-		 *  - it is still runnable (could have been stopped)
-		 * If either is violated, then the active plugin is
-		 * doing something wrong.
-		 */
-		if (!is_realtime(next) || !tsk_rt(next)->present) {
-			/* BAD BAD BAD */
-			TRACE_TASK(next,"BAD: migration invariant FAILED: "
-				   "rt=%d present=%d\n",
-				   is_realtime(next),
-				   tsk_rt(next)->present);
-			/* drop the task */
-			next = NULL;
-		}
 		/* release the other CPU's runqueue, but keep ours */
 		raw_spin_unlock(&other_rq->lock);
 	}
 #endif
+
+	/* check if the task became invalid while we dropped the lock */
+	if (next && (!is_realtime(next) || !tsk_rt(next)->present)) {
+		TRACE_TASK(next,
+			"BAD: next (no longer?) valid\n");
+		litmus->next_became_invalid(next);
+		litmus_reschedule_local();
+		next = NULL;
+	}
 
 	if (next) {
 #ifdef CONFIG_SMP
