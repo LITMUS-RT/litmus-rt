@@ -78,6 +78,19 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			if (next->rt_param.stack_in_use == NO_CPU)
 				TRACE_TASK(next,"descheduled. Proceeding.\n");
 
+			if (!litmus->should_wait_for_stack(next)) {
+				/* plugin aborted the wait */
+				TRACE_TASK(next,
+				           "plugin gave up waiting for stack\n");
+				next = NULL;
+				/* Make sure plugin is given a chance to
+				 * reconsider. */
+				litmus_reschedule_local();
+				/* give up */
+				raw_spin_lock(&rq->lock);
+				return next;
+			}
+
 			if (lt_before(_maybe_deadlock + 1000000000L,
 				      litmus_clock())) {
 				/* We've been spinning for 1s.

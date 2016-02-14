@@ -70,6 +70,11 @@ static struct task_struct* litmus_dummy_schedule(struct task_struct * prev)
 	return NULL;
 }
 
+static bool litmus_dummy_should_wait_for_stack(struct task_struct *next)
+{
+	return true; /* by default, wait indefinitely */
+}
+
 static long litmus_dummy_admit_task(struct task_struct* tsk)
 {
 	printk(KERN_CRIT "LITMUS^RT: Linux plugin rejects %s/%d.\n",
@@ -186,6 +191,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	/* make sure we don't trip over null pointers later */
 	CHECK(finish_switch);
 	CHECK(schedule);
+	CHECK(should_wait_for_stack);
 	CHECK(task_wake_up);
 	CHECK(task_exit);
 	CHECK(task_cleanup);
