@@ -35,6 +35,12 @@ typedef void (*finish_switch_t)(struct task_struct *prev);
  * the scheduler is invoked again. */
 typedef bool (*should_wait_for_stack_t)(struct task_struct *next);
 
+/* After a pull migration (which involves dropping scheduler locks),
+ * the plugin is given the chance to validate that the task is still
+ * the right one. If the plugin returns false, the scheduler
+ * will be invoked again. */
+typedef bool (*post_migration_validate_t)(struct task_struct *next);
+
 /* After dropping the lock to facilitate a pull migration, the task
  * state may have changed. In this case, the core notifies the plugin
  * with this callback and then invokes the scheduler again. */
@@ -118,6 +124,7 @@ struct sched_plugin {
 	/* control over pull migrations */
 	should_wait_for_stack_t should_wait_for_stack;
 	next_became_invalid_t next_became_invalid;
+	post_migration_validate_t post_migration_validate;
 
 	/*	syscall backend 	*/
 	complete_job_t 		complete_job;

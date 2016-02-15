@@ -79,6 +79,11 @@ static void litmus_dummy_next_became_invalid(struct task_struct *next)
 {
 }
 
+static bool litmus_dummy_post_migration_validate(struct task_struct *next)
+{
+	return true; /* by default, anything is ok */
+}
+
 static long litmus_dummy_admit_task(struct task_struct* tsk)
 {
 	printk(KERN_CRIT "LITMUS^RT: Linux plugin rejects %s/%d.\n",
@@ -196,6 +201,7 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(finish_switch);
 	CHECK(schedule);
 	CHECK(should_wait_for_stack);
+	CHECK(post_migration_validate);
 	CHECK(next_became_invalid);
 	CHECK(task_wake_up);
 	CHECK(task_exit);
