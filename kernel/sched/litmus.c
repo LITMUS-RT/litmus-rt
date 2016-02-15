@@ -39,6 +39,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 #ifdef CONFIG_SMP
 	struct rq* other_rq;
 	long was_running;
+	int from_where;
 	lt_t _maybe_deadlock = 0;
 #endif
 
@@ -52,15 +53,14 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 	if (next && task_rq(next) != rq) {
 		/* we need to migrate the task */
 		other_rq = task_rq(next);
-		TRACE_TASK(next, "migrate from %d\n", other_rq->cpu);
+		from_where = other_rq->cpu;
+		TRACE_TASK(next, "migrate from %d\n", from_where);
 
 		/* while we drop the lock, the prev task could change its
 		 * state
 		 */
 		BUG_ON(prev != current);
 		was_running = is_current_running();
-		mb();
-		raw_spin_unlock(&rq->lock);
 
 		/* Don't race with a concurrent switch.  This could deadlock in
 		 * the case of cross or circular migrations.  It's the job of
@@ -72,6 +72,9 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			TRACE_TASK(next, "waiting to deschedule\n");
 			_maybe_deadlock = litmus_clock();
 		}
+
+		raw_spin_unlock(&rq->lock);
+
 		while (next->rt_param.stack_in_use != NO_CPU) {
 			cpu_relax();
 			mb();
@@ -88,7 +91,24 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				litmus_reschedule_local();
 				/* give up */
 				raw_spin_lock(&rq->lock);
-				return next;
+				goto out;
+			}
+
+			if (from_where != task_rq(next)->cpu) {
+				/* The plugin should not give us something
+				 * that other cores are trying to pull, too */
+				TRACE_TASK(next, "next invalid: task keeps "
+				                 "shifting around!? "
+				                 "(%d->%d)\n",
+				                 from_where,
+				                 task_rq(next)->cpu);
+
+				/* bail out */
+				raw_spin_lock(&rq->lock);
+				litmus->next_became_invalid(next);
+				litmus_reschedule_local();
+				next = NULL;
+				goto out;
 			}
 
 			if (lt_before(_maybe_deadlock + 1000000000L,
@@ -108,7 +128,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 				/* bail out */
 				raw_spin_lock(&rq->lock);
-				return next;
+				goto out;
 #endif
 			}
 		}
@@ -121,9 +141,27 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		}
 #endif
 		double_rq_lock(rq, other_rq);
-		set_task_cpu(next, smp_processor_id());
-		/* release the other CPU's runqueue, but keep ours */
-		raw_spin_unlock(&other_rq->lock);
+		if (other_rq == task_rq(next) &&
+		    next->rt_param.stack_in_use == NO_CPU) {
+		    	/* ok, we can grab it */
+			set_task_cpu(next, rq->cpu);
+			/* release the other CPU's runqueue, but keep ours */
+			raw_spin_unlock(&other_rq->lock);
+		} else {
+			/* Either it moved or the stack was claimed; both is
+			 * bad and forces us to abort the migration. */
+			TRACE_TASK(next, "next invalid: no longer available\n");
+			raw_spin_unlock(&other_rq->lock);
+			litmus->next_became_invalid(next);
+			next = NULL;
+			goto out;
+		}
+
+		if (!litmus->post_migration_validate(next)) {
+			TRACE_TASK(next, "plugin deems task now invalid\n");
+			litmus_reschedule_local();
+			next = NULL;
+		}
 	}
 #endif
 
@@ -146,6 +184,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		next->se.exec_start = rq->clock;
 	}
 
+out:
 	update_enforcement_timer(next);
 	return next;
 }
