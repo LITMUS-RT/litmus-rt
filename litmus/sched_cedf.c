@@ -688,7 +688,7 @@ static void cedf_setup_domain_proc(void)
 	int num_rt_domains = num_clusters - (skip_domain != NO_CPU);
 	struct cd_mapping *map;
 
-	memset(&cedf_domain_proc_info, sizeof(cedf_domain_proc_info), 0);
+	memset(&cedf_domain_proc_info, 0, sizeof(cedf_domain_proc_info));
 	init_domain_proc_info(&cedf_domain_proc_info, num_rt_cpus, num_rt_domains);
 	cedf_domain_proc_info.num_cpus = num_rt_cpus;
 	cedf_domain_proc_info.num_domains = num_rt_domains;
