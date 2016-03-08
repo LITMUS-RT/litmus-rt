@@ -593,7 +593,7 @@ static void psnedf_setup_domain_proc(void)
 	int num_rt_cpus = num_online_cpus() - (release_master != NO_CPU);
 	struct cd_mapping *cpu_map, *domain_map;
 
-	memset(&psnedf_domain_proc_info, sizeof(psnedf_domain_proc_info), 0);
+	memset(&psnedf_domain_proc_info, 0, sizeof(psnedf_domain_proc_info));
 	init_domain_proc_info(&psnedf_domain_proc_info, num_rt_cpus, num_rt_cpus);
 	psnedf_domain_proc_info.num_cpus = num_rt_cpus;
 	psnedf_domain_proc_info.num_domains = num_rt_cpus;
