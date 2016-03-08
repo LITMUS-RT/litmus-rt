@@ -90,11 +90,14 @@ long complete_job(void)
 	return 0;
 }
 
+static long sleep_until_next_release(void);
 
 /* alternative job completion implementation that suspends the task */
 long complete_job_oneshot(void)
 {
 	struct task_struct *t = current;
+
+	preempt_disable();
 
 	TRACE_CUR("job completes at %llu (deadline: %llu)\n", litmus_clock(),
 		get_deadline(t));
@@ -106,13 +109,14 @@ long complete_job_oneshot(void)
 	return sleep_until_next_release();
 }
 
-long sleep_until_next_release(void)
+/* assumes caller has disabled preemptions;
+ * re-enables preemptions before returning */
+static long sleep_until_next_release(void)
 {
 	struct task_struct *t = current;
 	ktime_t next_release;
 	long err;
 
-	preempt_disable();
 	next_release = ns_to_ktime(get_release(t));
 
 	TRACE_CUR("next_release=%llu\n", get_release(t));
