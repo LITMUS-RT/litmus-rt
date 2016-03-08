@@ -1024,7 +1024,7 @@ static void pfair_setup_domain_proc(void)
 	int num_rt_domains = num_pfair_clusters - (skip_domain != NO_CPU);
 	struct cd_mapping *map;
 
-	memset(&pfair_domain_proc_info, sizeof(pfair_domain_proc_info), 0);
+	memset(&pfair_domain_proc_info, 0, sizeof(pfair_domain_proc_info));
 	init_domain_proc_info(&pfair_domain_proc_info, num_rt_cpus, num_pfair_clusters);
 	pfair_domain_proc_info.num_cpus = num_rt_cpus;
 	pfair_domain_proc_info.num_domains = num_rt_domains;
