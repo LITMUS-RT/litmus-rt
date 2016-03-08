@@ -648,6 +648,63 @@ static struct notifier_block shutdown_notifier = {
 	.notifier_call = litmus_shutdown_nb,
 };
 
+/**
+ * Triggering hrtimers on specific cpus as required by arm_release_timer(_on)
+ */
+#ifdef CONFIG_SMP
+
+/**
+ *  hrtimer_pull - smp_call_function_single_async callback on remote cpu
+ */
+void hrtimer_pull(void *csd_info)
+{
+	struct hrtimer_start_on_info *info = csd_info;
+	TRACE("pulled timer 0x%x\n", info->timer);
+	hrtimer_start_range_ns(info->timer, info->time, 0, info->mode);
+}
+
+/**
+ *  hrtimer_start_on - trigger timer arming on remote cpu
+ *  @cpu:	remote cpu
+ *  @info:	save timer information for enqueuing on remote cpu
+ *  @timer:	timer to be pulled
+ *  @time:	expire time
+ *  @mode:	timer mode
+ */
+void hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
+		struct hrtimer *timer, ktime_t time,
+		const enum hrtimer_mode mode)
+{
+	info->timer = timer;
+	info->time  = time;
+	info->mode  = mode;
+
+	/* initialize call_single_data struct */
+	info->csd.func  = &hrtimer_pull;
+	info->csd.info  = info;
+	info->csd.flags = 0;
+
+	/* initiate pull  */
+	preempt_disable();
+	if (cpu == smp_processor_id()) {
+		/* start timer locally; we may get called
+		* with rq->lock held, do not wake up anything
+		*/
+		TRACE("hrtimer_start_on: starting on local CPU\n");
+		__hrtimer_start_range_ns(info->timer, info->time,
+					0, info->mode, 0);
+	} else {
+		/* call hrtimer_pull() on remote cpu
+		* to start remote timer asynchronously
+		*/
+		TRACE("hrtimer_start_on: pulling to remote CPU\n");
+		smp_call_function_single_async(cpu, &info->csd);
+	}
+	preempt_enable();
+}
+
+#endif /* CONFIG_SMP */
+
 static int __init _init_litmus(void)
 {
 	/*      Common initializers,

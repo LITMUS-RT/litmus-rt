@@ -319,4 +319,27 @@ static inline int has_control_page(struct task_struct* t)
 
 #endif
 
+#ifdef CONFIG_SMP
+
+/*
+ * struct hrtimer_start_on_info - timer info on remote cpu
+ * @timer:	timer to be triggered on remote cpu
+ * @time:	time event
+ * @mode:	timer mode
+ * @csd:	smp_call_function parameter to call hrtimer_pull on remote cpu
+ */
+struct hrtimer_start_on_info {
+	struct hrtimer		*timer;
+	ktime_t			time;
+	enum hrtimer_mode	mode;
+	struct call_single_data csd;
+};
+
+void hrtimer_pull(void *csd_info);
+extern void hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
+			struct hrtimer *timer, ktime_t time,
+			const enum hrtimer_mode mode);
+
+#endif
+
 #endif
