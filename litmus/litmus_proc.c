@@ -569,5 +569,5 @@ void destroy_domain_proc_info(struct domain_proc_info* m)
 		free_cpumask_var(m->domain_to_cpus[i].mask);
 	kfree(m->cpu_to_domains);
 	kfree(m->domain_to_cpus);
-	memset(m, sizeof(*m), 0);
+	memset(m, 0, sizeof(*m));
 }
