@@ -31,4 +31,6 @@ obj-$(CONFIG_SCHED_TASK_TRACE) += sched_task_trace.o
 obj-$(CONFIG_SCHED_DEBUG_TRACE) += sched_trace.o
 obj-$(CONFIG_SCHED_OVERHEAD_TRACE) += trace.o
 
+obj-y += sched_pres.o
+
 obj-y += reservations/
