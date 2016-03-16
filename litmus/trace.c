@@ -263,11 +263,12 @@ feather_callback void save_cpu_task_latency(unsigned long event,
 {
 	lt_t now = litmus_clock();
 	lt_t *when = (lt_t*) when_ptr;
+	lt_t delta = now - *when;
 
 	write_cpu_timestamp(event, TSK_RT,
 			    0,
 			    0, LOCAL_IRQ_COUNT, 0,
-			    now - *when, DO_NOT_RECORD_TIMESTAMP);
+			    delta, DO_NOT_RECORD_TIMESTAMP);
 }
 
 /* Record to remote trace buffer */
