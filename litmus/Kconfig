@@ -57,8 +57,8 @@ config LITMUS_QUANTUM_LENGTH_US
     int "quantum length (in us)"
     default 1000
     range 500 10000
-    help 
-      Determine the desired quantum length, in microseconds, which 
+    help
+      Determine the desired quantum length, in microseconds, which
       is used to determine the granularity of scheduling in
       quantum-driven plugins (primarily PFAIR). This parameter does not
       affect event-driven plugins (such as the EDF-based plugins and P-FP).
@@ -369,6 +369,26 @@ config PREEMPT_STATE_TRACE
 	 recommended when you are debugging preemption-related races.
 
 	 If unsure, say No.
+
+config REPORT_TIMER_LATENCY
+       bool "Warn when hrtimers incur large latency"
+       default n
+       help
+         With this option enabled, the hrtimer code will printk()
+         a warning when a timer fires much after its intended
+         time. This can useful when debugging latency issues.
+
+	 If unsure, say No.
+
+config REPORT_TIMER_LATENCY_THRESHOLD
+       int "Maximum acceptable timer latency (in nanoseconds)"
+       depends on REPORT_TIMER_LATENCY
+       range 10000 100000000
+       default 1000000
+       help
+	     If a timer fires more than the given threshold after its intended
+	     expiration time, a warning message is printed to the kernel log.
+	     By default, the threshold is one millisecond (= one million nanoseconds).
 
 endmenu
 
