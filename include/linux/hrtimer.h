@@ -116,6 +116,9 @@ struct hrtimer {
 	void				*start_site;
 	char				start_comm[16];
 #endif
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	ktime_t when_added;
+#endif
 };
 
 /**

@@ -965,6 +965,10 @@ int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 #endif
 	}
 
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	timer->when_added = base->get_time();
+#endif
+
 	hrtimer_set_expires_range_ns(timer, tim, delta_ns);
 
 	/* Switch the timer base, if necessary: */
@@ -1252,6 +1256,9 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
 	ktime_t expires_next, now, entry_time, delta;
 	int i, retries = 0;
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	ktime_t was_exp_nxt;
+#endif
 
 	BUG_ON(!cpu_base->hres_active);
 	cpu_base->nr_events++;
@@ -1261,6 +1268,9 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	entry_time = now = hrtimer_update_base(cpu_base);
 retry:
 	cpu_base->in_hrtirq = 1;
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	was_exp_nxt = cpu_base->expires_next;
+#endif
 	/*
 	 * We set expires_next to KTIME_MAX here with cpu_base->lock
 	 * held to prevent that a timer is enqueued in our queue via
@@ -1300,6 +1310,30 @@ retry:
 			 */
 			if (basenow.tv64 < hrtimer_get_softexpires_tv64(timer))
 				break;
+
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+			if (cpu_base->hres_active &&
+			    (basenow.tv64 >=
+			     hrtimer_get_expires_tv64(timer) +
+			     ((s64) CONFIG_REPORT_TIMER_LATENCY_THRESHOLD))) {
+				printk_ratelimited(KERN_WARNING
+				    "WARNING: P%d timer latency:%lld now:%lld "
+				    "basenow:%lld exp:%lld soft-exp:%lld "
+				    "nxt:%lld added:%lld "
+				    "retries:%d "
+				    "timer:%p fn:%p"
+				    "\n",
+				    smp_processor_id(),
+				    basenow.tv64 - hrtimer_get_expires_tv64(timer),
+				    now.tv64, basenow.tv64,
+				    hrtimer_get_expires_tv64(timer),
+				    hrtimer_get_softexpires_tv64(timer),
+				    was_exp_nxt.tv64,
+				    timer->when_added.tv64,
+				    retries,
+				    timer, timer->function);
+			}
+#endif
 
 			__run_hrtimer(timer, &basenow);
 		}
