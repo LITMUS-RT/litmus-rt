@@ -1518,12 +1518,17 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 	t->task = NULL;
 	if (task)
 	{
+#ifdef CONFIG_SCHED_OVERHEAD_TRACE
 		if (is_realtime(task))
 		{
 			ktime_t expires = hrtimer_get_expires(timer);
-			lt_t intended_release = ktime_to_ns(expires);
+			/* Fix up timers that were added past their due date;
+			 * that's not really release latency. */
+			lt_t intended_release = max(expires.tv64,
+			                            timer->when_added.tv64);
 			TS_RELEASE_LATENCY(intended_release);
 		}
+#endif
 		TS_RELEASE_START;
 		wake_up_process(task);
 		TS_RELEASE_END;
