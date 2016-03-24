@@ -57,9 +57,9 @@ void release_heap_free(struct release_heap* rh);
 
 /**
  * Get the quantum alignment as a cmdline option.
- * Default is staggered quanta, as this results in lower overheads.
+ * Default is aligned quanta..
  */
-static bool aligned_quanta = 0;
+static bool aligned_quanta = 1;
 module_param(aligned_quanta, bool, 0644);
 
 u64 cpu_stagger_offset(int cpu)
