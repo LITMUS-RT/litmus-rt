@@ -630,9 +630,14 @@ static void process_out_of_budget_tasks(
 		list_del(&tsk_rt(t)->list);
 		if (t != prev || !blocks)
 		{
-			sched_trace_task_release(t);
-			add_release(&cpu_cluster(state)->pfair, t);
-			TRACE_TASK(t, "adding to release queue (budget exhausted)\n");
+			if (time_after(cur_release(t), state->local_tick)) {
+				TRACE_TASK(t, "adding to release queue (budget exhausted)\n");
+				add_release(&cpu_cluster(state)->pfair, t);
+			} else {
+				TRACE_TASK(t, "adding to ready queue (budget exhausted)\n");
+				sched_trace_task_release(t);
+				__add_ready(&cpu_cluster(state)->pfair, t);
+			}
 		} else {
 			TRACE_TASK(t, "not added to release queue (blocks=%d)\n", blocks);
 			tsk_pfair(t)->needs_requeue = 1;
