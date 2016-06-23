@@ -579,6 +579,7 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)) {
 		/* new sporadic release */
+		sched_trace_last_suspension_as_completion(task);
 		release_at(task, now);
 		sched_trace_task_release(task);
 	}
