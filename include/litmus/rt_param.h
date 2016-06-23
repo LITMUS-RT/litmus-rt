@@ -155,6 +155,12 @@ struct rt_job {
 	 * Increase this sequence number when a job is released.
 	 */
 	unsigned int    job_no;
+
+#ifdef CONFIG_SCHED_TASK_TRACE
+	/* Keep track of the last time the job suspended.
+	 * -> used for tracing sporadic tasks. */
+	lt_t	last_suspension;
+#endif
 };
 
 struct pfair_param;

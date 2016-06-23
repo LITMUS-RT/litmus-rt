@@ -218,6 +218,9 @@ static void dequeue_task_litmus(struct rq *rq, struct task_struct *p,
 				int flags)
 {
 	if (flags & DEQUEUE_SLEEP) {
+#ifdef CONFIG_SCHED_TASK_TRACE
+		tsk_rt(p)->job_params.last_suspension = litmus_clock();
+#endif
 		litmus->task_block(p);
 		tsk_rt(p)->present = 0;
 		sched_trace_task_block(p);
