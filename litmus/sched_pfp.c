@@ -327,6 +327,7 @@ static void pfp_task_wake_up(struct task_struct *task)
 #endif
 		) {
 		/* new sporadic release */
+		sched_trace_last_suspension_as_completion(task);
 		release_at(task, now);
 		sched_trace_task_release(task);
 	}
