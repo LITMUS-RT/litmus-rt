@@ -804,6 +804,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	if (is_tardy(t, now)) {
 		TRACE_TASK(t, "sporadic release!\n");
 		sporadic_release = 1;
+		sched_trace_last_suspension_as_completion(t);
 		release_at(t, now);
 		prepare_release(t, time2quanta(now, CEIL));
 		sched_trace_task_release(t);
