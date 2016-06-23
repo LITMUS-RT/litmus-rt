@@ -144,6 +144,9 @@ feather_callback void do_sched_trace_task_switch_away(unsigned long id,
 feather_callback void do_sched_trace_task_completion(unsigned long id,
 						     struct task_struct* task,
 						     unsigned long forced);
+feather_callback void do_sched_trace_last_suspension_as_completion(
+						unsigned long id,
+						struct task_struct* task);
 feather_callback void do_sched_trace_task_block(unsigned long id,
 						struct task_struct* task);
 feather_callback void do_sched_trace_task_resume(unsigned long id,
@@ -249,6 +252,12 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 		SCHED_TRACE(SCHED_TRACE_BASE_ID + 10,			\
 			do_sched_trace_sys_release, when);		\
 		trace_litmus_sys_release(when);				\
+	} while (0)
+
+#define sched_trace_last_suspension_as_completion(t)	\
+	do {								\
+		SCHED_TRACE(SCHED_TRACE_BASE_ID + 11,			\
+				do_sched_trace_last_suspension_as_completion, t); \
 	} while (0)
 
 #define sched_trace_quantum_boundary() /* NOT IMPLEMENTED */

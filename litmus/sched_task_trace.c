@@ -194,6 +194,21 @@ feather_callback void do_sched_trace_task_completion(unsigned long id,
 	}
 }
 
+feather_callback void do_sched_trace_last_suspension_as_completion(
+	unsigned long id,
+	unsigned long _task)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record* rec = get_record(ST_COMPLETION, t);
+	if (rec) {
+		rec->data.completion.when
+			= tsk_rt(t)->job_params.last_suspension;
+		rec->data.completion.forced = 0;
+		rec->data.completion.exec_time = get_exec_time(t);
+		put_record(rec);
+	}
+}
+
 feather_callback void do_sched_trace_task_block(unsigned long id,
 						unsigned long _task)
 {
