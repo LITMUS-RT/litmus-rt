@@ -215,8 +215,11 @@ static void resume_legacy_task_model_updates(struct task_struct *tsk)
 		 * P-RES scheduler. */
 
 		now = litmus_clock();
-		if (is_tardy(tsk, now))
+		if (is_tardy(tsk, now)) {
+			sched_trace_last_suspension_as_completion(tsk);
 			release_at(tsk, now);
+			sched_trace_task_release(tsk);
+		}
 	}
 }
 
