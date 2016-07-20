@@ -58,6 +58,27 @@ void release_at(struct task_struct *t, lt_t start)
 	tsk_rt(t)->completed = 0;
 }
 
+void inferred_sporadic_job_release_at(struct task_struct *t, lt_t when)
+{
+	/* new sporadic release */
+	sched_trace_last_suspension_as_completion(t);
+	/* check if this task is resuming from a clock_nanosleep() call */
+	if (tsk_rt(t)->doing_abs_nanosleep &&
+	    lt_after_eq(tsk_rt(t)->nanosleep_wakeup,
+	                get_release(t) + get_rt_period(t))) {
+		/* clock_nanosleep() is supposed to wake up the task
+		 * at a time that is a valid release time. Use that time
+		 * rather than guessing the intended release time from the
+		 * current time. */
+		TRACE_TASK(t, "nanosleep: backdating release "
+			"to %llu instead of %llu\n",
+			tsk_rt(t)->nanosleep_wakeup, when);
+		when = tsk_rt(t)->nanosleep_wakeup;
+	}
+	release_at(t, when);
+	sched_trace_task_release(t);
+}
+
 long default_wait_for_release_at(lt_t release_time)
 {
 	struct task_struct *t = current;
