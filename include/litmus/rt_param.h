@@ -197,12 +197,18 @@ struct rt_param {
 	/* timing parameters */
 	struct rt_job 		job_params;
 
+
+	/* Special handling for periodic tasks executing
+	 * clock_nanosleep(CLOCK_MONOTONIC, ...).
+	 */
+	lt_t			nanosleep_wakeup;
+	unsigned int	doing_abs_nanosleep:1;
+
 	/* Should the next job be released at some time other than
 	 * just period time units after the last release?
 	 */
 	unsigned int		sporadic_release:1;
 	lt_t			sporadic_release_time;
-
 
 	/* task representing the current "inherited" task
 	 * priority, assigned by inherit_priority and
