@@ -311,10 +311,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	    && !is_priority_boosted(task)
 #endif
 		) {
-		/* new sporadic release */
-		sched_trace_last_suspension_as_completion(task);
-		release_at(task, now);
-		sched_trace_task_release(task);
+			inferred_sporadic_job_release_at(task, now);
 	}
 
 	/* Only add to ready queue if it is not the currently-scheduled
