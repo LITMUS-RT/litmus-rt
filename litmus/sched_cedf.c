@@ -582,10 +582,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)) {
-		/* new sporadic release */
-		sched_trace_last_suspension_as_completion(task);
-		release_at(task, now);
-		sched_trace_task_release(task);
+		inferred_sporadic_job_release_at(task, now);
 	}
 	cedf_job_arrival(task);
 	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
