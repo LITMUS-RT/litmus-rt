@@ -231,6 +231,7 @@ static void pres_task_block(struct task_struct *tsk)
 		litmus_clock(), tsk->state, is_current_running());
 
 	raw_spin_lock_irqsave(&state->lock, flags);
+	sup_update_time(&state->sup_env, litmus_clock());
 	task_departs(tsk, is_completed(tsk));
 	raw_spin_unlock_irqrestore(&state->lock, flags);
 }
