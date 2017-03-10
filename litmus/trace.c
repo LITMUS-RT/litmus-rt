@@ -16,8 +16,8 @@ static struct ftdev msg_overhead_dev;
 #define cpu_trace_ts_buf(cpu) cpu_overhead_dev.minor[(cpu)].buf
 #define msg_trace_ts_buf(cpu) msg_overhead_dev.minor[(cpu)].buf
 
-DEFINE_PER_CPU(atomic_t, irq_fired_count;)
-DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, cpu_irq_fired_count);
+DEFINE_PER_CPU(unsigned int, local_irq_count;)
+DEFINE_PER_CPU_SHARED_ALIGNED(atomic_t, msg_irq_count);
 
 static DEFINE_PER_CPU(unsigned int, cpu_ts_seq_no);
 static DEFINE_PER_CPU(atomic_t, msg_ts_seq_no);
@@ -27,42 +27,28 @@ static int64_t cycle_offset[NR_CPUS][NR_CPUS];
 void ft_irq_fired(void)
 {
 	/* Only called with preemptions disabled.  */
-	atomic_inc(this_cpu_ptr(&irq_fired_count));
-	atomic_inc(this_cpu_ptr(&cpu_irq_fired_count));
+	/* local counter => not atomic, trace points disable interrupts */
+	this_cpu_inc(local_irq_count);
+	/* counter for messages => read remotely */
+	atomic_inc(this_cpu_ptr(&msg_irq_count));
 
 	if (has_control_page(current))
 		get_control_page(current)->irq_count++;
 }
 
-static inline void clear_irq_fired(void)
+static inline unsigned int snapshot_local_irqs(void)
 {
-	atomic_set(raw_cpu_ptr(&irq_fired_count), 0);
+	return this_cpu_xchg(local_irq_count, 0);
 }
 
-static inline unsigned int get_and_clear_irq_fired(void)
+static inline unsigned int snapshot_msg_irq_for(int cpu)
 {
-	/* This is potentially not atomic  since we might migrate if
-	 * preemptions are not disabled. As a tradeoff between
-	 * accuracy and tracing overheads, this seems acceptable.
-	 * If it proves to be a problem, then one could add a callback
-	 * from the migration code to invalidate irq_fired_count.
-	 */
-	return atomic_xchg(raw_cpu_ptr(&irq_fired_count), 0);
+	return atomic_xchg(&per_cpu(msg_irq_count, cpu), 0);
 }
 
-static inline unsigned int get_and_clear_irq_fired_for_cpu(int cpu)
+static inline unsigned int snapshot_msg_irq_locally(void)
 {
-	return atomic_xchg(&per_cpu(irq_fired_count, cpu), 0);
-}
-
-static inline void cpu_clear_irq_fired(void)
-{
-	atomic_set(raw_cpu_ptr(&cpu_irq_fired_count), 0);
-}
-
-static inline unsigned int cpu_get_and_clear_irq_fired(void)
-{
-	return atomic_xchg(raw_cpu_ptr(&cpu_irq_fired_count), 0);
+	return atomic_xchg(raw_cpu_ptr(&msg_irq_count), 0);
 }
 
 static inline void save_irq_flags(struct timestamp *ts, unsigned int irq_count)
@@ -141,11 +127,21 @@ static inline void __write_record(
 
 		ts->cpu       = cpu;
 
-		if (record_irq) {
-			if (local_cpu)
-				irq_count = cpu_get_and_clear_irq_fired();
-			else
-				irq_count = get_and_clear_irq_fired_for_cpu(cpu);
+		switch (record_irq) {
+			case LOCAL_IRQ_COUNT:
+				if (is_cpu_timestamp)
+					irq_count = snapshot_local_irqs();
+				else
+					irq_count = snapshot_msg_irq_locally();
+				break;
+			case REMOTE_IRQ_COUNT:
+				irq_count = snapshot_msg_irq_for(other_cpu);
+				break;
+			case NO_IRQ_COUNT:
+				/* fall through */
+			default:
+				/* do nothing */
+				break;
 		}
 
 		save_irq_flags(ts, irq_count - hide_irq);
@@ -301,7 +297,7 @@ static void __add_timestamp_user(struct timestamp *pre_recorded)
 		*ts = *pre_recorded;
 		ts->seq_no = seq_no;
 		ts->cpu	   = raw_smp_processor_id();
-	        save_irq_flags(ts, get_and_clear_irq_fired());
+	        save_irq_flags(ts, snapshot_local_irqs());
 		ft_buffer_finish_write(buf, ts);
 	}
 
