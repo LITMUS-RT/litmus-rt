@@ -1080,5 +1080,7 @@ source "lib/Kconfig"
 config ARCH_HAS_FEATHER_TRACE
 	def_bool n
 
-source "litmus/Kconfig"
+config ARCH_CALLS_IRQ_ENTER_ON_RESCHED_IPI
+	def_bool n
 
+source "litmus/Kconfig"
