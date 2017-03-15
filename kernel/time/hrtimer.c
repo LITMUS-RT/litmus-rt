@@ -1411,8 +1411,13 @@ retry:
 	 */
 	cpu_base->nr_hangs++;
 	cpu_base->hang_detected = 1;
+
+	TRACE("hrtimer hang detected on P%d: #%u \n",
+		cpu_base->cpu, cpu_base->nr_hangs);
+
 	raw_spin_unlock(&cpu_base->lock);
 	delta = ktime_sub(now, entry_time);
+	TRACE("hrtimer hang delta.tv64:%u\n", (unsigned int)delta.tv64);
 	if ((unsigned int)delta.tv64 > cpu_base->max_hang_time)
 		cpu_base->max_hang_time = (unsigned int) delta.tv64;
 	/*
@@ -1423,6 +1428,9 @@ retry:
 		expires_next = ktime_add_ns(now, 100 * NSEC_PER_MSEC);
 	else
 		expires_next = ktime_add(now, delta);
+
+	TRACE("hrtimer expires_next:%llu\n", expires_next.tv64);
+
 	tick_program_event(expires_next, 1);
 	printk_once(KERN_WARNING "hrtimer: interrupt took %llu ns\n",
 		    ktime_to_ns(delta));
