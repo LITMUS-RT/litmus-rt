@@ -96,8 +96,6 @@ static void pres_update_timer_and_unlock(struct pres_cpu_state *state)
 			TRACE("canceling timer...\n");
 			hrtimer_cancel(&state->timer);
 			TRACE("setting scheduler timer for %llu\n", update);
-			/* We cannot use hrtimer_start() here because the
-			 * wakeup flag must be set to zero. */
 			hrtimer_start(&state->timer,
 					ns_to_ktime(update),
 					HRTIMER_MODE_ABS_PINNED);
