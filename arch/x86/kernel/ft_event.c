@@ -1,4 +1,7 @@
 #include <linux/types.h>
+#include <linux/module.h>
+#include <asm/cacheflush.h>
+#include <asm/sections.h>
 
 #include <litmus/feather_trace.h>
 
@@ -6,7 +9,7 @@
  * exclusive access to the event table
  */
 
-#ifndef CONFIG_DEBUG_RODATA
+#ifndef CONFIG_RELOCATABLE
 
 #define BYTE_JUMP      0xeb
 #define BYTE_JUMP_LEN  0x02
@@ -22,6 +25,31 @@ struct trace_event {
 extern struct trace_event  __start___event_table[];
 extern struct trace_event  __stop___event_table[];
 
+
+/* NOTE: The following two functions have been stolen from ftrace.c */
+
+static inline int
+within(unsigned long addr, unsigned long start, unsigned long end)
+{
+	return addr >= start && addr < end;
+}
+
+static unsigned long text_ip_addr(unsigned long ip)
+{
+	/*
+	 * On x86_64, kernel text mappings are mapped read-only, so we use
+	 * the kernel identity mapping instead of the kernel text mapping
+	 * to modify the kernel text.
+	 *
+	 * For 32bit kernels, these mappings are same and we can use
+	 * kernel identity mapping to modify code.
+	 */
+	if (within(ip, (unsigned long)_text, (unsigned long)_etext))
+		ip = (unsigned long)__va(__pa_symbol(ip));
+
+	return ip;
+}
+
 /* Workaround: if no events are defined, then the event_table section does not
  * exist and the above references cause linker errors. This could probably be
  * fixed by adjusting the linker script, but it is easier to maintain for us if
@@ -36,12 +64,17 @@ int ft_enable_event(unsigned long id)
 	char* delta;
 	unsigned char* instr;
 
+	set_kernel_text_rw();
+	set_all_modules_text_rw();
+
 	while (te < __stop___event_table) {
 		if (te->id == id && ++te->count == 1) {
 			instr  = (unsigned char*) te->start_addr;
 			/* make sure we don't clobber something wrong */
 			if (*instr == BYTE_JUMP) {
-				delta  = (((unsigned char*) te->start_addr) + 1);
+				delta  = (unsigned char*) text_ip_addr(
+						((unsigned long) te->start_addr)
+						+ 1);
 				*delta = 0;
 			}
 		}
@@ -49,6 +82,9 @@ int ft_enable_event(unsigned long id)
 			count++;
 		te++;
 	}
+
+	set_all_modules_text_ro();
+	set_kernel_text_ro();
 
 	printk(KERN_DEBUG "ft_enable_event: enabled %d events\n", count);
 	return count;
@@ -61,11 +97,16 @@ int ft_disable_event(unsigned long id)
 	char* delta;
 	unsigned char* instr;
 
+	set_kernel_text_rw();
+	set_all_modules_text_rw();
+
 	while (te < __stop___event_table) {
 		if (te->id == id && --te->count == 0) {
 			instr  = (unsigned char*) te->start_addr;
 			if (*instr == BYTE_JUMP) {
-				delta  = (((unsigned char*) te->start_addr) + 1);
+				delta  = (unsigned char*) text_ip_addr(
+						((unsigned long) te->start_addr)
+						+ 1);
 				*delta = te->end_addr - te->start_addr -
 					BYTE_JUMP_LEN;
 			}
@@ -74,6 +115,9 @@ int ft_disable_event(unsigned long id)
 			count++;
 		te++;
 	}
+
+	set_all_modules_text_ro();
+	set_kernel_text_ro();
 
 	printk(KERN_DEBUG "ft_disable_event: disabled %d events\n", count);
 	return count;
@@ -86,12 +130,16 @@ int ft_disable_all_events(void)
 	char* delta;
 	unsigned char* instr;
 
+	set_kernel_text_rw();
+	set_all_modules_text_rw();
+
 	while (te < __stop___event_table) {
 		if (te->count) {
 			instr  = (unsigned char*) te->start_addr;
 			if (*instr == BYTE_JUMP) {
-				delta  = (((unsigned char*) te->start_addr)
-					  + 1);
+				delta  = (unsigned char*) text_ip_addr(
+						((unsigned long) te->start_addr)
+						+ 1);
 				*delta = te->end_addr - te->start_addr -
 					BYTE_JUMP_LEN;
 				te->count = 0;
@@ -100,6 +148,10 @@ int ft_disable_all_events(void)
 		}
 		te++;
 	}
+
+	set_all_modules_text_ro();
+	set_kernel_text_ro();
+
 	return count;
 }
 
