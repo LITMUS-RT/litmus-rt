@@ -8,12 +8,9 @@ int ft_disable_event(unsigned long id);
 int ft_is_event_enabled(unsigned long id);
 int ft_disable_all_events(void);
 
-/* Don't use rewriting implementation if kernel text pages are read-only.
- * Ftrace gets around this by using the identity mapping, but that's more
- * effort that is warrented right now for Feather-Trace.
- * Eventually, it may make sense to replace Feather-Trace with ftrace.
+/* Don't use rewriting implementation if the kernel is relocatable.
  */
-#if defined(CONFIG_ARCH_HAS_FEATHER_TRACE) && !defined(CONFIG_DEBUG_RODATA)
+#if defined(CONFIG_ARCH_HAS_FEATHER_TRACE) && !defined(CONFIG_RELOCATABLE)
 
 #include <asm/feather_trace.h>
 
