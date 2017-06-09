@@ -6,8 +6,6 @@
 #include <linux/percpu.h>
 #include <asm/atomic.h>
 
-#include <litmus/debug_trace.h>
-
 DECLARE_PER_CPU(bool, litmus_preemption_in_progress);
 
 /* is_current_running() is legacy macro (and a hack) that is used to make
@@ -37,8 +35,13 @@ DECLARE_PER_CPU(bool, litmus_preemption_in_progress);
 DECLARE_PER_CPU_SHARED_ALIGNED(atomic_t, resched_state);
 
 #ifdef CONFIG_PREEMPT_STATE_TRACE
+/* this file is included widely --- be careful not to pollute the namespace
+ * with the TRACE() symbol */
+#define LITMUS_DEBUG_TRACE_DONT_POLLUTE_NAMESPACE
+#include <litmus/debug_trace.h>
+#undef LITMUS_DEBUG_TRACE_DONT_POLLUTE_NAMESPACE
 const char* sched_state_name(int s);
-#define TRACE_STATE(fmt, args...) TRACE("SCHED_STATE " fmt, args)
+#define TRACE_STATE(fmt, args...) LITMUS_TRACE("SCHED_STATE " fmt, args)
 #else
 #define TRACE_STATE(fmt, args...) /* ignore */
 #endif
