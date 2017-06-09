@@ -9,6 +9,7 @@
 #include <linux/sched.h>
 #include <linux/seq_file.h>
 
+#include <litmus/debug_trace.h>
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>
 #include <litmus/preempt.h>
