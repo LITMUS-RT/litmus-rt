@@ -11,6 +11,7 @@
 #include <linux/spinlock.h>
 #include <linux/module.h>
 
+#include <litmus/debug_trace.h>
 #include <litmus/litmus.h>
 #include <litmus/wait.h>
 #include <litmus/jobs.h>
