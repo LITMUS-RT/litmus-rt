@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/vmalloc.h>
+#include <linux/mutex.h>
 
 #include <litmus/feather_trace.h>
 #include <litmus/ftdev.h>
@@ -51,13 +52,17 @@ struct ftdev_event {
 	struct ftdev_event* next;
 };
 
+static DEFINE_MUTEX(ft_event_activation_mutex);
+
 static int activate(struct ftdev_event** chain, int id)
 {
 	struct ftdev_event* ev = kmalloc(sizeof(*ev), GFP_KERNEL);
 	if (ev) {
+		mutex_lock(&ft_event_activation_mutex);
 		printk(KERN_INFO
 		       "Enabling feather-trace event %d.\n", (int) id);
 		ft_enable_event(id);
+		mutex_unlock(&ft_event_activation_mutex);
 		ev->id = id;
 		ev->next = *chain;
 		*chain    = ev;
@@ -76,7 +81,9 @@ static void deactivate(struct ftdev_event** chain, int id)
 			*cur  = nxt;
 			printk(KERN_INFO
 			       "Disabling feather-trace event %d.\n", (int) id);
+			mutex_lock(&ft_event_activation_mutex);
 			ft_disable_event(id);
+			mutex_unlock(&ft_event_activation_mutex);
 			break;
 		}
 		cur = &(*cur)->next;
