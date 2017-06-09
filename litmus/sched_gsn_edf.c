@@ -13,6 +13,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 
+#include <litmus/debug_trace.h>
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 #include <litmus/sched_plugin.h>
