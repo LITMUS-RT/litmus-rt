@@ -1816,6 +1816,9 @@ void scheduler_ipi(void)
 	 */
 	preempt_fold_need_resched();
 
+	/* Let LITMUS^RT preemption state machine know about this IPI. */
+	sched_state_ipi();
+
 	if (llist_empty(&this_rq()->wake_list) && !got_nohz_idle_kick())
 	{
 #ifndef CONFIG_ARCH_CALLS_IRQ_ENTER_ON_RESCHED_IPI
