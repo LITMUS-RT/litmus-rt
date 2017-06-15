@@ -24,8 +24,6 @@
 #include <linux/cpu.h>
 #include <linux/gfp.h>
 
-#include <litmus/preempt.h>
-
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
 #include <asm/mmu_context.h>
@@ -270,11 +268,6 @@ __visible void smp_reschedule_interrupt(struct pt_regs *regs)
 	/*
 	 * KVM uses this interrupt to force a cpu out of guest mode
 	 */
-
-	/* LITMUS^RT: this IPI might need to trigger the sched state machine.
-	 * Starting from 3.0 schedule_ipi() actually does something.  This may
-	 * increase IPI latencies compared with previous versions. */
-	sched_state_ipi();
 }
 
 __visible void smp_trace_reschedule_interrupt(struct pt_regs *regs)
