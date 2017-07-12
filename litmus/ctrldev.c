@@ -133,7 +133,7 @@ asmlinkage long sys_litmus_lock(int lock_od);
 asmlinkage long sys_litmus_unlock(int lock_od);
 asmlinkage long sys_wait_for_job_release(unsigned int job);
 asmlinkage long sys_wait_for_ts_release(void);
-asmlinkage long sys_release_ts(lt_t __user *__delay);
+asmlinkage long sys_release_ts(lt_t __user *__when);
 
 static long litmus_ctrl_ioctl(struct file *filp,
 	unsigned int cmd, unsigned long arg)

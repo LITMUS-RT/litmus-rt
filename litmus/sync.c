@@ -130,23 +130,23 @@ asmlinkage long sys_wait_for_ts_release(void)
 	return ret;
 }
 
-#define ONE_MS 1000000
+#define ONE_MS 1000000ULL
+#define ONE_SECOND (ONE_MS * 1000)
 
-asmlinkage long sys_release_ts(lt_t __user *__delay)
+asmlinkage long sys_release_ts(lt_t __user *__when)
 {
 	long ret;
-	lt_t delay;
 	lt_t start_time;
+	lt_t now;
 
 	/* FIXME: check capabilities... */
 
-	ret = copy_from_user(&delay, __delay, sizeof(delay));
+	ret = copy_from_user(&start_time, __when, sizeof(start_time));
 	if (ret == 0) {
-		/* round up to next larger integral millisecond */
-		start_time = litmus_clock();
-		do_div(start_time, ONE_MS);
-		start_time *= ONE_MS;
-		ret = do_release_ts(start_time + delay);
+		now = litmus_clock();
+		if (lt_before(start_time, now))
+			start_time = now + ONE_SECOND;
+		ret = do_release_ts(start_time);
 	}
 
 	return ret;
