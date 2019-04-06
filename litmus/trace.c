@@ -557,10 +557,11 @@ static int __init init_ft_overhead_trace(void)
 		return err;
 
 	err = init_msg_ft_overhead_trace();
-	if (err)
+	if (err){
 		ftdev_exit(&cpu_overhead_dev);
 		return err;
-
+	}
+		
 	return 0;
 }
 
