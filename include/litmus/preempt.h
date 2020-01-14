@@ -154,7 +154,7 @@ static inline void sched_state_entered_schedule(void)
 }
 
 /* Called by schedule() to check if the scheduling decision is still valid
- * after a context switch. Returns 1 if the CPU needs to reschdule. */
+ * after a context switch. Returns 1 if the CPU needs to reschedule. */
 static inline int sched_state_validate_switch(void)
 {
 	int decision_ok = 0;
