@@ -191,6 +191,7 @@ struct sched_plugin linux_sched_plugin = {
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
 	.get_domain_proc_info = litmus_dummy_get_domain_proc_info,
 	.synchronous_release_at = litmus_dummy_synchronous_release_at,
+	.should_wait_for_stack = litmus_dummy_should_wait_for_stack,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
