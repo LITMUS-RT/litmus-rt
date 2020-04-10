@@ -197,7 +197,8 @@ struct sched_plugin linux_sched_plugin = {
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
-	.admit_task = litmus_dummy_admit_task
+	.admit_task = litmus_dummy_admit_task,
+	.fork_task = litmus_dummy_fork_task,
 };
 
 /*
