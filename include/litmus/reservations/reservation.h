@@ -6,6 +6,7 @@
 
 #include <litmus/debug_trace.h>
 #include <litmus/reservations/budget-notifier.h>
+#include <litmus/rt_param.h>
 
 struct reservation_client;
 struct reservation_environment;
